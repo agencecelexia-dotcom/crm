@@ -30,6 +30,7 @@ import {
 import { formatEuros, formatDate } from '@/lib/format'
 import { useArtisan, useDeleteArtisan } from '../hooks/use-artisans'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
+import { ContratCard } from '@/features/contrats/contrat-card'
 
 // Fiche artisan : infos, spécificités, historique projets, total rapporté.
 export function ArtisanDetailPage() {
@@ -156,6 +157,9 @@ export function ArtisanDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Contrat d'engagement (signature en ligne) */}
+      <ContratCard artisan={artisan} />
 
       {/* Historique des projets */}
       <Card className="mb-4">

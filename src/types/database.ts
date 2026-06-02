@@ -80,3 +80,29 @@ export type ProjetInput = Omit<
   Projet,
   'id' | 'commission' | 'created_by' | 'created_at' | 'updated_at'
 >
+
+/** Contrat d'engagement Celexia ↔ artisan (signé en ligne via token public). */
+export interface Contrat {
+  id: string
+  artisan_id: string
+  type: string
+  token: string
+  contenu: string
+  statut: 'envoye' | 'signe'
+  signataire_nom: string | null
+  signature_data: string | null
+  signed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Vue publique d'un contrat (retournée par la fonction get_contrat_by_token). */
+export interface ContratPublic {
+  id: string
+  type: string
+  contenu: string
+  statut: 'envoye' | 'signe'
+  signataire_nom: string | null
+  signed_at: string | null
+  artisan: { nom: string; prenom: string | null; societe: string | null }
+}
