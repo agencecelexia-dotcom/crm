@@ -36,7 +36,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
-import { formatEuros } from '@/lib/format'
+import { formatEuros, formatDateHeure } from '@/lib/format'
 import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets'
 import { AssignArtisan } from '../components/assign-artisan'
 import { MissionLinkCard } from '../components/mission-link-card'
@@ -122,6 +122,18 @@ export function ProjetDetailPage() {
               ))}
             </SelectContent>
           </Select>
+
+          {projet.statut === 'perdu' && (
+            <p className="rounded-md border border-[#EF4444]/30 bg-[#EF4444]/10 p-2 text-xs text-[#991B1B]">
+              ⚠️ Projet perdu : suppression automatique définitive 48 h après le passage en « Perdu »
+              {projet.perdu_at
+                ? ` (vers le ${formatDateHeure(
+                    new Date(new Date(projet.perdu_at).getTime() + 48 * 3600 * 1000).toISOString(),
+                  )})`
+                : ''}
+              . Repasse-le à un autre statut pour annuler.
+            </p>
+          )}
         </CardContent>
       </Card>
 

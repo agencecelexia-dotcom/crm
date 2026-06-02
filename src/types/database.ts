@@ -73,6 +73,7 @@ export interface Projet {
   commission: number | null // colonne calculée par la base (montant signé × taux)
   commission_encaissee: boolean
   date_signature: string | null
+  perdu_at: string | null // date de passage en "perdu" (purge auto 48h après)
   // Fichiers
   contrat_url: string | null
   devis_url: string | null
@@ -91,7 +92,7 @@ export interface ProjetAvecArtisan extends Projet {
 /** Champs éditables d'un projet (le reste est géré par la base). */
 export type ProjetInput = Omit<
   Projet,
-  'id' | 'commission' | 'token' | 'created_by' | 'created_at' | 'updated_at'
+  'id' | 'commission' | 'token' | 'perdu_at' | 'created_by' | 'created_at' | 'updated_at'
 >
 
 /** Note rapide attachée à un projet (suivi interne agence). */
