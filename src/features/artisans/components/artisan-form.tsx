@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
@@ -133,8 +133,8 @@ export function ArtisanForm({
     })
   }
 
-  const metiersSeles = form.watch('metiers') ?? []
-  const sousMetiersSeles = form.watch('sous_metiers') ?? []
+  const metiersSeles = useWatch({ control: form.control, name: 'metiers' }) ?? []
+  const sousMetiersSeles = useWatch({ control: form.control, name: 'sous_metiers' }) ?? []
 
   function toggleMetier(m: string) {
     const set = new Set(metiersSeles)

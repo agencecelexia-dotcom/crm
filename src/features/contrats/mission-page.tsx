@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   Loader2,
   CheckCircle2,
@@ -55,29 +56,33 @@ interface Mission {
 
 export function MissionPage() {
   const { token } = useParams()
-  const [mission, setMission] = useState<Mission | null>(null)
-  const [chargement, setChargement] = useState(true)
-  const [introuvable, setIntrouvable] = useState(false)
+  // Chargement de la mission via react-query (rechargé après signature / upload).
+  const {
+    data: mission,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['mission', token],
+    enabled: !!token,
+    queryFn: async (): Promise<Mission | null> => {
+      const { data, error } = await supabase.rpc('get_mission_by_token', {
+        p_token: token,
+      })
+      if (error) throw error
+      return (data as Mission) ?? null
+    },
+  })
+  const charger = () => {
+    void refetch()
+  }
 
-  const charger = useCallback(async () => {
-    if (!token) return
-    const { data, error } = await supabase.rpc('get_mission_by_token', { p_token: token })
-    if (error || !data) setIntrouvable(true)
-    else setMission(data as Mission)
-    setChargement(false)
-  }, [token])
-
-  useEffect(() => {
-    void charger()
-  }, [charger])
-
-  if (chargement)
+  if (isLoading)
     return (
       <Centre>
         <Loader2 className="size-6 animate-spin text-primary" />
       </Centre>
     )
-  if (introuvable || !mission)
+  if (!mission)
     return (
       <Centre>
         <FileText className="mb-2 size-8 text-muted-foreground" />

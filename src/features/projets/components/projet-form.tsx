@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
@@ -71,6 +71,8 @@ export function ProjetForm({
     resolver: zodResolver(schema),
     defaultValues: valeursParDefaut(projet),
   })
+  // Métier observé (useWatch = mémo-friendly) pour afficher les sous-métiers.
+  const metierSel = useWatch({ control: form.control, name: 'metier' })
 
   function handleSubmit(values: FormValues) {
     const clean = (v?: string) => (v && v.trim() ? v.trim() : null)
@@ -180,7 +182,7 @@ export function ProjetForm({
         />
 
         {/* Sous-métier précis (optionnel) — fiabilise le matching artisan */}
-        {form.watch('metier') && (SOUS_METIERS[form.watch('metier')] ?? []).length > 0 && (
+        {metierSel && (SOUS_METIERS[metierSel] ?? []).length > 0 && (
           <FormField
             control={form.control}
             name="sous_metier"
@@ -194,7 +196,7 @@ export function ProjetForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {(SOUS_METIERS[form.watch('metier')] ?? []).map((s) => (
+                    {(SOUS_METIERS[metierSel] ?? []).map((s) => (
                       <SelectItem key={s} value={s}>
                         {s}
                       </SelectItem>
