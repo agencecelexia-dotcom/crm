@@ -126,3 +126,10 @@ export const COULEUR_ARTISAN = '#7C3AED'
 /** Centre de la carte (France) + zoom par défaut. */
 export const CARTE_CENTRE: [number, number] = [46.6, 2.5]
 export const CARTE_ZOOM = 6
+
+/**
+ * Webhook n8n des notifications/envois (workflow "CRM Celexia — Notifications").
+ * Non secret (simple URL de webhook) ; utilisé aussi par les triggers Supabase.
+ */
+export const N8N_WEBHOOK_URL =
+  'https://n8n.srv1241880.hstgr.cloud/webhook/crm-celexia-events'

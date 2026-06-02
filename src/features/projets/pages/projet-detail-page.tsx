@@ -42,6 +42,7 @@ import { AssignArtisan } from '../components/assign-artisan'
 import { MissionLinkCard } from '../components/mission-link-card'
 import { MontantsCard } from '../components/montants-card'
 import { DocumentRow } from '../components/document-row'
+import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
 import type { ProjetInput, StatutProjet } from '@/types/database'
 
 // Fiche projet : infos, statut, assignation, montants/commission, documents.
@@ -213,13 +214,8 @@ export function ProjetDetailPage() {
           <CardTitle className="text-base">Documents (PDF)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <DocumentRow
-            projetId={projet.id}
-            type="contrat"
-            label="Contrat artisan"
-            champ="contrat_url"
-            cheminActuel={projet.contrat_url}
-          />
+          {/* Contrat d'engagement = signé en ligne par l'artisan (table contrats) */}
+          <ContratEngagementRow artisanId={projet.artisan_id} />
           <DocumentRow
             projetId={projet.id}
             type="devis"

@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Copy, Mail, Link2, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { N8N_WEBHOOK_URL } from '@/lib/constants'
 import { useArtisan } from '@/features/artisans/hooks/use-artisans'
 import { useContratArtisan } from '@/features/contrats/use-contrats'
 import { ContratGenerateur } from '@/features/contrats/contrat-generateur'
@@ -15,6 +17,7 @@ import type { ProjetAvecArtisan } from '@/types/database'
 export function MissionLinkCard({ projet }: { projet: ProjetAvecArtisan }) {
   const { data: artisan } = useArtisan(projet.artisan_id ?? undefined)
   const { data: contrat, isLoading } = useContratArtisan(projet.artisan_id ?? undefined)
+  const [envoi, setEnvoi] = useState(false)
 
   const lien = `${window.location.origin}/mission/${projet.token}`
   const email = projet.artisan?.email ?? ''
@@ -27,11 +30,32 @@ export function MissionLinkCard({ projet }: { projet: ProjetAvecArtisan }) {
     )
   }
 
-  const mailto = `mailto:${email}?subject=${encodeURIComponent(
-    'Votre dossier client Celexia',
-  )}&body=${encodeURIComponent(
-    `Bonjour,\n\nVoici votre espace pour ce projet : signez le contrat puis accédez aux coordonnées du client et déposez votre devis.\n${lien}\n\nL'équipe Celexia`,
-  )}`
+  // Envoi automatique du lien à l'artisan via n8n (email Gmail), au lieu d'un mailto.
+  async function envoyerLien() {
+    if (!email) return
+    setEnvoi(true)
+    try {
+      await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors', // webhook cross-origin : envoi "fire and forget"
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'envoyer_lien_mission',
+          email,
+          lien,
+          client_nom: projet.client_nom,
+          artisan_nom: [projet.artisan?.prenom, projet.artisan?.nom]
+            .filter(Boolean)
+            .join(' '),
+        }),
+      })
+      toast.success(`Lien envoyé à l'artisan (${email})`)
+    } catch {
+      toast.error('Envoi impossible')
+    } finally {
+      setEnvoi(false)
+    }
+  }
 
   return (
     <Card className="mb-4">
@@ -87,18 +111,20 @@ export function MissionLinkCard({ projet }: { projet: ProjetAvecArtisan }) {
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" onClick={copier}>
                 <Copy className="size-4" />
-                Copier
+                Copier le lien
               </Button>
-              <Button asChild variant="outline" disabled={!email}>
-                <a href={mailto}>
-                  <Mail className="size-4" />
-                  Email
-                </a>
+              <Button onClick={envoyerLien} disabled={!email || envoi}>
+                {envoi ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                Envoyer à l'artisan
               </Button>
             </div>
-            {!email && (
+            {!email ? (
               <p className="text-xs text-muted-foreground">
-                Ajoute l'email de l'artisan (sur sa fiche) pour l'envoi par mail.
+                Ajoute l'email de l'artisan (sur sa fiche) pour l'envoi automatique.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                « Envoyer » expédie automatiquement le lien par email à {email}.
               </p>
             )}
           </>
