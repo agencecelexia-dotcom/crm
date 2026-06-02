@@ -41,6 +41,7 @@ import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets
 import { AssignArtisan } from '../components/assign-artisan'
 import { MissionLinkCard } from '../components/mission-link-card'
 import { MontantsCard } from '../components/montants-card'
+import { NotesCard } from '../components/notes-card'
 import { DocumentRow } from '../components/document-row'
 import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
 import type { ProjetInput, StatutProjet } from '@/types/database'
@@ -204,6 +205,9 @@ export function ProjetDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Notes rapides (suivi interne) */}
+      <NotesCard projetId={projet.id} />
 
       {/* Argent / commission */}
       <MontantsCard projet={projet} />

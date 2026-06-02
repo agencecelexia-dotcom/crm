@@ -144,6 +144,8 @@ export const STATUTS: Record<
   { label: string; color: string; textOnColor: string }
 > = {
   nouveau: { label: 'Nouveau', color: '#64748B', textOnColor: '#FFFFFF' },
+  a_rappeler: { label: 'À rappeler', color: '#F97316', textOnColor: '#FFFFFF' },
+  en_attente: { label: 'En attente', color: '#06B6D4', textOnColor: '#FFFFFF' },
   artisan_assigne: { label: 'Artisan assigné', color: '#3B82F6', textOnColor: '#FFFFFF' },
   devis_envoye: { label: 'Devis envoyé', color: '#F59E0B', textOnColor: '#FFFFFF' },
   devis_signe: { label: 'Devis signé', color: '#22C55E', textOnColor: '#FFFFFF' },
@@ -153,6 +155,8 @@ export const STATUTS: Record<
 /** Ordre d'affichage des statuts dans le pipeline. */
 export const STATUTS_ORDRE: StatutProjet[] = [
   'nouveau',
+  'a_rappeler',
+  'en_attente',
   'artisan_assigne',
   'devis_envoye',
   'devis_signe',

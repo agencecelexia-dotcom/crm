@@ -4,6 +4,8 @@
 /** Statuts possibles d'un projet (pipeline). */
 export type StatutProjet =
   | 'nouveau'
+  | 'a_rappeler'
+  | 'en_attente'
   | 'artisan_assigne'
   | 'devis_envoye'
   | 'devis_signe'
@@ -91,6 +93,15 @@ export type ProjetInput = Omit<
   Projet,
   'id' | 'commission' | 'token' | 'created_by' | 'created_at' | 'updated_at'
 >
+
+/** Note rapide attachée à un projet (suivi interne agence). */
+export interface Note {
+  id: string
+  projet_id: string
+  contenu: string
+  auteur: string | null
+  created_at: string
+}
 
 /** Contrat d'engagement Celexia ↔ artisan (signé en ligne via token public). */
 export interface Contrat {
