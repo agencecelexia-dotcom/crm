@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { METIERS, SOUS_METIERS, REGIONS } from '@/lib/constants'
+import { SocieteSearch } from './societe-search'
+import type { ResultatEntreprise } from '@/lib/entreprise'
 import type { Artisan, ArtisanInput } from '@/types/database'
 
 // Validation : seul le nom est obligatoire (saisie au fil de l'eau).
@@ -41,6 +43,14 @@ const schema = z.object({
   ville: z.string().optional(),
   code_postal: z.string().optional(),
   specificites: z.string().optional(),
+  // Société (pour le contrat)
+  forme_juridique: z.string().optional(),
+  capital_social: z.string().optional(),
+  siren: z.string().optional(),
+  ville_immatriculation: z.string().optional(),
+  representant: z.string().optional(),
+  qualite_representant: z.string().optional(),
+  taux_commission: z.string().optional(), // en %, parsé au submit
 })
 
 type FormValues = z.infer<typeof schema>
@@ -61,6 +71,15 @@ function valeursParDefaut(artisan?: Artisan): FormValues {
     ville: artisan?.ville ?? '',
     code_postal: artisan?.code_postal ?? '',
     specificites: artisan?.specificites ?? '',
+    forme_juridique: artisan?.forme_juridique ?? '',
+    capital_social: artisan?.capital_social ?? '',
+    siren: artisan?.siren ?? '',
+    ville_immatriculation: artisan?.ville_immatriculation ?? '',
+    representant: artisan?.representant ?? '',
+    qualite_representant: artisan?.qualite_representant ?? '',
+    taux_commission: String(
+      artisan?.taux_commission != null ? Math.round(artisan.taux_commission * 100) : 10,
+    ),
   }
 }
 
@@ -98,6 +117,16 @@ export function ArtisanForm({
       ville: clean(values.ville),
       code_postal: clean(values.code_postal),
       specificites: clean(values.specificites),
+      forme_juridique: clean(values.forme_juridique),
+      capital_social: clean(values.capital_social),
+      siren: clean(values.siren),
+      ville_immatriculation: clean(values.ville_immatriculation),
+      representant: clean(values.representant),
+      qualite_representant: clean(values.qualite_representant),
+      taux_commission: (() => {
+        const t = parseFloat((values.taux_commission ?? '').replace(',', '.'))
+        return Number.isFinite(t) && t >= 0 ? t / 100 : 0.1
+      })(),
       // Coordonnées recalculées par le hook au moment du save.
       latitude: null,
       longitude: null,
@@ -129,6 +158,21 @@ export function ArtisanForm({
     if (set.has(s)) set.delete(s)
     else set.add(s)
     form.setValue('sous_metiers', [...set], { shouldDirty: true })
+  }
+
+  // Auto-remplissage depuis le résultat de recherche d'entreprise.
+  function appliquerEntreprise(r: ResultatEntreprise) {
+    const opt = { shouldDirty: true }
+    if (r.raison_sociale) form.setValue('societe', r.raison_sociale, opt)
+    if (r.siren) form.setValue('siren', r.siren, opt)
+    if (r.forme_juridique) form.setValue('forme_juridique', r.forme_juridique, opt)
+    if (r.ville) form.setValue('ville_immatriculation', r.ville, opt)
+    if (r.representant) form.setValue('representant', r.representant, opt)
+    if (r.qualite_representant) form.setValue('qualite_representant', r.qualite_representant, opt)
+    // Adresse du siège (utile aussi pour la carte)
+    if (r.adresse) form.setValue('adresse', r.adresse, opt)
+    if (r.code_postal) form.setValue('code_postal', r.code_postal, opt)
+    if (r.ville) form.setValue('ville', r.ville, opt)
   }
 
   return (
@@ -344,6 +388,110 @@ export function ArtisanForm({
                 <FormControl>
                   <Input className="h-11" {...field} />
                 </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* ----- Société (pour le contrat) ----- */}
+        <div className="space-y-4 rounded-xl border border-border p-3">
+          <p className="text-sm font-semibold">Société (pour le contrat)</p>
+
+          <SocieteSearch onSelect={appliquerEntreprise} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="forme_juridique"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Forme juridique</FormLabel>
+                  <FormControl>
+                    <Input className="h-11" placeholder="SARL, SASU…" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="capital_social"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Capital (€)</FormLabel>
+                  <FormControl>
+                    <Input className="h-11" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="siren"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>SIREN</FormLabel>
+                  <FormControl>
+                    <Input className="h-11" inputMode="numeric" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="ville_immatriculation"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ville d'immatriculation</FormLabel>
+                  <FormControl>
+                    <Input className="h-11" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="representant"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Représentant</FormLabel>
+                  <FormControl>
+                    <Input className="h-11" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="qualite_representant"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Qualité</FormLabel>
+                  <FormControl>
+                    <Input className="h-11" placeholder="Gérant, Président…" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="taux_commission"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Taux de commission par défaut (%)</FormLabel>
+                <FormControl>
+                  <Input type="number" inputMode="decimal" className="h-11" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Repris dans le contrat et proposé par défaut sur ses projets (modifiable par projet).
+                </FormDescription>
               </FormItem>
             )}
           />

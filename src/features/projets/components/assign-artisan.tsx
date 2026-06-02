@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/empty-state'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { artisansCompatibles } from '../lib/artisans-compatibles'
 import { usePatchProjet } from '../hooks/use-projets'
-import type { ProjetAvecArtisan } from '@/types/database'
+import type { Artisan, ProjetAvecArtisan } from '@/types/database'
 
 // Panneau d'assignation : liste les artisans du même métier, triés par proximité.
 export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
@@ -26,12 +26,14 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
 
   const compatibles = artisansCompatibles(projet, artisans ?? [])
 
-  function assigner(artisanId: string) {
+  function assigner(artisan: Artisan) {
     // Si le projet est encore "nouveau", on le fait passer en "artisan_assigné".
+    // On reprend aussi le taux de commission par défaut de l'artisan.
+    const base = { artisan_id: artisan.id, taux_commission: artisan.taux_commission }
     const patchData =
       projet.statut === 'nouveau'
-        ? { artisan_id: artisanId, statut: 'artisan_assigne' as const }
-        : { artisan_id: artisanId }
+        ? { ...base, statut: 'artisan_assigne' as const }
+        : base
 
     patch.mutate(
       { id: projet.id, patch: patchData },
@@ -79,7 +81,7 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
                   key={artisan.id}
                   type="button"
                   disabled={patch.isPending}
-                  onClick={() => assigner(artisan.id)}
+                  onClick={() => assigner(artisan)}
                   className="flex w-full items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent/50 disabled:opacity-60"
                 >
                   <div className="min-w-0 flex-1">

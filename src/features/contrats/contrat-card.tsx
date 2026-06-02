@@ -1,12 +1,5 @@
 import { useState } from 'react'
-import {
-  FileSignature,
-  Loader2,
-  Copy,
-  Mail,
-  CheckCircle2,
-  Eye,
-} from 'lucide-react'
+import { Loader2, Copy, Mail, CheckCircle2, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,12 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/format'
 import type { Artisan } from '@/types/database'
-import { useContratArtisan, useCreateContrat } from './use-contrats'
+import { useContratArtisan } from './use-contrats'
+import { ContratGenerateur } from './contrat-generateur'
 
 // Carte "Contrat d'engagement" sur la fiche artisan.
 export function ContratCard({ artisan }: { artisan: Artisan }) {
   const { data: contrat, isLoading } = useContratArtisan(artisan.id)
-  const create = useCreateContrat()
   const [signatureVisible, setSignatureVisible] = useState(false)
 
   const lien = contrat
@@ -63,28 +56,10 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
         ) : !contrat ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Aucun contrat. Génère-le puis envoie le lien de signature à l'artisan.
+              Aucun contrat. Prépare-le (variables pré-remplies) puis envoie le lien de
+              signature à l'artisan.
             </p>
-            <Button
-              className="w-full"
-              disabled={create.isPending}
-              onClick={() =>
-                create.mutate(artisan, {
-                  onSuccess: () => toast.success('Contrat généré'),
-                  onError: (e) =>
-                    toast.error('Génération impossible', {
-                      description: e instanceof Error ? e.message : undefined,
-                    }),
-                })
-              }
-            >
-              {create.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <FileSignature className="size-4" />
-              )}
-              Générer le contrat
-            </Button>
+            <ContratGenerateur artisan={artisan} />
           </>
         ) : contrat.statut === 'signe' ? (
           <>

@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { supabase } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/format'
+import { finaliserContenu } from './contrat-modele'
 import type { ContratPublic } from '@/types/database'
 
 // Page PUBLIQUE de signature d'un contrat (accès par token, sans authentification).
@@ -112,7 +113,7 @@ export function SignerPage() {
 
             {/* Texte du contrat */}
             <div className="max-h-[45dvh] overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-4 text-sm leading-relaxed">
-              {contrat.contenu}
+              {finaliserContenu(contrat.contenu, contrat.signed_at)}
             </div>
 
             {/* Nom du signataire */}

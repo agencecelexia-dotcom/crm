@@ -27,6 +27,14 @@ export interface Artisan {
   latitude: number | null
   longitude: number | null
   specificites: string | null
+  // Infos société (pour le contrat) — auto-remplies via SIRET, éditables
+  forme_juridique: string | null
+  capital_social: string | null
+  siren: string | null
+  ville_immatriculation: string | null
+  representant: string | null
+  qualite_representant: string | null
+  taux_commission: number // taux par défaut de l'artisan (ex: 0.10)
   created_at: string
   updated_at: string
 }
@@ -58,7 +66,8 @@ export interface Projet {
   // Argent
   montant_devis: number | null
   montant_devis_signe: number | null
-  commission: number | null // colonne calculée par la base (10 %)
+  taux_commission: number // taux appliqué à ce projet (ex: 0.10)
+  commission: number | null // colonne calculée par la base (montant signé × taux)
   commission_encaissee: boolean
   date_signature: string | null
   // Fichiers

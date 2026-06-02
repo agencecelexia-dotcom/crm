@@ -23,6 +23,7 @@ import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pa
 import { supabase } from '@/lib/supabase/client'
 import { formatEuros } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
+import { finaliserContenu } from './contrat-modele'
 
 // Structure renvoyée par la fonction SQL get_mission_by_token.
 interface Mission {
@@ -169,7 +170,7 @@ function SignatureContrat({
         </div>
 
         <div className="max-h-[40dvh] overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-4 text-sm leading-relaxed">
-          {engagement.contenu}
+          {finaliserContenu(engagement.contenu, null)}
         </div>
 
         <div className="space-y-1.5">
@@ -231,7 +232,7 @@ function Dossier({
             onClick={() =>
               engagement &&
               telechargerContratPdf({
-                contenu: engagement.contenu,
+                contenu: finaliserContenu(engagement.contenu, engagement.signed_at),
                 signataire: engagement.signataire_nom,
                 signedAt: engagement.signed_at,
                 signatureDataUrl: engagement.signature_data,

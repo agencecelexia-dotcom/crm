@@ -93,6 +93,7 @@ export function ProjetForm({
       statut: projet?.statut ?? 'nouveau',
       montant_devis: projet?.montant_devis ?? null,
       montant_devis_signe: projet?.montant_devis_signe ?? null,
+      taux_commission: projet?.taux_commission ?? 0.1,
       commission_encaissee: projet?.commission_encaissee ?? false,
       date_signature: projet?.date_signature ?? null,
       contrat_url: projet?.contrat_url ?? null,

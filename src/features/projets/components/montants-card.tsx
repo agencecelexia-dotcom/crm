@@ -27,6 +27,9 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
   const [dateSign, setDateSign] = useState<Date | undefined>(
     projet.date_signature ? parseISO(projet.date_signature) : undefined,
   )
+  const [taux, setTaux] = useState(
+    String(Math.round((projet.taux_commission ?? 0.1) * 100)),
+  )
 
   function toNum(v: string): number | null {
     const n = parseFloat(v.replace(',', '.'))
@@ -41,6 +44,10 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
           montant_devis: toNum(devis),
           montant_devis_signe: toNum(devisSigne),
           date_signature: dateSign ? format(dateSign, 'yyyy-MM-dd') : null,
+          taux_commission: (() => {
+            const t = parseFloat(taux.replace(',', '.'))
+            return Number.isFinite(t) && t >= 0 ? t / 100 : 0.1
+          })(),
         },
       },
       {
@@ -127,6 +134,18 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
           </Popover>
         </div>
 
+        <div className="space-y-1.5">
+          <Label htmlFor="taux">Taux de commission (%)</Label>
+          <Input
+            id="taux"
+            type="number"
+            inputMode="decimal"
+            className="h-11"
+            value={taux}
+            onChange={(e) => setTaux(e.target.value)}
+          />
+        </div>
+
         <Button onClick={enregistrer} disabled={patch.isPending} className="h-11 w-full">
           {patch.isPending ? (
             <Loader2 className="size-4 animate-spin" />
@@ -140,7 +159,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
 
         {/* Commission calculée par la base (10 %) — jamais recalculée côté front */}
         <div className="flex items-center justify-between rounded-lg bg-secondary p-3">
-          <span className="text-sm font-medium">Commission (10 %)</span>
+          <span className="text-sm font-medium">Commission ({taux} %)</span>
           <span className="montant text-xl font-semibold text-primary">
             {formatEuros(projet.commission)}
           </span>
