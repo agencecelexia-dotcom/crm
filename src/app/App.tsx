@@ -9,6 +9,7 @@ import { SignerPage } from '@/features/contrats/signer-page'
 import { MissionPage } from '@/features/contrats/mission-page'
 import { DashboardPage } from '@/features/dashboard/dashboard-page'
 import { CartePage } from '@/features/carte/carte-page'
+import { NotesPage } from '@/features/notes/notes-page'
 import { ProjetsListPage } from '@/features/projets/pages/projets-list-page'
 import { ProjetNewPage } from '@/features/projets/pages/projet-new-page'
 import { ProjetEditPage } from '@/features/projets/pages/projet-edit-page'
@@ -37,6 +38,7 @@ export default function App() {
               <Route element={<AppLayout />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/carte" element={<CartePage />} />
+                <Route path="/notes" element={<NotesPage />} />
 
                 <Route path="/projets" element={<ProjetsListPage />} />
                 <Route path="/projets/new" element={<ProjetNewPage />} />
