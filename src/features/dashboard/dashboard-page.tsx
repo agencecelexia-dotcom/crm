@@ -202,7 +202,7 @@ export function DashboardPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{p.client_nom}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {p.metier} · {formatDate(p.created_at)}
+                        {p.metiers.join(', ')} · {formatDate(p.created_at)}
                       </p>
                     </div>
                     <StatutBadge statut={p.statut} />

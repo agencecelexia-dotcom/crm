@@ -15,14 +15,8 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { METIERS, SOUS_METIERS } from '@/lib/constants'
+import { cn } from '@/lib/utils'
+import { METIERS } from '@/lib/constants'
 import type { Projet, ProjetInput } from '@/types/database'
 
 // Formulaire d'appel rapide : champs courts, saisissables pendant l'appel.
@@ -33,8 +27,7 @@ const schema = z.object({
   client_adresse: z.string().optional(),
   client_code_postal: z.string().optional(),
   client_ville: z.string().optional(),
-  metier: z.string().min(1, 'Métier requis'),
-  sous_metier: z.string().optional(),
+  metiers: z.array(z.string()).min(1, 'Choisis au moins un type de projet'),
   description: z.string().optional(),
   budget_estime: z.string().optional(), // parsé en nombre au submit
 })
@@ -49,8 +42,11 @@ function valeursParDefaut(projet?: Projet): FormValues {
     client_adresse: projet?.client_adresse ?? '',
     client_code_postal: projet?.client_code_postal ?? '',
     client_ville: projet?.client_ville ?? '',
-    metier: projet?.metier ?? '',
-    sous_metier: projet?.sous_metier ?? '',
+    metiers: projet?.metiers?.length
+      ? projet.metiers
+      : projet?.metier
+        ? [projet.metier]
+        : [],
     description: projet?.description ?? '',
     budget_estime: projet?.budget_estime != null ? String(projet.budget_estime) : '',
   }
@@ -71,8 +67,14 @@ export function ProjetForm({
     resolver: zodResolver(schema),
     defaultValues: valeursParDefaut(projet),
   })
-  // Métier observé (useWatch = mémo-friendly) pour afficher les sous-métiers.
-  const metierSel = useWatch({ control: form.control, name: 'metier' })
+  // Métiers sélectionnés (un projet peut concerner plusieurs corps de métier).
+  const metiersSeles = useWatch({ control: form.control, name: 'metiers' }) ?? []
+  function toggleMetier(m: string) {
+    const set = new Set(metiersSeles)
+    if (set.has(m)) set.delete(m)
+    else set.add(m)
+    form.setValue('metiers', [...set], { shouldDirty: true, shouldValidate: true })
+  }
 
   function handleSubmit(values: FormValues) {
     const clean = (v?: string) => (v && v.trim() ? v.trim() : null)
@@ -84,8 +86,9 @@ export function ProjetForm({
       client_adresse: clean(values.client_adresse),
       client_code_postal: clean(values.client_code_postal),
       client_ville: clean(values.client_ville),
-      metier: values.metier,
-      sous_metier: clean(values.sous_metier),
+      metiers: values.metiers,
+      metier: values.metiers[0], // 1er métier (colonne NOT NULL, compat)
+      sous_metier: null,
       description: clean(values.description),
       budget_estime: Number.isFinite(budget) && budget > 0 ? budget : null,
       // Champs gérés ailleurs : on conserve l'existant pour une édition.
@@ -149,67 +152,41 @@ export function ProjetForm({
           />
         </div>
 
+        {/* Type(s) de projet — un client peut demander plusieurs corps de métier */}
         <FormField
           control={form.control}
-          name="metier"
-          render={({ field }) => (
+          name="metiers"
+          render={() => (
             <FormItem>
-              <FormLabel>Métier *</FormLabel>
-              <Select
-                value={field.value}
-                onValueChange={(v) => {
-                  field.onChange(v)
-                  // Le sous-métier dépend du métier → on le réinitialise.
-                  form.setValue('sous_metier', '')
-                }}
-              >
-                <FormControl>
-                  <SelectTrigger className="h-11 w-full">
-                    <SelectValue placeholder="Choisir un métier" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {METIERS.map((m) => (
-                    <SelectItem key={m} value={m}>
+              <FormLabel>Type(s) de projet *</FormLabel>
+              <div className="flex flex-wrap gap-2">
+                {METIERS.map((m) => {
+                  const actif = metiersSeles.includes(m)
+                  return (
+                    <button
+                      type="button"
+                      key={m}
+                      onClick={() => toggleMetier(m)}
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                        actif
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-card text-foreground hover:bg-accent',
+                      )}
+                    >
                       {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </button>
+                  )
+                })}
+              </div>
+              <FormDescription>
+                Sélectionne tous les corps de métier concernés (ex. portail + clôture + toiture) ;
+                détaille le reste dans la description.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
-
-        {/* Sous-métier précis (optionnel) — fiabilise le matching artisan */}
-        {metierSel && (SOUS_METIERS[metierSel] ?? []).length > 0 && (
-          <FormField
-            control={form.control}
-            name="sous_metier"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Type précis (optionnel)</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="h-11 w-full">
-                      <SelectValue placeholder="Préciser le besoin exact" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {(SOUS_METIERS[metierSel] ?? []).map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  Si précisé, seuls les artisans qui font ce type exact seront proposés.
-                </FormDescription>
-              </FormItem>
-            )}
-          />
-        )}
 
         <FormField
           control={form.control}

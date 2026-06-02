@@ -32,10 +32,10 @@ export function ProjetsListPage() {
     const q = recherche.trim().toLowerCase()
     return projets.filter((p) => {
       const matchStatut = statut === 'tous' || p.statut === statut
-      const matchMetier = metier === 'tous' || p.metier === metier
+      const matchMetier = metier === 'tous' || p.metiers.includes(metier)
       const matchTexte =
         !q ||
-        [p.client_nom, p.client_ville, p.metier, p.artisan?.societe, p.artisan?.nom]
+        [p.client_nom, p.client_ville, p.metiers.join(' '), p.artisan?.societe, p.artisan?.nom]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
       return matchStatut && matchMetier && matchTexte
@@ -128,7 +128,7 @@ export function ProjetsListPage() {
                       <StatutBadge statut={p.statut} />
                     </div>
                     <p className="truncate text-sm text-muted-foreground">
-                      {p.metier}
+                      {p.metiers.join(', ')}
                       {p.client_ville && ` · ${p.client_ville}`}
                       {p.artisan && ` · ${p.artisan.societe ?? p.artisan.nom}`}
                     </p>

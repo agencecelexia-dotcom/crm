@@ -9,13 +9,12 @@ export interface ArtisanCompatible {
 
 /**
  * Renvoie les artisans compatibles avec un projet :
- *  - exerçant le métier demandé ;
- *  - si un sous-métier précis est demandé, l'artisan doit le faire ;
+ *  - exerçant AU MOINS UN des métiers demandés (un projet peut en avoir plusieurs) ;
  *  - triés par proximité du client (les plus proches d'abord),
  *    ceux sans coordonnées étant placés à la fin.
  */
 export function artisansCompatibles(
-  projet: Pick<Projet, 'metier' | 'sous_metier' | 'latitude' | 'longitude'>,
+  projet: Pick<Projet, 'metiers' | 'latitude' | 'longitude'>,
   artisans: Artisan[],
 ): ArtisanCompatible[] {
   const client =
@@ -24,13 +23,7 @@ export function artisansCompatibles(
       : null
 
   return artisans
-    .filter((a) => {
-      const faitLeMetier = a.metiers.includes(projet.metier)
-      // Si un sous-métier précis est demandé, on exige qu'il le fasse.
-      const faitLeSousMetier =
-        !projet.sous_metier || a.sous_metiers.includes(projet.sous_metier)
-      return faitLeMetier && faitLeSousMetier
-    })
+    .filter((a) => a.metiers.some((m) => projet.metiers.includes(m)))
     .map((a) => {
       const distance =
         client && a.latitude != null && a.longitude != null

@@ -36,6 +36,7 @@ interface Mission {
     client_code_postal: string | null
     client_ville: string | null
     metier: string
+    metiers: string[]
     sous_metier: string | null
     description: string | null
     budget_estime: number | null
@@ -292,8 +293,7 @@ function Dossier({
           <Separator />
           <p className="text-muted-foreground">
             <strong className="text-foreground">Demande :</strong>{' '}
-            {projet.metier}
-            {projet.sous_metier && ` · ${projet.sous_metier}`}
+            {(projet.metiers?.length ? projet.metiers : [projet.metier]).join(', ')}
             {projet.budget_estime != null && ` · budget estimé ${formatEuros(projet.budget_estime)}`}
           </p>
           {projet.description && (

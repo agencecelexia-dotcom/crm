@@ -68,7 +68,7 @@ export function CartePage() {
         (p) =>
           p.latitude != null &&
           p.longitude != null &&
-          (metier === 'tous' || p.metier === metier) &&
+          (metier === 'tous' || p.metiers.includes(metier)) &&
           (statut === 'tous' || p.statut === statut),
       ),
     [projets, metier, statut],
@@ -150,7 +150,7 @@ export function CartePage() {
               <Popup>
                 <p className="font-medium">{p.client_nom}</p>
                 <p className="text-xs">
-                  {p.metier} · {STATUTS[p.statut].label}
+                  {p.metiers.join(', ')} · {STATUTS[p.statut].label}
                 </p>
                 {p.montant_devis_signe != null && (
                   <p className="text-xs">Signé : {formatEuros(p.montant_devis_signe)}</p>

@@ -55,7 +55,8 @@ export interface Projet {
   latitude: number | null
   longitude: number | null
   // Demande
-  metier: string
+  metier: string // 1er métier (compat)
+  metiers: string[] // tous les métiers demandés (un projet peut en avoir plusieurs)
   sous_metier: string | null
   description: string | null
   budget_estime: number | null
