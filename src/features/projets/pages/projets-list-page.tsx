@@ -47,17 +47,7 @@ export function ProjetsListPage() {
     <div>
       <PageHeader
         titre="Projets"
-        action={
-          <div className="flex gap-2">
-            <QuickProspectDialog />
-            <Button asChild size="sm" variant="outline">
-              <Link to="/projets/new">
-                <Plus className="size-4" />
-                Projet
-              </Link>
-            </Button>
-          </div>
-        }
+        action={<QuickProspectDialog />}
       />
 
       <div className="mb-4 space-y-2">

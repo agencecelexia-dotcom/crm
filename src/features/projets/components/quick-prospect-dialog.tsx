@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, Loader2 } from 'lucide-react'
+import { Plus, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -88,15 +88,16 @@ export function QuickProspectDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm">
-          <Zap className="size-4" />
-          Prospect
+          <Plus className="size-4" />
+          Nouveau
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Prospect rapide</DialogTitle>
+          <DialogTitle>Nouveau projet</DialogTitle>
           <DialogDescription>
-            Pour un lead dont tu n'as que le numéro (appel manqué, SMS sans réponse).
+            Un numéro de téléphone suffit pour démarrer (appel manqué, SMS…). Tu compléteras
+            le reste (métier, adresse, artisan…) plus tard depuis la fiche.
           </DialogDescription>
         </DialogHeader>
 
@@ -148,10 +149,21 @@ export function QuickProspectDialog() {
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-col">
           <Button onClick={creer} disabled={create.isPending} className="w-full">
             {create.isPending && <Loader2 className="size-4 animate-spin" />}
-            Ajouter le prospect
+            Ajouter
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full text-muted-foreground"
+            onClick={() => {
+              setOpen(false)
+              navigate('/projets/new')
+            }}
+          >
+            Saisie complète (métier, adresse, budget…)
           </Button>
         </DialogFooter>
       </DialogContent>
