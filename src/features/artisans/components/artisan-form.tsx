@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/form'
 import { cn } from '@/lib/utils'
 import { METIERS, SOUS_METIERS } from '@/lib/constants'
-import { RegionCombobox } from '@/components/region-combobox'
+import { ZoneCombobox } from '@/components/zone-combobox'
 import { SocieteSearch } from './societe-search'
 import type { ResultatEntreprise } from '@/lib/entreprise'
 import type { Artisan, ArtisanInput } from '@/types/database'
@@ -310,8 +310,8 @@ export function ArtisanForm({
             name="zone_intervention"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Région</FormLabel>
-                <RegionCombobox value={field.value ?? ''} onChange={field.onChange} />
+                <FormLabel>Zone d'intervention</FormLabel>
+                <ZoneCombobox value={field.value ?? ''} onChange={field.onChange} />
               </FormItem>
             )}
           />

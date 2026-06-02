@@ -12,11 +12,11 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { REGIONS } from '@/lib/constants'
+import { ZONES_INTERVENTION } from '@/lib/constants'
 
-// Sélecteur de région avec RECHERCHE + liste déroulante scrollable.
-// Tape "H" → les régions correspondantes (Hauts-de-France…) se filtrent.
-export function RegionCombobox({
+// Sélecteur de zone d'intervention avec RECHERCHE + liste scrollable.
+// Contient France entière + régions + départements (tape "Haute-Savoie" ou "74").
+export function ZoneCombobox({
   value,
   onChange,
 }: {
@@ -38,7 +38,7 @@ export function RegionCombobox({
             !value && 'text-muted-foreground',
           )}
         >
-          {value || 'Choisir une région'}
+          <span className="truncate">{value || 'Choisir une zone'}</span>
           <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -47,22 +47,22 @@ export function RegionCombobox({
         align="start"
       >
         <Command>
-          <CommandInput placeholder="Rechercher une région…" />
-          {/* CommandList est scrollable (max-h + overflow) → toutes les régions accessibles */}
+          <CommandInput placeholder="Rechercher (région, département, n°)…" />
+          {/* CommandList scrollable → toutes les zones accessibles */}
           <CommandList>
-            <CommandEmpty>Aucune région trouvée.</CommandEmpty>
+            <CommandEmpty>Aucune zone trouvée.</CommandEmpty>
             <CommandGroup>
-              {REGIONS.map((r) => (
+              {ZONES_INTERVENTION.map((z) => (
                 <CommandItem
-                  key={r}
-                  value={r}
+                  key={z}
+                  value={z}
                   onSelect={() => {
-                    onChange(r === value ? '' : r)
+                    onChange(z === value ? '' : z)
                     setOpen(false)
                   }}
                 >
-                  <Check className={cn('size-4', value === r ? 'opacity-100' : 'opacity-0')} />
-                  {r}
+                  <Check className={cn('size-4', value === z ? 'opacity-100' : 'opacity-0')} />
+                  {z}
                 </CommandItem>
               ))}
             </CommandGroup>
