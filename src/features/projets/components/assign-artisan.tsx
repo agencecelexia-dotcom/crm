@@ -60,7 +60,7 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
         <SheetHeader>
           <SheetTitle>Assigner un artisan</SheetTitle>
           <SheetDescription>
-            Artisans « {projet.metier} » triés par proximité du client.
+            Artisans « {projet.sous_metier ?? projet.metier} » triés par proximité du client.
           </SheetDescription>
         </SheetHeader>
 
@@ -72,7 +72,7 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
               description={`Aucun artisan « ${projet.metier} » en base. Ajoute-en un depuis l'onglet Artisans.`}
             />
           ) : (
-            compatibles.map(({ artisan, distance }) => {
+            compatibles.map(({ artisan, distance, dansRayon }) => {
               const estAssigne = artisan.id === projet.artisan_id
               return (
                 <button
@@ -97,6 +97,13 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
                   </div>
                   {estAssigne ? (
                     <Check className="size-5 shrink-0 text-primary" />
+                  ) : dansRayon === false ? (
+                    <Badge
+                      className="shrink-0 border-transparent text-xs"
+                      style={{ backgroundColor: '#F59E0B', color: '#fff' }}
+                    >
+                      hors rayon
+                    </Badge>
                   ) : (
                     artisan.rayon_km && (
                       <Badge variant="secondary" className="shrink-0 text-xs">

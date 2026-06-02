@@ -15,8 +15,15 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { METIERS } from '@/lib/constants'
+import { METIERS, SOUS_METIERS, REGIONS } from '@/lib/constants'
 import type { Artisan, ArtisanInput } from '@/types/database'
 
 // Validation : seul le nom est obligatoire (saisie au fil de l'eau).
@@ -27,6 +34,7 @@ const schema = z.object({
   telephone: z.string().optional(),
   email: z.string().email('Email invalide').or(z.literal('')).optional(),
   metiers: z.array(z.string()),
+  sous_metiers: z.array(z.string()),
   zone_intervention: z.string().optional(),
   rayon_km: z.string().optional(), // parsé en nombre au submit
   adresse: z.string().optional(),
@@ -46,6 +54,7 @@ function valeursParDefaut(artisan?: Artisan): FormValues {
     telephone: artisan?.telephone ?? '',
     email: artisan?.email ?? '',
     metiers: artisan?.metiers ?? [],
+    sous_metiers: artisan?.sous_metiers ?? [],
     zone_intervention: artisan?.zone_intervention ?? '',
     rayon_km: artisan?.rayon_km != null ? String(artisan.rayon_km) : '',
     adresse: artisan?.adresse ?? '',
@@ -82,6 +91,7 @@ export function ArtisanForm({
       telephone: clean(values.telephone),
       email: clean(values.email),
       metiers: values.metiers ?? [],
+      sous_metiers: values.sous_metiers ?? [],
       zone_intervention: clean(values.zone_intervention),
       rayon_km: Number.isFinite(rayon) && rayon > 0 ? rayon : null,
       adresse: clean(values.adresse),
@@ -95,11 +105,30 @@ export function ArtisanForm({
   }
 
   const metiersSeles = form.watch('metiers') ?? []
+  const sousMetiersSeles = form.watch('sous_metiers') ?? []
+
   function toggleMetier(m: string) {
     const set = new Set(metiersSeles)
-    if (set.has(m)) set.delete(m)
-    else set.add(m)
+    if (set.has(m)) {
+      set.delete(m)
+      // En retirant un métier, on retire aussi ses sous-métiers cochés.
+      const aRetirer = new Set(SOUS_METIERS[m] ?? [])
+      form.setValue(
+        'sous_metiers',
+        sousMetiersSeles.filter((s) => !aRetirer.has(s)),
+        { shouldDirty: true },
+      )
+    } else {
+      set.add(m)
+    }
     form.setValue('metiers', [...set], { shouldDirty: true })
+  }
+
+  function toggleSousMetier(s: string) {
+    const set = new Set(sousMetiersSeles)
+    if (set.has(s)) set.delete(s)
+    else set.add(s)
+    form.setValue('sous_metiers', [...set], { shouldDirty: true })
   }
 
   return (
@@ -200,16 +229,64 @@ export function ArtisanForm({
           <FormDescription>Sélectionne un ou plusieurs métiers.</FormDescription>
         </FormItem>
 
+        {/* Sous-métiers : se déroulent pour chaque métier sélectionné.
+            On coche précisément ce que l'artisan sait faire. */}
+        {metiersSeles.length > 0 && (
+          <div className="space-y-4 rounded-xl border border-border bg-secondary/40 p-3">
+            <p className="text-sm font-medium">
+              Précise ce qu'il fait exactement
+            </p>
+            {metiersSeles.map((m) => (
+              <div key={m} className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {m}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(SOUS_METIERS[m] ?? []).map((s) => {
+                    const actif = sousMetiersSeles.includes(s)
+                    return (
+                      <button
+                        type="button"
+                        key={s}
+                        onClick={() => toggleSousMetier(s)}
+                        className={cn(
+                          'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                          actif
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-card text-foreground hover:bg-accent',
+                        )}
+                      >
+                        {s}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <FormField
             control={form.control}
             name="zone_intervention"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Zone d'intervention</FormLabel>
-                <FormControl>
-                  <Input className="h-11" placeholder="Ex : Île-de-France" {...field} />
-                </FormControl>
+                <FormLabel>Région</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue placeholder="Choisir" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {REGIONS.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FormItem>
             )}
           />
@@ -237,7 +314,9 @@ export function ArtisanForm({
                 <Input className="h-11" placeholder="12 rue des Lilas" {...field} />
               </FormControl>
               <FormDescription>
-                Géocodée automatiquement à l'enregistrement (pour la carte).
+                Géocodée à l'enregistrement. Le <strong>rayon (km)</strong> ci-dessus s'applique
+                <strong> autour de cette adresse</strong> — c'est ce qui sert à proposer les artisans
+                proches d'un client (la région reste juste indicative).
               </FormDescription>
             </FormItem>
           )}

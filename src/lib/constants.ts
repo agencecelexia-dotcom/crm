@@ -4,23 +4,94 @@ import type { StatutProjet } from '@/types/database'
 //  Constantes métier partagées dans toute l'app
 // ------------------------------------------------------------
 
-/** Liste des métiers proposés (saisie rapide + filtres). */
-export const METIERS = [
-  'Clôture',
-  'Piscine',
-  'Paysagisme',
-  'CVC', // Chauffage Ventilation Climatisation
-  'Couverture',
-  'Maçonnerie',
-  'Menuiserie',
-  'Électricité',
-  'Plomberie',
-  'Terrasse',
-  'Portail',
-  'Toiture',
-  'Isolation',
-  'Rénovation',
-] as const
+/**
+ * Taxonomie métiers → sous-métiers.
+ * Quand on enregistre un artisan, on coche précisément les sous-métiers qu'il fait.
+ * Quand on crée un projet, on peut préciser le sous-métier requis → matching fiable.
+ */
+export const SOUS_METIERS: Record<string, string[]> = {
+  'Clôture': [
+    'Clôture aluminium', 'Clôture bois', 'Clôture composite', 'Clôture PVC',
+    'Clôture grillagée / rigide', 'Clôture béton', 'Mur / muret', 'Garde-corps',
+  ],
+  'Piscine': [
+    'Piscine béton enterrée', 'Piscine coque polyester', 'Piscine hors-sol',
+    'Liner / étanchéité', 'Margelles', 'Local technique / filtration',
+    'Volet / abri de piscine', 'Chauffage de piscine',
+  ],
+  'Paysagisme': [
+    'Création de jardin', 'Engazonnement / pelouse', 'Plantation',
+    'Arrosage automatique', 'Élagage / abattage', 'Allées / pavage',
+    'Clôture végétale', 'Entretien espaces verts',
+  ],
+  'CVC': [
+    'Pompe à chaleur', 'Climatisation', 'Chaudière gaz', 'Chaudière fioul',
+    'Plancher chauffant', 'Ventilation / VMC', 'Radiateurs', 'Ballon thermodynamique',
+  ],
+  'Couverture': [
+    'Toiture tuiles', 'Toiture ardoise', 'Toiture zinc', 'Toiture bac acier',
+    'Charpente', 'Zinguerie / gouttières', 'Étanchéité toit-terrasse',
+    'Fenêtre de toit / Velux', 'Démoussage',
+  ],
+  'Maçonnerie': [
+    'Fondations', 'Murs / élévation', 'Dalle béton', 'Enduit / façade',
+    'Ouverture mur porteur', 'Extension', 'Garage', 'Terrassement',
+  ],
+  'Menuiserie': [
+    'Fenêtres PVC', 'Fenêtres alu', 'Fenêtres bois', 'Portes', 'Porte de garage',
+    'Volets', 'Véranda', 'Pergola', 'Dressing / placard', 'Parquet',
+  ],
+  'Électricité': [
+    'Tableau électrique', 'Mise aux normes', 'Rénovation complète', 'Domotique',
+    'Borne de recharge VE', 'Éclairage', 'Interphone / visiophone',
+  ],
+  'Plomberie': [
+    'Salle de bain', 'Cuisine', 'Chauffe-eau', 'Recherche de fuite',
+    'Évacuation / canalisation', 'Robinetterie', 'WC / sanitaires',
+  ],
+  'Terrasse': [
+    'Terrasse bois', 'Terrasse composite', 'Terrasse carrelage', 'Terrasse pierre',
+    'Terrasse béton', 'Dalle sur plots', 'Pergola / couverture',
+  ],
+  'Portail': [
+    'Portail battant', 'Portail coulissant', 'Motorisation', 'Portillon',
+    'Interphone', 'Automatisme',
+  ],
+  'Toiture': [
+    'Réfection toiture', 'Isolation toiture', 'Nettoyage / démoussage',
+    'Étanchéité', 'Charpente', 'Fenêtre de toit',
+  ],
+  'Isolation': [
+    'Combles perdus', 'Combles aménagés', 'Murs intérieurs',
+    'Isolation extérieure (ITE)', 'Sol', 'Sous-toiture',
+  ],
+  'Rénovation': [
+    'Rénovation complète', 'Cuisine', 'Salle de bain', 'Peinture',
+    'Carrelage', 'Plâtrerie / cloisons', 'Sols / revêtements',
+  ],
+}
+
+/** Liste des métiers (dérivée de la taxonomie pour rester synchronisée). */
+export const METIERS = Object.keys(SOUS_METIERS)
+
+/** Régions françaises pour la zone d'intervention (liste déroulante). */
+export const REGIONS = [
+  'France entière',
+  'Auvergne-Rhône-Alpes',
+  'Bourgogne-Franche-Comté',
+  'Bretagne',
+  'Centre-Val de Loire',
+  'Corse',
+  'Grand Est',
+  'Hauts-de-France',
+  'Île-de-France',
+  'Normandie',
+  'Nouvelle-Aquitaine',
+  'Occitanie',
+  'Pays de la Loire',
+  "Provence-Alpes-Côte d'Azur",
+  'DOM-TOM',
+]
 
 /**
  * Configuration des statuts : libellé FR + couleur sémantique (hex).

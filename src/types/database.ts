@@ -18,6 +18,7 @@ export interface Artisan {
   telephone: string | null
   email: string | null
   metiers: string[]
+  sous_metiers: string[]
   zone_intervention: string | null
   rayon_km: number | null
   adresse: string | null
@@ -47,6 +48,7 @@ export interface Projet {
   longitude: number | null
   // Demande
   metier: string
+  sous_metier: string | null
   description: string | null
   budget_estime: number | null
   // Attribution

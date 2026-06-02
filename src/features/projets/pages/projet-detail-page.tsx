@@ -90,7 +90,7 @@ export function ProjetDetailPage() {
     <div>
       <PageHeader
         titre={projet.client_nom}
-        sousTitre={projet.metier}
+        sousTitre={projet.sous_metier ? `${projet.metier} · ${projet.sous_metier}` : projet.metier}
         back
         action={
           <Button asChild variant="outline" size="icon" aria-label="Modifier">

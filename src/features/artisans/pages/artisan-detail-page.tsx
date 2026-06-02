@@ -131,6 +131,21 @@ export function ArtisanDetailPage() {
             </>
           )}
 
+          {artisan.sous_metiers.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                Fait exactement :
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {artisan.sous_metiers.map((s) => (
+                  <Badge key={s} variant="outline">
+                    {s}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           {artisan.specificites && (
             <>
               <Separator />
