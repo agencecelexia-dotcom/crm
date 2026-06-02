@@ -33,6 +33,7 @@ CELEXIA n'exécute aucun travaux et n'intervient pas dans la relation contractue
 
 Article 1 – Objet du contrat
 Le présent contrat a pour objet de définir les conditions dans lesquelles CELEXIA transmet au Partenaire des opportunités d'affaires (les « Affaires ») correspondant à son métier et à sa zone d'intervention, et la rémunération due à CELEXIA en contrepartie de cet apport.
+Il est conclu pour l'ensemble des Affaires, présentes ET futures : signé une seule fois, il demeure valable pour tous les projets que CELEXIA transmettra ultérieurement au Partenaire, sans qu'une nouvelle signature soit nécessaire.
 
 Article 2 – Définitions
 Affaire / Lead : toute demande d'un Client transmise par CELEXIA au Partenaire, comprenant a minima l'identité du Client, ses coordonnées et la nature du projet.
