@@ -37,9 +37,13 @@ if (d.event === 'envoyer_lien_mission') {
   if (!to) return [];           // pas d'email artisan → on n'envoie rien
 
   // Salutation : prénom si dispo, sinon "Monsieur <nom>".
-  const prenom = esc(d.artisan_prenom).trim();
-  const nom = esc(d.artisan_nom).trim();
-  const salut = prenom ? ('Bonjour ' + prenom) : (nom ? ('Bonjour Monsieur ' + nom) : 'Bonjour');
+  // Casse normalisée (évite le TOUT-MAJUSCULES) : "ZACHARI" → "Zachari".
+  const cap = (s) => esc(s).toLowerCase().replace(/(^|[\s'’-])([a-zà-ÿ])/g, (m, sep, c) => sep + c.toUpperCase());
+  const hasPrenom = (d.artisan_prenom || '').trim() !== '';
+  const hasNom = (d.artisan_nom || '').trim() !== '';
+  const salut = hasPrenom
+    ? ('Bonjour ' + cap(d.artisan_prenom))
+    : (hasNom ? ('Bonjour Monsieur ' + cap(d.artisan_nom)) : 'Bonjour');
 
   // Aperçu projet SANS identité client (ni nom, ni téléphone) : ville + type + description.
   const lignes = [];
