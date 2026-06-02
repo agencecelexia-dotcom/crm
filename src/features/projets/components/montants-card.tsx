@@ -81,7 +81,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="montant_devis">Montant devis (€)</Label>
+            <Label htmlFor="montant_devis">Montant devis TTC (€)</Label>
             <Input
               id="montant_devis"
               type="number"
@@ -92,7 +92,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="montant_devis_signe">Devis signé (€)</Label>
+            <Label htmlFor="montant_devis_signe">Devis signé TTC (€)</Label>
             <Input
               id="montant_devis_signe"
               type="number"
@@ -159,7 +159,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
 
         {/* Commission calculée par la base (10 %) — jamais recalculée côté front */}
         <div className="flex items-center justify-between rounded-lg bg-secondary p-3">
-          <span className="text-sm font-medium">Commission ({taux} %)</span>
+          <span className="text-sm font-medium">Commission ({taux} % TTC)</span>
           <span className="montant text-xl font-semibold text-primary">
             {formatEuros(projet.commission)}
           </span>

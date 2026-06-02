@@ -39,7 +39,7 @@ Affaire / Lead : toute demande d'un Client transmise par CELEXIA au Partenaire, 
 Client : le particulier ou professionnel à l'origine de la demande de travaux, mis en relation avec le Partenaire par CELEXIA.
 Devis signé : tout devis, bon de commande ou marché accepté par le Client et émanant du Partenaire (ou de toute entité qui lui est liée), portant sur une Affaire transmise par CELEXIA.
 Acompte : toute somme versée par le Client au Partenaire à la signature du devis ou avant le démarrage des travaux.
-Montant HT : le montant hors taxes total du Devis signé, avenants et travaux complémentaires inclus.
+Montant TTC : le montant toutes taxes comprises (TTC) total du Devis signé, avenants et travaux complémentaires inclus.
 
 Article 3 – Obligations de CELEXIA
 Transmettre au Partenaire, avec diligence, les Affaires correspondant à son métier et à sa zone géographique d'intervention.
@@ -55,7 +55,7 @@ Exécuter les travaux dans les règles de l'art, conformément à la réglementa
 Disposer, pendant toute la durée du contrat, des qualifications, autorisations et assurances nécessaires (cf. Article 10).
 
 Article 5 – Rémunération de l'Apporteur
-En contrepartie de l'apport d'Affaires, le Partenaire verse à CELEXIA une commission égale à {{TAUX_COMMISSION}} % du Montant HT de chaque Devis signé issu d'une Affaire transmise par CELEXIA.
+En contrepartie de l'apport d'Affaires, le Partenaire verse à CELEXIA une commission égale à {{TAUX_COMMISSION}} % du Montant TTC (toutes taxes comprises) de chaque Devis signé issu d'une Affaire transmise par CELEXIA.
 La commission est due dès la signature du devis par le Client. En cas d'avenant ou de travaux complémentaires sur la même Affaire, la commission s'applique également au montant additionnel.
 
 Article 6 – Paiement de la commission sur l'acompte

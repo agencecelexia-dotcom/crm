@@ -75,14 +75,16 @@ if (d.event === 'envoyer_lien_mission') {
   subject = '✍️ Contrat signé — ' + (d.societe || d.artisan || 'Artisan');
   html = frame(`
     <h1 style="margin:0 0 10px;font-size:18px;color:#111827;">Contrat signé ✍️</h1>
-    <p style="margin:0;color:#374151;font-size:15px;line-height:1.5;"><b>${esc(d.artisan)}</b>${d.societe ? ' (' + esc(d.societe) + ')' : ''} vient de signer son contrat d'engagement${d.signataire ? ' — signataire : ' + esc(d.signataire) : ''}.</p>`);
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;"><b>${esc(d.artisan)}</b>${d.societe ? ' (' + esc(d.societe) + ')' : ''} vient de signer son contrat d'engagement${d.signataire ? ' — signataire : ' + esc(d.signataire) : ''}.</p>
+    ${d.lien ? btn(esc(d.lien), 'Ouvrir la fiche artisan →') : ''}`);
 } else if (d.event === 'devis_depose') {
   const label = d.type === 'devis_signe' ? 'Devis SIGNÉ' : 'Devis';
   subject = '📄 ' + label + ' déposé — ' + (d.client_nom || 'Client');
   html = frame(`
     <h1 style="margin:0 0 10px;font-size:18px;color:#111827;">${label} déposé 📄</h1>
-    <p style="margin:0;color:#374151;font-size:15px;line-height:1.5;">Déposé par <b>${esc(d.artisan)}</b>${d.societe ? ' (' + esc(d.societe) + ')' : ''} pour le client <b>${esc(d.client_nom)}</b> (${esc(d.metier)}${d.client_ville ? ', ' + esc(d.client_ville) : ''}).</p>
-    <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Ouvrez le CRM pour vérifier le dossier.</p>`);
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Déposé par <b>${esc(d.artisan)}</b>${d.societe ? ' (' + esc(d.societe) + ')' : ''} pour le client <b>${esc(d.client_nom)}</b> (${esc(d.metier)}${d.client_ville ? ', ' + esc(d.client_ville) : ''}).</p>
+    ${d.lien ? btn(esc(d.lien), 'Ouvrir le projet →') : ''}
+    <p style="margin:8px 0 0;color:#6b7280;font-size:13px;">Pense à valider l'encaissement de la commission une fois reçue (case « Commission encaissée »).</p>`);
 } else {
   return []; // événement inconnu → aucun envoi
 }

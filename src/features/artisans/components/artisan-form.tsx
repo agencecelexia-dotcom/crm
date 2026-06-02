@@ -452,7 +452,7 @@ export function ArtisanForm({
             name="taux_commission"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Taux de commission par défaut (%)</FormLabel>
+                <FormLabel>Taux de commission par défaut (% TTC)</FormLabel>
                 <FormControl>
                   <Input type="number" inputMode="decimal" className="h-11" {...field} />
                 </FormControl>

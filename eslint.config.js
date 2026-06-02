@@ -7,7 +7,8 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
   // dist = build ; src/components/ui = composants shadcn vendored (exports mixtes normaux)
-  globalIgnores(['dist', 'src/components/ui/**']),
+  // dist = build ; src/components/ui = shadcn vendored ; n8n = snippets de nœuds (hors app)
+  globalIgnores(['dist', 'src/components/ui/**', 'n8n/**']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
