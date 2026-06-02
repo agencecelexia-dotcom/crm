@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils'
 import { METIERS, SOUS_METIERS } from '@/lib/constants'
 import { ZoneCombobox } from '@/components/zone-combobox'
+import { CpVilleFields } from '@/components/cp-ville-fields'
 import { SocieteSearch } from './societe-search'
 import type { ResultatEntreprise } from '@/lib/entreprise'
 import type { Artisan, ArtisanInput } from '@/types/database'
@@ -129,6 +130,9 @@ export function ArtisanForm({
 
   const metiersSeles = useWatch({ control: form.control, name: 'metiers' }) ?? []
   const sousMetiersSeles = useWatch({ control: form.control, name: 'sous_metiers' }) ?? []
+  // CP/Ville observés pour l'autocomplétion croisée.
+  const cpVal = useWatch({ control: form.control, name: 'code_postal' }) ?? ''
+  const villeVal = useWatch({ control: form.control, name: 'ville' }) ?? ''
 
   function toggleMetier(m: string) {
     const set = new Set(metiersSeles)
@@ -347,32 +351,14 @@ export function ArtisanForm({
           )}
         />
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField
-            control={form.control}
-            name="code_postal"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Code postal</FormLabel>
-                <FormControl>
-                  <Input inputMode="numeric" className="h-11" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="ville"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Ville</FormLabel>
-                <FormControl>
-                  <Input className="h-11" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
+        <CpVilleFields
+          codePostal={cpVal}
+          ville={villeVal}
+          onChange={(cp, v) => {
+            form.setValue('code_postal', cp, { shouldDirty: true })
+            form.setValue('ville', v, { shouldDirty: true })
+          }}
+        />
 
         {/* ----- Société (pour le contrat) ----- */}
         <div className="space-y-4 rounded-xl border border-border p-3">

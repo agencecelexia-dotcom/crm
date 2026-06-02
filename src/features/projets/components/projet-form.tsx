@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/form'
 import { cn } from '@/lib/utils'
 import { METIERS } from '@/lib/constants'
+import { CpVilleFields } from '@/components/cp-ville-fields'
 import type { Projet, ProjetInput } from '@/types/database'
 
 // Formulaire d'appel rapide : champs courts, saisissables pendant l'appel.
@@ -69,6 +70,8 @@ export function ProjetForm({
   })
   // Métiers sélectionnés (un projet peut concerner plusieurs corps de métier).
   const metiersSeles = useWatch({ control: form.control, name: 'metiers' }) ?? []
+  const cpVal = useWatch({ control: form.control, name: 'client_code_postal' }) ?? ''
+  const villeVal = useWatch({ control: form.control, name: 'client_ville' }) ?? ''
   function toggleMetier(m: string) {
     const set = new Set(metiersSeles)
     if (set.has(m)) set.delete(m)
@@ -204,32 +207,14 @@ export function ProjetForm({
           )}
         />
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField
-            control={form.control}
-            name="client_code_postal"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Code postal</FormLabel>
-                <FormControl>
-                  <Input inputMode="numeric" className="h-11" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="client_ville"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Ville</FormLabel>
-                <FormControl>
-                  <Input className="h-11" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
+        <CpVilleFields
+          codePostal={cpVal}
+          ville={villeVal}
+          onChange={(cp, v) => {
+            form.setValue('client_code_postal', cp, { shouldDirty: true })
+            form.setValue('client_ville', v, { shouldDirty: true })
+          }}
+        />
 
         <FormField
           control={form.control}
