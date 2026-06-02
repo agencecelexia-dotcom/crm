@@ -44,6 +44,8 @@ export function MissionLinkCard({ projet }: { projet: ProjetAvecArtisan }) {
           email,
           lien,
           client_nom: projet.client_nom,
+          client_ville: projet.client_ville ?? '',
+          metiers: projet.metiers.join(', '),
           artisan_nom: [projet.artisan?.prenom, projet.artisan?.nom]
             .filter(Boolean)
             .join(' '),
