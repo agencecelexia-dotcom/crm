@@ -19,6 +19,7 @@ import {
 import { METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
+import { QuickProspectDialog } from '../components/quick-prospect-dialog'
 
 // Liste des projets : recherche + filtres statut / métier / ville.
 export function ProjetsListPage() {
@@ -47,12 +48,15 @@ export function ProjetsListPage() {
       <PageHeader
         titre="Projets"
         action={
-          <Button asChild size="sm">
-            <Link to="/projets/new">
-              <Plus className="size-4" />
-              Nouveau
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <QuickProspectDialog />
+            <Button asChild size="sm" variant="outline">
+              <Link to="/projets/new">
+                <Plus className="size-4" />
+                Projet
+              </Link>
+            </Button>
+          </div>
         }
       />
 
