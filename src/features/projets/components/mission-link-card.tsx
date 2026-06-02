@@ -43,12 +43,13 @@ export function MissionLinkCard({ projet }: { projet: ProjetAvecArtisan }) {
           event: 'envoyer_lien_mission',
           email,
           lien,
-          client_nom: projet.client_nom,
+          // On NE transmet PAS l'identité du client dans l'email (révélée après signature) :
+          // seulement ville + type de projet + description.
           client_ville: projet.client_ville ?? '',
           metiers: projet.metiers.join(', '),
-          artisan_nom: [projet.artisan?.prenom, projet.artisan?.nom]
-            .filter(Boolean)
-            .join(' '),
+          description: projet.description ?? '',
+          artisan_prenom: projet.artisan?.prenom ?? '',
+          artisan_nom: projet.artisan?.nom ?? '',
         }),
       })
       toast.success(`Lien envoyé à l'artisan (${email})`)
