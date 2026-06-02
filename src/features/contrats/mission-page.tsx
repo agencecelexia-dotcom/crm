@@ -104,6 +104,7 @@ export function MissionPage() {
       {!signe ? (
         <SignatureContrat
           engagement={engagement}
+          aArtisan={!!mission.artisan}
           artisanNomParDefaut={
             mission.artisan
               ? [mission.artisan.prenom, mission.artisan.nom].filter(Boolean).join(' ')
@@ -122,10 +123,12 @@ export function MissionPage() {
 // -------------------- Étape 1 : signature --------------------
 function SignatureContrat({
   engagement,
+  aArtisan,
   artisanNomParDefaut,
   onSigne,
 }: {
   engagement: Mission['engagement']
+  aArtisan: boolean
   artisanNomParDefaut: string
   onSigne: () => void
 }) {
@@ -134,11 +137,22 @@ function SignatureContrat({
   const [accepte, setAccepte] = useState(false)
   const [envoi, setEnvoi] = useState(false)
 
+  // Pas (encore) de contrat à signer : message selon l'état réel du projet.
   if (!engagement)
     return (
       <Card className="shadow-card">
         <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Ce projet n'est pas encore attribué. Celexia reviendra vers vous.
+          {aArtisan ? (
+            <>
+              <p className="font-medium text-foreground">Contrat en cours de préparation</p>
+              <p className="mt-1">
+                Celexia finalise votre contrat. Revenez sur ce lien dans quelques instants :
+                vous pourrez le signer ici, puis accéder au dossier de votre client.
+              </p>
+            </>
+          ) : (
+            <>Ce projet n'est pas encore attribué. Celexia reviendra vers vous.</>
+          )}
         </CardContent>
       </Card>
     )

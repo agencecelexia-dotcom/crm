@@ -36,10 +36,10 @@ function KpiCard({
 }) {
   return (
     <Card className={accent ? 'bg-primary text-primary-foreground' : ''}>
-      <CardContent className="py-4">
-        <div className="mb-1 flex items-center gap-1.5 text-sm opacity-80">
-          <Icon className="size-4" />
-          {label}
+      <CardContent className="px-4 py-4">
+        <div className="mb-1 flex items-center gap-1.5 text-xs opacity-80">
+          <Icon className="size-4 shrink-0" />
+          <span className="truncate">{label}</span>
         </div>
         <p className="montant text-2xl font-semibold">{valeur}</p>
       </CardContent>

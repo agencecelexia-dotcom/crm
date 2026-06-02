@@ -47,7 +47,7 @@ export function ArtisansListPage() {
           <Button asChild size="sm">
             <Link to="/artisans/new">
               <Plus className="size-4" />
-              Nouvel
+              Nouveau
             </Link>
           </Button>
         }

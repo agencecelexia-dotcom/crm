@@ -36,7 +36,7 @@ export function SocieteSearch({
       <p className="text-sm font-medium">Rechercher l'entreprise (auto-remplissage)</p>
       <div className="flex gap-2">
         <Input
-          className="h-11"
+          className="h-11 flex-1 min-w-0"
           placeholder="Nom de société ou SIREN…"
           value={q}
           onChange={(e) => setQ(e.target.value)}

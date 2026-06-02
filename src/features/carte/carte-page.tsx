@@ -107,7 +107,7 @@ export function CartePage() {
       </div>
 
       {/* Carte */}
-      <div className="h-[calc(100dvh-13rem)] w-full">
+      <div className="h-[calc(100dvh-16rem)] w-full">
         <MapContainer
           center={CARTE_CENTRE}
           zoom={CARTE_ZOOM}

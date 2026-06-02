@@ -87,6 +87,19 @@ export function ContratGenerateur({ artisan }: { artisan: Artisan }) {
           ))}
         </div>
 
+        {(() => {
+          const cles = ['SOCIETE_ARTISAN', 'SIREN_ARTISAN', 'REPRESENTANT_ARTISAN']
+          const manquantes = cles.filter((c) => !(vars[c] ?? '').trim())
+          if (manquantes.length === 0) return null
+          return (
+            <p className="rounded-md border border-[#F59E0B]/30 bg-[#F59E0B]/10 p-2 text-xs text-[#92400E]">
+              ⚠️ Infos société incomplètes (société, SIREN ou représentant). Le contrat sera généré
+              avec des champs vides — complète-les ci-dessus ou via la recherche SIRET sur la fiche
+              artisan.
+            </p>
+          )
+        })()}
+
         <DialogFooter>
           <Button onClick={lancer} disabled={generer.isPending} className="w-full">
             {generer.isPending && <Loader2 className="size-4 animate-spin" />}
