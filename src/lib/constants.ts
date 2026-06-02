@@ -74,9 +74,10 @@ export const SOUS_METIERS: Record<string, string[]> = {
 /** Liste des métiers (dérivée de la taxonomie pour rester synchronisée). */
 export const METIERS = Object.keys(SOUS_METIERS)
 
-/** Régions françaises pour la zone d'intervention (liste déroulante). */
+/** Régions françaises pour la zone d'intervention (18 régions officielles + national). */
 export const REGIONS = [
   'France entière',
+  // Métropole (13)
   'Auvergne-Rhône-Alpes',
   'Bourgogne-Franche-Comté',
   'Bretagne',
@@ -90,7 +91,12 @@ export const REGIONS = [
   'Occitanie',
   'Pays de la Loire',
   "Provence-Alpes-Côte d'Azur",
-  'DOM-TOM',
+  // Outre-mer (5)
+  'Guadeloupe',
+  'Martinique',
+  'Guyane',
+  'La Réunion',
+  'Mayotte',
 ]
 
 /**
