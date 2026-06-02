@@ -15,15 +15,9 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { METIERS, SOUS_METIERS, REGIONS } from '@/lib/constants'
+import { METIERS, SOUS_METIERS } from '@/lib/constants'
+import { RegionCombobox } from '@/components/region-combobox'
 import { SocieteSearch } from './societe-search'
 import type { ResultatEntreprise } from '@/lib/entreprise'
 import type { Artisan, ArtisanInput } from '@/types/database'
@@ -317,20 +311,7 @@ export function ArtisanForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Région</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="h-11 w-full">
-                      <SelectValue placeholder="Choisir" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {REGIONS.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <RegionCombobox value={field.value ?? ''} onChange={field.onChange} />
               </FormItem>
             )}
           />
