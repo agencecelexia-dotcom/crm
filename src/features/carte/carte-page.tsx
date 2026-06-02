@@ -106,8 +106,9 @@ export function CartePage() {
         </Select>
       </div>
 
-      {/* Carte */}
-      <div className="h-[calc(100dvh-16rem)] w-full">
+      {/* Carte — `isolate` crée un contexte d'empilement pour confiner les z-index
+          internes de Leaflet (sinon ils passent au-dessus des menus déroulants des filtres) */}
+      <div className="relative isolate h-[calc(100dvh-16rem)] w-full">
         <MapContainer
           center={CARTE_CENTRE}
           zoom={CARTE_ZOOM}
