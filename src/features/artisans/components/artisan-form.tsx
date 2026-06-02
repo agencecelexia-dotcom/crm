@@ -26,7 +26,7 @@ const schema = z.object({
   societe: z.string().optional(),
   telephone: z.string().optional(),
   email: z.string().email('Email invalide').or(z.literal('')).optional(),
-  metiers: z.array(z.string()).default([]),
+  metiers: z.array(z.string()),
   zone_intervention: z.string().optional(),
   rayon_km: z.string().optional(), // parsé en nombre au submit
   adresse: z.string().optional(),

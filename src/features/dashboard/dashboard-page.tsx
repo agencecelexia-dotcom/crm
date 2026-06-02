@@ -171,11 +171,8 @@ export function DashboardPage() {
                     height={50}
                   />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    cursor={{ fill: 'transparent' }}
-                    formatter={(v: number) => [v, 'Projets']}
-                  />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  <Tooltip cursor={{ fill: 'transparent' }} />
+                  <Bar dataKey="count" name="Projets" radius={[4, 4, 0, 0]}>
                     {stats.parStatut.map((s) => (
                       <Cell key={s.statut} fill={s.color} />
                     ))}
