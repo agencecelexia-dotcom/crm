@@ -65,6 +65,7 @@ export interface Projet {
   contrat_url: string | null
   devis_url: string | null
   devis_signe_url: string | null
+  token: string // lien public "espace artisan" (/mission/:token)
   created_by: string | null
   created_at: string
   updated_at: string
@@ -72,13 +73,13 @@ export interface Projet {
 
 /** Projet enrichi de son artisan (jointure pour l'affichage). */
 export interface ProjetAvecArtisan extends Projet {
-  artisan: Pick<Artisan, 'id' | 'nom' | 'prenom' | 'societe'> | null
+  artisan: Pick<Artisan, 'id' | 'nom' | 'prenom' | 'societe' | 'email'> | null
 }
 
 /** Champs éditables d'un projet (le reste est géré par la base). */
 export type ProjetInput = Omit<
   Projet,
-  'id' | 'commission' | 'created_by' | 'created_at' | 'updated_at'
+  'id' | 'commission' | 'token' | 'created_by' | 'created_at' | 'updated_at'
 >
 
 /** Contrat d'engagement Celexia ↔ artisan (signé en ligne via token public). */

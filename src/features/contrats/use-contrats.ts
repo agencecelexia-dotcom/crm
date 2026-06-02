@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import type { Artisan, Contrat } from '@/types/database'
-import { genererContenuContrat } from './contrat-template'
 
 const TABLE = 'contrats'
 
@@ -24,18 +23,20 @@ export function useContratArtisan(artisanId: string | undefined) {
   })
 }
 
-/** Génère un contrat d'engagement (snapshot du texte + token de signature). */
+/**
+ * Génère (ou récupère) le contrat d'engagement de l'artisan.
+ * S'appuie sur la fonction SQL idempotente `ensure_engagement_contrat`
+ * (un seul contrat par artisan, texte par défaut côté base).
+ */
 export function useCreateContrat() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (artisan: Artisan): Promise<Contrat> => {
-      const { data, error } = await supabase
-        .from(TABLE)
-        .insert({ artisan_id: artisan.id, contenu: genererContenuContrat(artisan) })
-        .select('*')
-        .single()
+      const { data, error } = await supabase.rpc('ensure_engagement_contrat', {
+        p_artisan_id: artisan.id,
+      })
       if (error) throw error
-      return data
+      return data as Contrat
     },
     onSuccess: (c) =>
       qc.invalidateQueries({ queryKey: ['contrats', 'artisan', c.artisan_id] }),

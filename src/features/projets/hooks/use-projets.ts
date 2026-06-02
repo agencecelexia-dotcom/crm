@@ -6,7 +6,7 @@ import type { Projet, ProjetAvecArtisan, ProjetInput } from '@/types/database'
 const TABLE = 'projets'
 // Jointure légère vers l'artisan assigné (pour l'affichage en liste/fiche).
 const SELECT_AVEC_ARTISAN =
-  '*, artisan:artisans(id, nom, prenom, societe)'
+  '*, artisan:artisans(id, nom, prenom, societe, email)'
 
 // ------------------------------------------------------------
 //  Hooks react-query pour les projets.

@@ -39,6 +39,7 @@ import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros } from '@/lib/format'
 import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets'
 import { AssignArtisan } from '../components/assign-artisan'
+import { MissionLinkCard } from '../components/mission-link-card'
 import { MontantsCard } from '../components/montants-card'
 import { DocumentRow } from '../components/document-row'
 import type { ProjetInput, StatutProjet } from '@/types/database'
@@ -153,6 +154,9 @@ export function ProjetDetailPage() {
           <AssignArtisan projet={projet} />
         </CardContent>
       </Card>
+
+      {/* Espace artisan (lien à envoyer) — visible une fois l'artisan assigné */}
+      {projet.artisan && <MissionLinkCard projet={projet} />}
 
       {/* Coordonnées client */}
       <Card className="mb-4">
