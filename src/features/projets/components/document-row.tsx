@@ -3,11 +3,13 @@ import { FileText, Upload, Eye, Loader2, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { useDropzone } from '@/hooks/use-dropzone'
 import { uploaderDocument, urlSignee, type TypeDocument } from '@/lib/storage'
 import { usePatchProjet } from '../hooks/use-projets'
 import type { ProjetInput } from '@/types/database'
 
-// Une ligne de document : upload (PDF) vers le bucket privé + consultation signée.
+// Une ligne de document : upload (PDF) par clic OU glisser-déposer + consultation signée.
 export function DocumentRow({
   projetId,
   type,
@@ -26,9 +28,12 @@ export function DocumentRow({
   const [uploading, setUploading] = useState(false)
   const [ouverture, setOuverture] = useState(false)
 
-  async function onFichier(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // Logique d'upload partagée (clic + drop)
+  async function traiter(file: File) {
+    if (file.type && !file.type.includes('pdf')) {
+      toast.error('Format PDF uniquement')
+      return
+    }
     setUploading(true)
     try {
       const chemin = await uploaderDocument(projetId, type, file)
@@ -44,6 +49,8 @@ export function DocumentRow({
     }
   }
 
+  const { dragActive, handlers } = useDropzone(traiter)
+
   async function consulter() {
     setOuverture(true)
     try {
@@ -56,20 +63,28 @@ export function DocumentRow({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border p-3">
+    <div
+      {...handlers}
+      className={cn(
+        'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+        dragActive ? 'border-primary border-dashed bg-primary/5' : 'border-border',
+      )}
+    >
       <FileText
         className={cheminActuel ? 'size-5 text-primary' : 'size-5 text-muted-foreground'}
       />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{label}</p>
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
-          {cheminActuel ? (
+          {dragActive ? (
+            'Déposez le PDF ici…'
+          ) : cheminActuel ? (
             <>
               <CheckCircle2 className="size-3 text-[#22C55E]" />
               Document présent
             </>
           ) : (
-            'Aucun fichier'
+            'Aucun fichier — glissez un PDF ou cliquez'
           )}
         </p>
       </div>
@@ -94,7 +109,10 @@ export function DocumentRow({
         type="file"
         accept="application/pdf"
         className="hidden"
-        onChange={onFichier}
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void traiter(f)
+        }}
       />
     </div>
   )
