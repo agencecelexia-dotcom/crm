@@ -1,0 +1,275 @@
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { format } from 'date-fns'
+import { toast } from 'sonner'
+import {
+  Loader2,
+  Pencil,
+  Trash2,
+  Phone,
+  Mail,
+  MapPin,
+  User,
+  ChevronRight,
+} from 'lucide-react'
+
+import { PageHeader } from '@/components/page-header'
+import { StatutBadge } from '@/components/statut-badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
+import { formatEuros } from '@/lib/format'
+import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets'
+import { AssignArtisan } from '../components/assign-artisan'
+import { MontantsCard } from '../components/montants-card'
+import { DocumentRow } from '../components/document-row'
+import type { ProjetInput, StatutProjet } from '@/types/database'
+
+// Fiche projet : infos, statut, assignation, montants/commission, documents.
+export function ProjetDetailPage() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const { data: projet, isLoading } = useProjet(id)
+  const patch = usePatchProjet()
+  const remove = useDeleteProjet()
+
+  if (isLoading || !projet) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  // Changement de statut. Passage à "devis signé" → date de signature auto si vide.
+  function changerStatut(nouveau: StatutProjet) {
+    if (!projet) return
+    const patchData: Partial<ProjetInput> = { statut: nouveau }
+    if (nouveau === 'devis_signe' && !projet.date_signature) {
+      patchData.date_signature = format(new Date(), 'yyyy-MM-dd')
+    }
+    patch.mutate(
+      { id: projet.id, patch: patchData },
+      {
+        onSuccess: () => toast.success(`Statut : ${STATUTS[nouveau].label}`),
+        onError: (err) =>
+          toast.error('Changement impossible', {
+            description: err instanceof Error ? err.message : undefined,
+          }),
+      },
+    )
+  }
+
+  const adresseClient = [
+    projet.client_adresse,
+    projet.client_code_postal,
+    projet.client_ville,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
+  return (
+    <div>
+      <PageHeader
+        titre={projet.client_nom}
+        sousTitre={projet.metier}
+        back
+        action={
+          <Button asChild variant="outline" size="icon" aria-label="Modifier">
+            <Link to={`/projets/${projet.id}/edit`}>
+              <Pencil className="size-4" />
+            </Link>
+          </Button>
+        }
+      />
+
+      {/* Statut */}
+      <Card className="mb-4">
+        <CardContent className="space-y-3 py-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Statut</span>
+            <StatutBadge statut={projet.statut} />
+          </div>
+          <Select value={projet.statut} onValueChange={(v) => changerStatut(v as StatutProjet)}>
+            <SelectTrigger className="h-11 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUTS_ORDRE.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STATUTS[s].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {/* Artisan assigné */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Artisan</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {projet.artisan ? (
+            <Link
+              to={`/artisans/${projet.artisan.id}`}
+              className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-accent/50"
+            >
+              <User className="size-5 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">
+                  {projet.artisan.nom} {projet.artisan.prenom}
+                </p>
+                {projet.artisan.societe && (
+                  <p className="truncate text-sm text-muted-foreground">
+                    {projet.artisan.societe}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="size-5 text-muted-foreground" />
+            </Link>
+          ) : (
+            <p className="text-sm text-muted-foreground">Aucun artisan assigné.</p>
+          )}
+          <AssignArtisan projet={projet} />
+        </CardContent>
+      </Card>
+
+      {/* Coordonnées client */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Client</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {projet.client_telephone && (
+            <a
+              href={`tel:${projet.client_telephone}`}
+              className="flex items-center gap-3"
+            >
+              <Phone className="size-4 text-muted-foreground" />
+              {projet.client_telephone}
+            </a>
+          )}
+          {projet.client_email && (
+            <a
+              href={`mailto:${projet.client_email}`}
+              className="flex items-center gap-3 break-all"
+            >
+              <Mail className="size-4 text-muted-foreground" />
+              {projet.client_email}
+            </a>
+          )}
+          {adresseClient && (
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <span>{adresseClient}</span>
+            </div>
+          )}
+          {projet.budget_estime != null && (
+            <p className="text-muted-foreground">
+              Budget estimé : {formatEuros(projet.budget_estime)}
+            </p>
+          )}
+          {projet.description && (
+            <>
+              <Separator />
+              <p className="whitespace-pre-wrap text-muted-foreground">
+                {projet.description}
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Argent / commission */}
+      <MontantsCard projet={projet} />
+
+      {/* Documents */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Documents (PDF)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <DocumentRow
+            projetId={projet.id}
+            type="contrat"
+            label="Contrat artisan"
+            champ="contrat_url"
+            cheminActuel={projet.contrat_url}
+          />
+          <DocumentRow
+            projetId={projet.id}
+            type="devis"
+            label="Devis"
+            champ="devis_url"
+            cheminActuel={projet.devis_url}
+          />
+          <DocumentRow
+            projetId={projet.id}
+            type="devis_signe"
+            label="Devis signé"
+            champ="devis_signe_url"
+            cheminActuel={projet.devis_signe_url}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Suppression */}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="ghost" className="w-full text-destructive">
+            <Trash2 className="size-4" />
+            Supprimer ce projet
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer le projet ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() =>
+                remove.mutate(projet.id, {
+                  onSuccess: () => {
+                    toast.success('Projet supprimé')
+                    navigate('/projets', { replace: true })
+                  },
+                  onError: (err) =>
+                    toast.error('Suppression impossible', {
+                      description: err instanceof Error ? err.message : undefined,
+                    }),
+                })
+              }
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
