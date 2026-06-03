@@ -23,7 +23,13 @@ export function artisansCompatibles(
       : null
 
   return artisans
-    .filter((a) => a.metiers.some((m) => projet.metiers.includes(m)))
+    .filter((a) =>
+      // Pas (encore) de métier sur le projet (ex. prospect rapide) → on propose
+      // tous les artisans (triés par proximité). Sinon, intersection des métiers.
+      projet.metiers.length === 0
+        ? true
+        : a.metiers.some((m) => projet.metiers.includes(m)),
+    )
     .map((a) => {
       const distance =
         client && a.latitude != null && a.longitude != null

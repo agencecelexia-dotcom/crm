@@ -62,7 +62,8 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
         <SheetHeader>
           <SheetTitle>Assigner un artisan</SheetTitle>
           <SheetDescription>
-            Artisans « {projet.metiers.join(' / ')} » triés par proximité du client.
+            Artisans « {projet.metiers.length ? projet.metiers.join(' / ') : 'tous métiers'} »
+            triés par proximité du client.
           </SheetDescription>
         </SheetHeader>
 

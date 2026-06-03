@@ -112,10 +112,9 @@ export function ArtisanDetailPage() {
               </span>
             </div>
           )}
-          {(artisan.zone_intervention || artisan.rayon_km) && (
+          {artisan.rayon_km != null && (
             <p className="text-muted-foreground">
-              Zone : {artisan.zone_intervention || '—'}
-              {artisan.rayon_km ? ` · rayon ${artisan.rayon_km} km` : ''}
+              Rayon d'intervention : {artisan.rayon_km} km autour de son adresse
             </p>
           )}
 

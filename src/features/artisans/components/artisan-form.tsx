@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/form'
 import { cn } from '@/lib/utils'
 import { METIERS, SOUS_METIERS } from '@/lib/constants'
-import { ZoneCombobox } from '@/components/zone-combobox'
 import { CpVilleFields } from '@/components/cp-ville-fields'
 import { SocieteSearch } from './societe-search'
 import type { ResultatEntreprise } from '@/lib/entreprise'
@@ -32,7 +31,6 @@ const schema = z.object({
   email: z.string().email('Email invalide').or(z.literal('')).optional(),
   metiers: z.array(z.string()),
   sous_metiers: z.array(z.string()),
-  zone_intervention: z.string().optional(),
   rayon_km: z.string().optional(), // parsé en nombre au submit
   adresse: z.string().optional(),
   ville: z.string().optional(),
@@ -60,7 +58,6 @@ function valeursParDefaut(artisan?: Artisan): FormValues {
     email: artisan?.email ?? '',
     metiers: artisan?.metiers ?? [],
     sous_metiers: artisan?.sous_metiers ?? [],
-    zone_intervention: artisan?.zone_intervention ?? '',
     rayon_km: artisan?.rayon_km != null ? String(artisan.rayon_km) : '',
     adresse: artisan?.adresse ?? '',
     ville: artisan?.ville ?? '',
@@ -106,7 +103,7 @@ export function ArtisanForm({
       email: clean(values.email),
       metiers: values.metiers ?? [],
       sous_metiers: values.sous_metiers ?? [],
-      zone_intervention: clean(values.zone_intervention),
+      zone_intervention: null, // champ retiré (ville + rayon suffisent)
       rayon_km: Number.isFinite(rayon) && rayon > 0 ? rayon : null,
       adresse: clean(values.adresse),
       ville: clean(values.ville),
@@ -308,30 +305,18 @@ export function ArtisanForm({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField
-            control={form.control}
-            name="zone_intervention"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Zone d'intervention</FormLabel>
-                <ZoneCombobox value={field.value ?? ''} onChange={field.onChange} />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="rayon_km"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Rayon (km)</FormLabel>
-                <FormControl>
-                  <Input type="number" inputMode="numeric" className="h-11" {...field} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
+        <FormField
+          control={form.control}
+          name="rayon_km"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Rayon d'intervention (km)</FormLabel>
+              <FormControl>
+                <Input type="number" inputMode="numeric" className="h-11" {...field} />
+              </FormControl>
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}
