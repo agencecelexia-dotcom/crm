@@ -19,7 +19,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
-import { formatEuros, formatDate } from '@/lib/format'
+import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
 import { QuickProspectDialog } from '../components/quick-prospect-dialog'
 import { KanbanProjets } from '../components/kanban-projets'
@@ -134,31 +134,30 @@ export function ProjetsListPage() {
           }
         />
       ) : (
-        <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-3 md:grid-cols-2">
           {resultats.map((p) => (
             <li key={p.id} className="min-w-0">
-              <Link to={`/projets/${p.id}`}>
-                <Card className="flex items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
-                  <div className="min-w-0 flex-1">
+              <Link to={`/projets/${p.id}`} className="block h-full">
+                <Card className="flex h-full items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="min-w-0 truncate font-medium">{p.client_nom}</p>
                       <StatutBadge statut={p.statut} />
                     </div>
                     {p.client_telephone && (
-                      <p className="flex items-center gap-1 truncate text-sm font-medium text-primary">
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
                         <Phone className="size-3.5 shrink-0" />
-                        {p.client_telephone}
+                        <span className="truncate">{formatTel(p.client_telephone)}</span>
                       </p>
                     )}
                     <p className="truncate text-xs text-muted-foreground">
                       {p.metiers.join(', ') || '—'}
                       {p.client_ville && ` · ${p.client_ville}`}
-                      {p.artisan && ` · ${p.artisan.societe ?? p.artisan.nom}`}
                     </p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    <p className="truncate text-xs text-muted-foreground">
+                      {p.artisan ? `${p.artisan.societe ?? p.artisan.nom} · ` : ''}
                       {formatDate(p.created_at)}
-                      {p.montant_devis_signe != null &&
-                        ` · signé ${formatEuros(p.montant_devis_signe)}`}
+                      {p.montant_devis_signe != null && ` · ${formatEuros(p.montant_devis_signe)}`}
                     </p>
                   </div>
                   <ChevronRight className="size-5 shrink-0 text-muted-foreground" />

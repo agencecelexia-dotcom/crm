@@ -24,7 +24,7 @@ import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pa
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { useDropzone } from '@/hooks/use-dropzone'
-import { formatEuros } from '@/lib/format'
+import { formatEuros, formatTel } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
 
@@ -277,7 +277,7 @@ function Dossier({
           {projet.client_telephone && (
             <a href={`tel:${projet.client_telephone}`} className="flex items-center gap-3 text-primary">
               <Phone className="size-4" />
-              {projet.client_telephone}
+              {formatTel(projet.client_telephone)}
             </a>
           )}
           {projet.client_email && (

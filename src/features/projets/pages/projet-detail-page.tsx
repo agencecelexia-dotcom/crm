@@ -36,7 +36,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
-import { formatEuros, formatDateHeure } from '@/lib/format'
+import { formatEuros, formatDateHeure, formatTel } from '@/lib/format'
 import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets'
 import { AssignArtisan } from '../components/assign-artisan'
 import { MissionLinkCard } from '../components/mission-link-card'
@@ -183,7 +183,7 @@ export function ProjetDetailPage() {
               className="flex items-center gap-3"
             >
               <Phone className="size-4 text-muted-foreground" />
-              {projet.client_telephone}
+              {formatTel(projet.client_telephone)}
             </a>
           )}
           {projet.client_email && (

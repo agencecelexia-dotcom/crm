@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { METIERS } from '@/lib/constants'
+import { formatTel } from '@/lib/format'
 import { useArtisans } from '../hooks/use-artisans'
 
 // Liste des artisans : recherche texte + filtre métier.
@@ -101,12 +102,12 @@ export function ArtisansListPage() {
           }
         />
       ) : (
-        <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid gap-3 md:grid-cols-2">
           {resultats.map((a) => (
             <li key={a.id} className="min-w-0">
-              <Link to={`/artisans/${a.id}`}>
-                <Card className="flex items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
-                  <div className="min-w-0 flex-1">
+              <Link to={`/artisans/${a.id}`} className="block h-full">
+                <Card className="flex h-full items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <p className="truncate font-medium">
                       {[a.prenom, a.nom].filter(Boolean).join(' ')}
                       {a.societe && (
@@ -114,16 +115,16 @@ export function ArtisansListPage() {
                       )}
                     </p>
                     {a.telephone && (
-                      <p className="flex items-center gap-1 truncate text-sm font-medium text-primary">
+                      <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
                         <Phone className="size-3.5 shrink-0" />
-                        {a.telephone}
+                        <span className="truncate">{formatTel(a.telephone)}</span>
                       </p>
                     )}
                     <p className="truncate text-xs text-muted-foreground">
                       {a.ville || 'Ville non renseignée'}
                     </p>
                     {a.metiers.length > 0 && (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1 pt-0.5">
                         {a.metiers.slice(0, 3).map((m) => (
                           <Badge key={m} variant="secondary" className="text-xs">
                             {m}

@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { formatEuros, formatDate } from '@/lib/format'
+import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useArtisan, useDeleteArtisan } from '../hooks/use-artisans'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
 import { ContratCard } from '@/features/contrats/contrat-card'
@@ -90,7 +90,7 @@ export function ArtisanDetailPage() {
               className="flex items-center gap-3 text-foreground"
             >
               <Phone className="size-4 text-muted-foreground" />
-              {artisan.telephone}
+              {formatTel(artisan.telephone)}
             </a>
           )}
           {artisan.email && (

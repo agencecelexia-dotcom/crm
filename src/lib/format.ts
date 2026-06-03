@@ -13,6 +13,17 @@ export function formatEuros(montant: number | null | undefined): string {
   }).format(montant)
 }
 
+/** Formate un numéro de téléphone FR par paires : "0612345678" → "06 12 34 56 78". */
+export function formatTel(tel: string | null | undefined): string {
+  if (!tel) return ''
+  const d = tel.replace(/\D/g, '')
+  if (d.startsWith('33') && d.length === 11) {
+    return '+33 ' + d.slice(2).replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+  }
+  const groupe = d.replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+  return groupe || tel
+}
+
 /** Formate une date ISO en JJ/MM/AAAA. null/undefined → "—". */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
