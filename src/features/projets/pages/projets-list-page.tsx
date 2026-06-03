@@ -134,7 +134,7 @@ export function ProjetsListPage() {
           }
         />
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {resultats.map((p) => (
             <li key={p.id}>
               <Link to={`/projets/${p.id}`}>

@@ -101,7 +101,7 @@ export function ArtisansListPage() {
           }
         />
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {resultats.map((a) => (
             <li key={a.id}>
               <Link to={`/artisans/${a.id}`}>

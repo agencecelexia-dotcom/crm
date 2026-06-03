@@ -21,7 +21,7 @@ export function ProjetEditPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <PageHeader titre="Modifier le projet" back />
       <ProjetForm
         projet={projet}

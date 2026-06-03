@@ -10,7 +10,7 @@ export function ArtisanNewPage() {
   const create = useCreateArtisan()
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <PageHeader titre="Nouvel artisan" back />
       <ArtisanForm
         submitting={create.isPending}

@@ -12,7 +12,7 @@ export function ProjetNewPage() {
   const create = useCreateProjet()
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <PageHeader titre="Nouveau projet" sousTitre="Saisie pendant l'appel" back />
       <ProjetForm
         submitting={create.isPending}

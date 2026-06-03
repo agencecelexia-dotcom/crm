@@ -54,7 +54,7 @@ export function ArtisanDetailPage() {
     .reduce((acc, p) => acc + (p.commission ?? 0), 0)
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <PageHeader
         titre={`${artisan.nom} ${artisan.prenom ?? ''}`.trim()}
         sousTitre={artisan.societe ?? undefined}

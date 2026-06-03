@@ -21,7 +21,7 @@ export function ArtisanEditPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <PageHeader titre="Modifier l'artisan" back />
       <ArtisanForm
         artisan={artisan}

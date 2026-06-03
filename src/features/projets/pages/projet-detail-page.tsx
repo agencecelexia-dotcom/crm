@@ -89,7 +89,7 @@ export function ProjetDetailPage() {
     .join(', ')
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl">
       <PageHeader
         titre={projet.client_nom}
         sousTitre={projet.metiers.join(' + ')}
