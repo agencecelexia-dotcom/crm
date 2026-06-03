@@ -29,10 +29,14 @@ export function ArtisansListPage() {
   const resultats = useMemo(() => {
     if (!artisans) return []
     const q = recherche.trim().toLowerCase()
+    const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
     return artisans.filter((a) => {
       const matchMetier = metier === 'tous' || a.metiers.includes(metier)
+      const telDigits = (a.telephone ?? '').replace(/\D/g, '')
+      const matchTel = qDigits.length >= 2 && telDigits.includes(qDigits)
       const matchTexte =
         !q ||
+        matchTel ||
         [a.nom, a.prenom, a.societe, a.ville]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
@@ -106,7 +110,7 @@ export function ArtisansListPage() {
           {resultats.map((a) => (
             <li key={a.id} className="min-w-0">
               <Link to={`/artisans/${a.id}`} className="block h-full">
-                <Card className="flex h-full items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
+                <Card className="flex h-full flex-row items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="truncate font-medium">
                       {[a.prenom, a.nom].filter(Boolean).join(' ')}

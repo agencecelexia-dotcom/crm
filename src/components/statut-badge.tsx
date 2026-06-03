@@ -8,7 +8,7 @@ export function StatutBadge({ statut }: { statut: StatutProjet }) {
   return (
     <Badge
       style={{ backgroundColor: color, color: textOnColor }}
-      className="border-transparent"
+      className="shrink-0 whitespace-nowrap border-transparent"
     >
       {label}
     </Badge>

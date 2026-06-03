@@ -36,10 +36,14 @@ export function ProjetsListPage() {
   const base = useMemo(() => {
     if (!projets) return []
     const q = recherche.trim().toLowerCase()
+    const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
     return projets.filter((p) => {
       const matchMetier = metier === 'tous' || p.metiers.includes(metier)
+      const telDigits = (p.client_telephone ?? '').replace(/\D/g, '')
+      const matchTel = qDigits.length >= 2 && telDigits.includes(qDigits)
       const matchTexte =
         !q ||
+        matchTel ||
         [p.client_nom, p.client_ville, p.metiers.join(' '), p.artisan?.societe, p.artisan?.nom]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
@@ -73,7 +77,7 @@ export function ProjetsListPage() {
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-11 pl-9"
-            placeholder="Rechercher (client, ville, artisan)…"
+            placeholder="Rechercher (nom, n° de tél, ville, artisan)…"
             value={recherche}
             onChange={(e) => setRecherche(e.target.value)}
           />
@@ -138,7 +142,7 @@ export function ProjetsListPage() {
           {resultats.map((p) => (
             <li key={p.id} className="min-w-0">
               <Link to={`/projets/${p.id}`} className="block h-full">
-                <Card className="flex h-full items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
+                <Card className="flex h-full flex-row items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="min-w-0 truncate font-medium">{p.client_nom}</p>
