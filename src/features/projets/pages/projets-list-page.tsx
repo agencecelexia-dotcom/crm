@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, FolderKanban, ChevronRight } from 'lucide-react'
+import { Plus, Search, FolderKanban, ChevronRight, Phone } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -136,20 +136,26 @@ export function ProjetsListPage() {
       ) : (
         <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {resultats.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className="min-w-0">
               <Link to={`/projets/${p.id}`}>
-                <Card className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/50">
+                <Card className="flex items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate font-medium">{p.client_nom}</p>
+                      <p className="min-w-0 truncate font-medium">{p.client_nom}</p>
                       <StatutBadge statut={p.statut} />
                     </div>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {p.metiers.join(', ')}
+                    {p.client_telephone && (
+                      <p className="flex items-center gap-1 truncate text-sm font-medium text-primary">
+                        <Phone className="size-3.5 shrink-0" />
+                        {p.client_telephone}
+                      </p>
+                    )}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {p.metiers.join(', ') || '—'}
                       {p.client_ville && ` · ${p.client_ville}`}
                       {p.artisan && ` · ${p.artisan.societe ?? p.artisan.nom}`}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {formatDate(p.created_at)}
                       {p.montant_devis_signe != null &&
                         ` · signé ${formatEuros(p.montant_devis_signe)}`}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Users, ChevronRight } from 'lucide-react'
+import { Plus, Search, Users, ChevronRight, Phone } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -103,17 +103,23 @@ export function ArtisansListPage() {
       ) : (
         <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {resultats.map((a) => (
-            <li key={a.id}>
+            <li key={a.id} className="min-w-0">
               <Link to={`/artisans/${a.id}`}>
-                <Card className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/50">
+                <Card className="flex items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">
-                      {a.nom} {a.prenom}
+                      {[a.prenom, a.nom].filter(Boolean).join(' ')}
                       {a.societe && (
                         <span className="text-muted-foreground"> · {a.societe}</span>
                       )}
                     </p>
-                    <p className="truncate text-sm text-muted-foreground">
+                    {a.telephone && (
+                      <p className="flex items-center gap-1 truncate text-sm font-medium text-primary">
+                        <Phone className="size-3.5 shrink-0" />
+                        {a.telephone}
+                      </p>
+                    )}
+                    <p className="truncate text-xs text-muted-foreground">
                       {a.ville || 'Ville non renseignée'}
                     </p>
                     {a.metiers.length > 0 && (
