@@ -11,8 +11,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30_000, // 30 s avant de considérer la donnée périmée
-            refetchOnWindowFocus: false,
+            staleTime: 15_000, // 15 s avant de considérer la donnée périmée
+            // Rafraîchit au retour sur l'onglet → reflète les actions faites ailleurs
+            // (ex. artisan qui signe son contrat depuis son téléphone).
+            refetchOnWindowFocus: true,
             retry: 1,
           },
         },

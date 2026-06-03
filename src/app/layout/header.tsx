@@ -17,7 +17,7 @@ export function Header() {
   const email = session?.user.email ?? ''
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur md:hidden">
       <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
         <BrandLogo className="h-7" />
         <DropdownMenu>

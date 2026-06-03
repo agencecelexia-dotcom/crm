@@ -15,7 +15,7 @@ export function BottomNav() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur
-                 pb-[env(safe-area-inset-bottom)]"
+                 pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Navigation principale"
     >
       <ul className="mx-auto flex max-w-2xl items-stretch justify-around">

@@ -16,10 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 import { METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
 import { QuickProspectDialog } from '../components/quick-prospect-dialog'
+import { KanbanProjets } from '../components/kanban-projets'
 
 // Liste des projets : recherche + filtres statut / métier / ville.
 export function ProjetsListPage() {
@@ -27,21 +30,28 @@ export function ProjetsListPage() {
   const [recherche, setRecherche] = useState('')
   const [statut, setStatut] = useState('tous')
   const [metier, setMetier] = useState('tous')
+  const [vue, setVue] = useState<'liste' | 'pipeline'>('liste')
 
-  const resultats = useMemo(() => {
+  // Recherche + métier (communs aux 2 vues)
+  const base = useMemo(() => {
     if (!projets) return []
     const q = recherche.trim().toLowerCase()
     return projets.filter((p) => {
-      const matchStatut = statut === 'tous' || p.statut === statut
       const matchMetier = metier === 'tous' || p.metiers.includes(metier)
       const matchTexte =
         !q ||
         [p.client_nom, p.client_ville, p.metiers.join(' '), p.artisan?.societe, p.artisan?.nom]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
-      return matchStatut && matchMetier && matchTexte
+      return matchMetier && matchTexte
     })
-  }, [projets, recherche, statut, metier])
+  }, [projets, recherche, metier])
+
+  // Vue liste : on applique aussi le filtre statut
+  const resultats = useMemo(
+    () => base.filter((p) => statut === 'tous' || p.statut === statut),
+    [base, statut],
+  )
 
   return (
     <div>
@@ -49,6 +59,14 @@ export function ProjetsListPage() {
         titre="Projets"
         action={<QuickProspectDialog />}
       />
+
+      {/* Bascule Liste / Pipeline (Kanban) */}
+      <Tabs value={vue} onValueChange={(v) => setVue(v as 'liste' | 'pipeline')} className="mb-3">
+        <TabsList>
+          <TabsTrigger value="liste">Liste</TabsTrigger>
+          <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="mb-4 space-y-2">
         <div className="relative">
@@ -60,20 +78,23 @@ export function ProjetsListPage() {
             onChange={(e) => setRecherche(e.target.value)}
           />
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Select value={statut} onValueChange={setStatut}>
-            <SelectTrigger className="h-11 w-full">
-              <SelectValue placeholder="Statut" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tous">Tous statuts</SelectItem>
-              {STATUTS_ORDRE.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STATUTS[s].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className={cn('grid gap-2', vue === 'liste' ? 'grid-cols-2' : 'grid-cols-1')}>
+          {/* Le filtre statut n'a de sens qu'en vue liste (en pipeline, ce sont les colonnes) */}
+          {vue === 'liste' && (
+            <Select value={statut} onValueChange={setStatut}>
+              <SelectTrigger className="h-11 w-full">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tous">Tous statuts</SelectItem>
+                {STATUTS_ORDRE.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {STATUTS[s].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={metier} onValueChange={setMetier}>
             <SelectTrigger className="h-11 w-full">
               <SelectValue placeholder="Métier" />
@@ -96,6 +117,8 @@ export function ProjetsListPage() {
             <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
         </div>
+      ) : vue === 'pipeline' ? (
+        <KanbanProjets projets={base} />
       ) : resultats.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
