@@ -33,16 +33,19 @@ export async function uploaderDocument(
 
 /**
  * Génère une URL signée (valable 1h par défaut) pour consulter un document privé.
+ * `download` force le téléchargement (Content-Disposition: attachment) ; on peut
+ * passer un nom de fichier (string) ou `true` pour garder le nom d'origine.
  * Renvoie null si le chemin est vide.
  */
 export async function urlSignee(
   chemin: string | null | undefined,
   expiresInSec = 3600,
+  download?: boolean | string,
 ): Promise<string | null> {
   if (!chemin) return null
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrl(chemin, expiresInSec)
+    .createSignedUrl(chemin, expiresInSec, download ? { download } : undefined)
   if (error) return null
   return data.signedUrl
 }

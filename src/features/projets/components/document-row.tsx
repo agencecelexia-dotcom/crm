@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FileText, Upload, Eye, Loader2, CheckCircle2 } from 'lucide-react'
+import { FileText, Upload, Eye, Download, Loader2, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ export function DocumentRow({
   const patch = usePatchProjet()
   const [uploading, setUploading] = useState(false)
   const [ouverture, setOuverture] = useState(false)
+  const [telechargement, setTelechargement] = useState(false)
 
   // Logique d'upload partagée (clic + drop)
   async function traiter(file: File) {
@@ -51,14 +52,44 @@ export function DocumentRow({
 
   const { dragActive, handlers } = useDropzone(traiter)
 
+  // Voir : on ouvre l'onglet TOUT DE SUITE (dans le geste de clic) puis on le
+  // redirige une fois l'URL signée prête — sinon les navigateurs (surtout mobile)
+  // bloquent l'ouverture asynchrone (popup bloqué) et rien ne s'affiche.
   async function consulter() {
     setOuverture(true)
+    const onglet = window.open('about:blank', '_blank')
     try {
       const url = await urlSignee(cheminActuel)
-      if (url) window.open(url, '_blank', 'noopener')
-      else toast.error('Document introuvable')
+      if (!url) {
+        onglet?.close()
+        toast.error('Document introuvable')
+        return
+      }
+      if (onglet) onglet.location.href = url
+      else window.location.href = url // popup bloqué → ouverture dans l'onglet courant
     } finally {
       setOuverture(false)
+    }
+  }
+
+  // Télécharger : URL signée avec Content-Disposition: attachment → marche
+  // partout (mobile + ordinateur), même sans gérer le nom côté navigateur.
+  async function telecharger() {
+    setTelechargement(true)
+    try {
+      const url = await urlSignee(cheminActuel, 3600, `${label}.pdf`)
+      if (!url) {
+        toast.error('Document introuvable')
+        return
+      }
+      const a = document.createElement('a')
+      a.href = url
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } finally {
+      setTelechargement(false)
     }
   }
 
@@ -90,9 +121,20 @@ export function DocumentRow({
       </div>
 
       {cheminActuel && (
-        <Button variant="ghost" size="icon" onClick={consulter} disabled={ouverture} aria-label="Voir">
-          {ouverture ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
-        </Button>
+        <>
+          <Button variant="ghost" size="icon" onClick={consulter} disabled={ouverture} aria-label="Voir">
+            {ouverture ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={telecharger}
+            disabled={telechargement}
+            aria-label="Télécharger"
+          >
+            {telechargement ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          </Button>
+        </>
       )}
 
       <Button
