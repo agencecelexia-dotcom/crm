@@ -62,7 +62,8 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
         <SheetHeader>
           <SheetTitle>Assigner un artisan</SheetTitle>
           <SheetDescription>
-            Artisans « {projet.metiers.length ? projet.metiers.join(' / ') : 'tous métiers'} »
+            Tous les artisans
+            {projet.metiers.length ? ` — métier « ${projet.metiers.join(' / ')} » d'abord` : ''},
             triés par proximité du client.
           </SheetDescription>
         </SheetHeader>
@@ -71,11 +72,11 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
           {compatibles.length === 0 ? (
             <EmptyState
               icon={UserPlus}
-              titre="Aucun artisan compatible"
-              description={`Aucun artisan « ${projet.metier} » en base. Ajoute-en un depuis l'onglet Artisans.`}
+              titre="Aucun artisan en base"
+              description="Ajoute un artisan depuis l'onglet Artisans pour pouvoir l'assigner."
             />
           ) : (
-            compatibles.map(({ artisan, distance, dansRayon }) => {
+            compatibles.map(({ artisan, distance, dansRayon, metierMatch }) => {
               const estAssigne = artisan.id === projet.artisan_id
               return (
                 <button
@@ -96,6 +97,12 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
                       <MapPin className="size-3" />
                       {artisan.ville || 'Ville inconnue'}
                       {distance != null && ` · ~${Math.round(distance)} km`}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {artisan.metiers.join(', ') || 'Aucun métier'}
+                      {!metierMatch && projet.metiers.length > 0 && (
+                        <span className="text-[#F59E0B]"> · autre métier</span>
+                      )}
                     </p>
                   </div>
                   {estAssigne ? (
