@@ -78,6 +78,7 @@ export interface Projet {
   contrat_url: string | null
   devis_url: string | null
   devis_signe_url: string | null
+  photos: string[] // URLs publiques des photos du chantier (vues par l'artisan)
   token: string // lien public "espace artisan" (/mission/:token)
   created_by: string | null
   created_at: string
@@ -92,8 +93,25 @@ export interface ProjetAvecArtisan extends Projet {
 /** Champs éditables d'un projet (le reste est géré par la base). */
 export type ProjetInput = Omit<
   Projet,
-  'id' | 'commission' | 'token' | 'perdu_at' | 'created_by' | 'created_at' | 'updated_at'
->
+  | 'id'
+  | 'commission'
+  | 'token'
+  | 'perdu_at'
+  | 'created_by'
+  | 'created_at'
+  | 'updated_at'
+  | 'photos'
+> & { photos?: string[] }
+
+/** Entrée de suivi d'un projet (statut déclaré et/ou note, par l'artisan ou l'agence). */
+export type StatutSuivi = 'contacte' | 'rdv_pris' | 'devis_envoye' | 'devis_signe' | 'perdu'
+export interface Suivi {
+  auteur: 'artisan' | 'agence'
+  type: 'statut' | 'note'
+  statut: StatutSuivi | null
+  message: string | null
+  created_at: string
+}
 
 /** Note rapide attachée à un projet (suivi interne agence). */
 export interface Note {

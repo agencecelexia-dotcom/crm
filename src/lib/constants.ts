@@ -102,6 +102,16 @@ export const STATUTS_ORDRE: StatutProjet[] = [
   'perdu',
 ]
 
+/** Statuts de suivi déclarables par l'artisan (parcours après mise en relation). */
+export const SUIVI_STATUTS: Record<string, { label: string; color: string; emoji: string }> = {
+  contacte: { label: 'Client contacté', color: '#3B82F6', emoji: '📞' },
+  rdv_pris: { label: 'RDV pris', color: '#8B5CF6', emoji: '📅' },
+  devis_envoye: { label: 'Devis envoyé', color: '#F59E0B', emoji: '📄' },
+  devis_signe: { label: 'Devis signé', color: '#22C55E', emoji: '✅' },
+  perdu: { label: 'Pas de suite / Perdu', color: '#EF4444', emoji: '✖️' },
+}
+export const SUIVI_ORDRE = ['contacte', 'rdv_pris', 'devis_envoye', 'devis_signe', 'perdu'] as const
+
 /** Taux de commission Celexia (10 %). La valeur réelle est calculée par la base. */
 export const TAUX_COMMISSION = 0.1
 

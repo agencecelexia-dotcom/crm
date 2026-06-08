@@ -20,14 +20,18 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { supabase } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { useDropzone } from '@/hooks/use-dropzone'
 import { formatEuros, formatTel } from '@/lib/format'
+import { SUIVI_STATUTS, SUIVI_ORDRE } from '@/lib/constants'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
+import { SuiviTimeline } from '@/features/projets/components/suivi-timeline'
+import type { Suivi } from '@/types/database'
 
 // Structure renvoyée par la fonction SQL get_mission_by_token.
 interface Mission {
@@ -44,6 +48,7 @@ interface Mission {
     description: string | null
     budget_estime: number | null
     statut: string
+    photos: string[]
     devis_depose: boolean
     devis_signe_depose: boolean
   }
@@ -57,6 +62,7 @@ interface Mission {
     signature_data: string | null
     apporteur_signature: string | null
   } | null
+  suivis: Suivi[]
 }
 
 export function MissionPage() {
@@ -246,6 +252,35 @@ function Dossier({
 
   return (
     <div className="space-y-4">
+      {/* Marche à suivre — la première chose que voit l'artisan */}
+      <Card className="border-primary/30 bg-primary/5 shadow-card">
+        <CardContent className="space-y-3 py-5">
+          <p className="text-lg font-semibold">🎯 À vous de jouer !</p>
+          <p className="text-sm">
+            Vous venez de la part d'<strong>Antoine</strong> (Celexia). Un client vous attend
+            pour son projet.
+          </p>
+          <p className="rounded-md bg-[#EF4444]/10 p-2.5 text-sm font-medium text-[#991B1B]">
+            ⏱️ Appelez <strong>{projet.client_nom}</strong> au plus vite — idéalement{' '}
+            <strong>sous 48 h</strong>. C'est la rapidité qui fait signer.
+          </p>
+          {projet.client_telephone && (
+            <Button asChild className="h-12 w-full text-base">
+              <a href={`tel:${projet.client_telephone}`}>
+                <Phone className="size-5" />
+                Appeler {formatTel(projet.client_telephone)}
+              </a>
+            </Button>
+          )}
+          <ol className="ml-4 list-decimal space-y-1 text-sm text-muted-foreground">
+            <li>Appelez le client et présentez-vous (de la part d'Antoine — Celexia).</li>
+            <li>Convenez d'un rendez-vous sur place.</li>
+            <li>Établissez votre devis et déposez-le plus bas.</li>
+            <li>Tenez Celexia informé avec les boutons de suivi ci-dessous.</li>
+          </ol>
+        </CardContent>
+      </Card>
+
       {/* Contrat signé + téléchargement */}
       <Card className="shadow-card">
         <CardContent className="flex items-center justify-between gap-3 py-4">
@@ -310,6 +345,33 @@ function Dossier({
         </CardContent>
       </Card>
 
+      {/* Photos du chantier */}
+      {projet.photos?.length > 0 && (
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="text-base">Photos du chantier</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-2">
+              {projet.photos.map((url) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noopener"
+                  className="aspect-square overflow-hidden rounded-lg border border-border"
+                >
+                  <img src={url} alt="Photo chantier" className="size-full object-cover" />
+                </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Suivi : l'artisan déclare où il en est + écrit ce qui s'est dit */}
+      <SuiviArtisan token={token} suivis={mission.suivis ?? []} onChange={onChange} />
+
       {/* Dépôt des devis */}
       <Card className="shadow-card">
         <CardHeader>
@@ -338,6 +400,89 @@ function Dossier({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// Suivi côté artisan : boutons de statut + note libre (ce qui s'est dit).
+function SuiviArtisan({
+  token,
+  suivis,
+  onChange,
+}: {
+  token: string
+  suivis: Suivi[]
+  onChange: () => void
+}) {
+  const [note, setNote] = useState('')
+  const [envoi, setEnvoi] = useState(false)
+
+  async function poster(statut?: string, message?: string) {
+    setEnvoi(true)
+    try {
+      const { data, error } = await supabase.rpc('add_suivi_by_token', {
+        p_token: token,
+        p_statut: statut ?? null,
+        p_message: message ?? null,
+      })
+      const ok = (data as { ok?: boolean } | null)?.ok
+      if (error || !ok) throw new Error('Échec')
+      if (!statut) setNote('')
+      toast.success('Mis à jour. Merci !')
+      onChange()
+    } catch {
+      toast.error("Impossible d'enregistrer")
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
+  return (
+    <Card className="shadow-card">
+      <CardHeader>
+        <CardTitle className="text-base">Où en êtes-vous ?</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Indiquez votre avancement (Celexia est tenu informé en temps réel) :
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {SUIVI_ORDRE.map((s) => (
+            <Button
+              key={s}
+              variant="outline"
+              disabled={envoi}
+              onClick={() => poster(s)}
+              className="justify-start"
+              style={{ borderColor: SUIVI_STATUTS[s].color }}
+            >
+              <span>{SUIVI_STATUTS[s].emoji}</span> {SUIVI_STATUTS[s].label}
+            </Button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          <Textarea
+            placeholder="Racontez ce qui s'est dit pendant l'appel (besoins, délais, objections…)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+          />
+          <Button
+            onClick={() => poster(undefined, note.trim())}
+            disabled={envoi || !note.trim()}
+            className="w-full"
+          >
+            <Upload className="size-4" />
+            Envoyer la note
+          </Button>
+        </div>
+        {suivis.length > 0 && (
+          <>
+            <Separator />
+            <SuiviTimeline suivis={suivis} />
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

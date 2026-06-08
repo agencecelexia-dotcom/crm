@@ -6,6 +6,29 @@ import { supabase } from '@/lib/supabase/client'
 // ------------------------------------------------------------
 
 const BUCKET = 'documents'
+const BUCKET_PHOTOS = 'projet-photos'
+
+/** Téléverse une photo de chantier (bucket public) et renvoie son URL publique. */
+export async function uploaderPhoto(projetId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  // Chemin imprévisible (anti-énumération) malgré le bucket public.
+  const rand = Math.random().toString(36).slice(2)
+  const chemin = `${projetId}/${Date.now()}-${rand}.${ext}`
+  const { error } = await supabase.storage
+    .from(BUCKET_PHOTOS)
+    .upload(chemin, file, { contentType: file.type || 'image/jpeg' })
+  if (error) throw error
+  return supabase.storage.from(BUCKET_PHOTOS).getPublicUrl(chemin).data.publicUrl
+}
+
+/** Supprime une photo à partir de son URL publique. */
+export async function supprimerPhoto(url: string): Promise<void> {
+  const marqueur = `/${BUCKET_PHOTOS}/`
+  const i = url.indexOf(marqueur)
+  if (i === -1) return
+  const chemin = url.slice(i + marqueur.length)
+  await supabase.storage.from(BUCKET_PHOTOS).remove([chemin])
+}
 
 /** Types de documents rattachés à un projet. */
 export type TypeDocument = 'contrat' | 'devis' | 'devis_signe'
