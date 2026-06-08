@@ -34,3 +34,6 @@ dist-ssr
 /blob-report/
 /playwright/.cache/
 Contrat-apporteur-affaires-Celexia.docx
+
+# Documents sources (contrats Word) — hors repo
+*.docx
