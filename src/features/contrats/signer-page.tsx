@@ -13,6 +13,7 @@ import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pa
 import { supabase } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/format'
 import { finaliserContenu } from './contrat-modele'
+import { ContratFormate } from './contrat-format'
 import type { ContratPublic } from '@/types/database'
 
 // Page PUBLIQUE de signature d'un contrat (accès par token, sans authentification).
@@ -111,24 +112,14 @@ export function SignerPage() {
           <CardContent className="space-y-5 py-6">
             <h1 className="text-lg font-semibold">Contrat d'engagement</h1>
 
-            {/* Texte du contrat */}
-            <div className="max-h-[45dvh] overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-4 text-sm leading-relaxed">
-              {finaliserContenu(contrat.contenu, contrat.signed_at)}
+            {/* Texte du contrat (mis en forme) */}
+            <div className="max-h-[50dvh] overflow-y-auto rounded-lg border border-border">
+              <ContratFormate
+                contenu={finaliserContenu(contrat.contenu, contrat.signed_at)}
+                signedAt={contrat.signed_at}
+                apporteurSignature={contrat.apporteur_signature}
+              />
             </div>
-
-            {/* Côté CELEXIA : déjà signé (apporteur) */}
-            {contrat.apporteur_signature && (
-              <div className="rounded-lg border border-border bg-background p-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Pour l'Apporteur (CELEXIA) — M. Thomas Aubigeon, Président
-                </p>
-                <img
-                  src={contrat.apporteur_signature}
-                  alt="Signature CELEXIA"
-                  className="mt-1 h-16 w-auto"
-                />
-              </div>
-            )}
 
             {/* Nom du signataire */}
             <div className="space-y-1.5">

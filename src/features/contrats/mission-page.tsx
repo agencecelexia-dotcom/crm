@@ -27,6 +27,7 @@ import { useDropzone } from '@/hooks/use-dropzone'
 import { formatEuros, formatTel } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
+import { ContratFormate } from './contrat-format'
 
 // Structure renvoyée par la fonction SQL get_mission_by_token.
 interface Mission {
@@ -192,23 +193,12 @@ function SignatureContrat({
           </p>
         </div>
 
-        <div className="max-h-[40dvh] overflow-y-auto whitespace-pre-wrap rounded-lg border border-border bg-background p-4 text-sm leading-relaxed">
-          {finaliserContenu(engagement.contenu, null)}
+        <div className="max-h-[50dvh] overflow-y-auto rounded-lg border border-border">
+          <ContratFormate
+            contenu={finaliserContenu(engagement.contenu, null)}
+            apporteurSignature={engagement.apporteur_signature}
+          />
         </div>
-
-        {/* Côté CELEXIA : déjà signé (apporteur) */}
-        {engagement.apporteur_signature && (
-          <div className="rounded-lg border border-border bg-background p-3">
-            <p className="text-xs font-medium text-muted-foreground">
-              Pour l'Apporteur (CELEXIA) — M. Thomas Aubigeon, Président
-            </p>
-            <img
-              src={engagement.apporteur_signature}
-              alt="Signature CELEXIA"
-              className="mt-1 h-16 w-auto"
-            />
-          </div>
-        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="nom">Nom du signataire</Label>
