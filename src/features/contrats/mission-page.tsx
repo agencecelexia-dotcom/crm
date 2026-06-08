@@ -258,11 +258,7 @@ function Dossier({
           <p className="text-lg font-semibold">🎯 À vous de jouer !</p>
           <p className="text-sm">
             Vous venez de la part d'<strong>Antoine</strong>. Un client vous attend
-            pour son projet.
-          </p>
-          <p className="rounded-md bg-[#EF4444]/10 p-2.5 text-sm font-medium text-[#991B1B]">
-            ⏱️ Appelez <strong>{projet.client_nom}</strong> au plus vite — idéalement{' '}
-            <strong>sous 48 h</strong>. C'est la rapidité qui fait signer.
+            pour son projet — contactez-le dès que possible.
           </p>
           {projet.client_telephone && (
             <Button asChild className="h-12 w-full text-base">
@@ -272,12 +268,12 @@ function Dossier({
               </a>
             </Button>
           )}
-          <ol className="ml-4 list-decimal space-y-1 text-sm text-muted-foreground">
-            <li>Appelez le client et présentez-vous (de la part d'Antoine).</li>
-            <li>Convenez d'un rendez-vous sur place.</li>
-            <li>Établissez votre devis et déposez-le plus bas.</li>
-            <li>Tenez Celexia informé avec les boutons de suivi ci-dessous.</li>
-          </ol>
+          <p className="rounded-md bg-primary/10 p-2.5 text-sm">
+            ⚠️ <strong>Le plus important :</strong> à chaque étape, mettez à jour votre
+            avancement avec les boutons «&nbsp;Où en êtes-vous&nbsp;?&nbsp;» plus bas —
+            c'est ce qui nous permet de suivre le projet avec vous. Et dès que le devis
+            est <strong>signé</strong>, déposez-le.
+          </p>
         </CardContent>
       </Card>
 
