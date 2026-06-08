@@ -37,12 +37,13 @@ export interface Artisan {
   representant: string | null
   qualite_representant: string | null
   taux_commission: number // taux par défaut de l'artisan (ex: 0.10)
+  token: string // lien public "espace artisan" (/artisan/:token)
   created_at: string
   updated_at: string
 }
 
 /** Données d'insertion / mise à jour d'un artisan (champs gérés par la base exclus). */
-export type ArtisanInput = Omit<Artisan, 'id' | 'created_at' | 'updated_at'>
+export type ArtisanInput = Omit<Artisan, 'id' | 'token' | 'created_at' | 'updated_at'>
 
 /** Un projet = un appel client. */
 export interface Projet {
@@ -149,4 +150,43 @@ export interface ContratPublic {
   apporteur_signature: string | null
   signed_at: string | null
   artisan: { nom: string; prenom: string | null; societe: string | null }
+}
+
+/** Un chantier vu depuis l'espace artisan (identité client masquée tant que non signé). */
+export interface ProjetEspace {
+  id: string
+  token: string // token du projet (pour suivi + upload devis)
+  statut: StatutProjet
+  metier: string
+  metiers: string[]
+  sous_metier: string | null
+  description: string | null
+  budget_estime: number | null
+  client_ville: string | null
+  photos: string[]
+  devis_depose: boolean
+  devis_signe_depose: boolean
+  suivis: Suivi[]
+  // Identité client : null tant que le contrat n'est pas signé
+  client_nom: string | null
+  client_telephone: string | null
+  client_email: string | null
+  client_adresse: string | null
+  client_code_postal: string | null
+}
+
+/** Réponse de get_espace_artisan : contrat unique + tous les chantiers de l'artisan. */
+export interface EspaceArtisan {
+  artisan: { nom: string; prenom: string | null; societe: string | null }
+  engagement: {
+    token: string
+    statut: 'envoye' | 'signe'
+    contenu: string
+    signataire_nom: string | null
+    signed_at: string | null
+    signature_data: string | null
+    apporteur_signature: string | null
+  }
+  signe: boolean
+  projets: ProjetEspace[]
 }

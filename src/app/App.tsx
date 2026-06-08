@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/lib/auth/protected-route'
 import { LoginPage } from '@/features/auth/login-page'
 import { SignerPage } from '@/features/contrats/signer-page'
 import { MissionPage } from '@/features/contrats/mission-page'
+import { EspaceArtisanPage } from '@/features/contrats/espace-artisan-page'
 import { DashboardPage } from '@/features/dashboard/dashboard-page'
 import { CartePage } from '@/features/carte/carte-page'
 import { NotesPage } from '@/features/notes/notes-page'
@@ -33,6 +34,8 @@ export default function App() {
             <Route path="/signer/:token" element={<SignerPage />} />
             {/* Espace artisan par projet : signature → dossier client → dépôt devis */}
             <Route path="/mission/:token" element={<MissionPage />} />
+            {/* Espace artisan UNIQUE (un lien par artisan) : contrat + tous ses chantiers */}
+            <Route path="/artisan/:token" element={<EspaceArtisanPage />} />
 
             {/* Privé (nécessite une session) */}
             <Route element={<ProtectedRoute />}>

@@ -1,16 +1,7 @@
 import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Loader2,
-  CheckCircle2,
-  FileText,
-  Download,
-  Phone,
-  Mail,
-  MapPin,
-  Upload,
-} from 'lucide-react'
+import { Loader2, CheckCircle2, FileText, Download, Phone, Mail, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { BrandLogo } from '@/components/brand-logo'
@@ -20,17 +11,14 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Textarea } from '@/components/ui/textarea'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { supabase } from '@/lib/supabase/client'
-import { cn } from '@/lib/utils'
-import { useDropzone } from '@/hooks/use-dropzone'
 import { formatEuros, formatTel } from '@/lib/format'
-import { SUIVI_STATUTS, SUIVI_ORDRE } from '@/lib/constants'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
-import { SuiviTimeline } from '@/features/projets/components/suivi-timeline'
+import { SuiviArtisan } from './suivi-artisan'
+import { UploadDevis } from './upload-devis'
 import type { Suivi } from '@/types/database'
 
 // Structure renvoyée par la fonction SQL get_mission_by_token.
@@ -399,176 +387,8 @@ function Dossier({
   )
 }
 
-// Suivi côté artisan : boutons de statut + note libre (ce qui s'est dit).
-function SuiviArtisan({
-  token,
-  suivis,
-  onChange,
-}: {
-  token: string
-  suivis: Suivi[]
-  onChange: () => void
-}) {
-  const [note, setNote] = useState('')
-  const [envoi, setEnvoi] = useState(false)
-
-  async function poster(statut?: string, message?: string) {
-    setEnvoi(true)
-    try {
-      const { data, error } = await supabase.rpc('add_suivi_by_token', {
-        p_token: token,
-        p_statut: statut ?? null,
-        p_message: message ?? null,
-      })
-      const ok = (data as { ok?: boolean } | null)?.ok
-      if (error || !ok) throw new Error('Échec')
-      if (!statut) setNote('')
-      toast.success('Mis à jour. Merci !')
-      onChange()
-    } catch {
-      toast.error("Impossible d'enregistrer")
-    } finally {
-      setEnvoi(false)
-    }
-  }
-
-  return (
-    <Card className="shadow-card">
-      <CardHeader>
-        <CardTitle className="text-base">Où en êtes-vous ?</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Indiquez votre avancement (Celexia est tenu informé en temps réel) :
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {SUIVI_ORDRE.map((s) => (
-            <Button
-              key={s}
-              variant="outline"
-              disabled={envoi}
-              onClick={() => poster(s)}
-              className="justify-start"
-              style={{ borderColor: SUIVI_STATUTS[s].color }}
-            >
-              <span>{SUIVI_STATUTS[s].emoji}</span> {SUIVI_STATUTS[s].label}
-            </Button>
-          ))}
-        </div>
-        <div className="space-y-2">
-          <Textarea
-            placeholder="Racontez ce qui s'est dit pendant l'appel (besoins, délais, objections…)"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-          />
-          <Button
-            onClick={() => poster(undefined, note.trim())}
-            disabled={envoi || !note.trim()}
-            className="w-full"
-          >
-            <Upload className="size-4" />
-            Envoyer la note
-          </Button>
-        </div>
-        {suivis.length > 0 && (
-          <>
-            <Separator />
-            <SuiviTimeline suivis={suivis} />
-          </>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// Une zone de dépôt de fichier (PDF) → Edge Function upload-devis.
-function UploadDevis({
-  token,
-  slot,
-  label,
-  depose,
-  onDone,
-}: {
-  token: string
-  slot: 'devis' | 'devis_signe'
-  label: string
-  depose: boolean
-  onDone: () => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [envoi, setEnvoi] = useState(false)
-
-  // Logique d'envoi partagée (clic + glisser-déposer)
-  async function traiter(file: File) {
-    if (file.type && !file.type.includes('pdf')) {
-      toast.error('Format PDF uniquement')
-      return
-    }
-    setEnvoi(true)
-    try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const fr = new FileReader()
-        fr.onload = () => resolve(String(fr.result).split(',')[1] ?? '')
-        fr.onerror = reject
-        fr.readAsDataURL(file)
-      })
-      const { data, error } = await supabase.functions.invoke('upload-devis', {
-        body: { token, slot, filename: file.name, base64 },
-      })
-      if (error || !(data as { ok?: boolean })?.ok) throw new Error('Envoi impossible')
-      toast.success(`${label} envoyé`)
-      onDone()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur')
-    } finally {
-      setEnvoi(false)
-      if (inputRef.current) inputRef.current.value = ''
-    }
-  }
-
-  const { dragActive, handlers } = useDropzone(traiter)
-
-  return (
-    <div
-      {...handlers}
-      className={cn(
-        'flex items-center gap-3 rounded-lg border p-3 transition-colors',
-        dragActive ? 'border-primary border-dashed bg-primary/5' : 'border-border',
-      )}
-    >
-      <FileText className={depose ? 'size-5 text-primary' : 'size-5 text-muted-foreground'} />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-          {dragActive ? (
-            'Déposez le PDF ici…'
-          ) : depose ? (
-            <>
-              <CheckCircle2 className="size-3 text-[#22C55E]" /> Reçu par Celexia
-            </>
-          ) : (
-            'Glissez un PDF ici ou cliquez'
-          )}
-        </p>
-      </div>
-      <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={envoi}>
-        {envoi ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-        {depose ? 'Remplacer' : 'Déposer'}
-      </Button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) void traiter(f)
-        }}
-      />
-    </div>
-  )
-}
+// SuiviArtisan et UploadDevis vivent désormais dans des fichiers partagés
+// (./suivi-artisan, ./upload-devis), réutilisés aussi par l'espace artisan.
 
 function Centre({ children }: { children: React.ReactNode }) {
   return (

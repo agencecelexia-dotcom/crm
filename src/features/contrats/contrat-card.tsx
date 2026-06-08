@@ -21,12 +21,28 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
     ? `${window.location.origin}/signer/${contrat.token}`
     : ''
 
+  // Lien UNIQUE de l'artisan : contrat + tous ses chantiers (le lien à envoyer).
+  const lienEspace = `${window.location.origin}/artisan/${artisan.token}`
+
   function copier() {
     navigator.clipboard.writeText(lien).then(
       () => toast.success('Lien copié'),
       () => toast.error('Copie impossible'),
     )
   }
+
+  function copierEspace() {
+    navigator.clipboard.writeText(lienEspace).then(
+      () => toast.success('Lien copié'),
+      () => toast.error('Copie impossible'),
+    )
+  }
+
+  const mailtoEspace = `mailto:${artisan.email ?? ''}?subject=${encodeURIComponent(
+    'Votre espace Celexia',
+  )}&body=${encodeURIComponent(
+    `Bonjour ${artisan.prenom ?? artisan.nom},\n\nVoici votre espace Celexia : signez votre contrat (une seule fois) et retrouvez tous vos chantiers ici :\n${lienEspace}\n\nÀ très vite,\nL'équipe Celexia`,
+  )}`
 
   // Email pré-rempli (envoi manuel pour l'instant ; automatisable via n8n plus tard).
   const mailto = `mailto:${artisan.email ?? ''}?subject=${encodeURIComponent(
@@ -51,6 +67,29 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
           ))}
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Lien unique de l'artisan — à lui envoyer (contrat + tous ses chantiers) */}
+        <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <p className="text-sm font-medium">Lien de l'artisan (à lui envoyer)</p>
+          <p className="text-xs text-muted-foreground">
+            Il y signe son contrat une seule fois et retrouve tous ses chantiers.
+          </p>
+          <div className="truncate rounded-md border border-border bg-background px-3 py-2 text-xs">
+            {lienEspace}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" size="sm" onClick={copierEspace}>
+              <Copy className="size-4" />
+              Copier
+            </Button>
+            <Button asChild variant="outline" size="sm" disabled={!artisan.email}>
+              <a href={mailtoEspace}>
+                <Mail className="size-4" />
+                Email
+              </a>
+            </Button>
+          </div>
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center py-2">
             <Loader2 className="size-5 animate-spin text-primary" />
