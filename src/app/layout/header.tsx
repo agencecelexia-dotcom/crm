@@ -1,4 +1,5 @@
-import { LogOut, User } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { LogOut, User, PenTool } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,6 +32,12 @@ export function Header() {
               {email}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/parametres/signature">
+                <PenTool className="size-4" />
+                Ma signature
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => void signOut()}>
               <LogOut className="size-4" />
               Se déconnecter

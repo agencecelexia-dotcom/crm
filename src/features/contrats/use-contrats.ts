@@ -26,6 +26,24 @@ export function useContratArtisan(artisanId: string | undefined) {
 }
 
 /**
+ * Ensemble des IDs d'artisans ayant au moins un contrat signé.
+ * Sert à afficher le badge « Contrat signé » dans la liste des artisans.
+ */
+export function useArtisansSignes() {
+  return useQuery({
+    queryKey: ['contrats', 'signes'],
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select('artisan_id')
+        .eq('statut', 'signe')
+      if (error) throw error
+      return new Set((data ?? []).map((c) => c.artisan_id))
+    },
+  })
+}
+
+/**
  * Génère le contrat d'engagement avec le contenu rempli (variables substituées).
  * Le contenu est figé en snapshot ; un token de signature est créé par défaut.
  */

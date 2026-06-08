@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Users, ChevronRight, Phone } from 'lucide-react'
+import { Plus, Search, Users, ChevronRight, Phone, BadgeCheck } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -18,11 +18,13 @@ import {
 } from '@/components/ui/select'
 import { METIERS } from '@/lib/constants'
 import { formatTel } from '@/lib/format'
+import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { useArtisans } from '../hooks/use-artisans'
 
 // Liste des artisans : recherche texte + filtre métier.
 export function ArtisansListPage() {
   const { data: artisans, isLoading } = useArtisans()
+  const { data: signes } = useArtisansSignes()
   const [recherche, setRecherche] = useState('')
   const [metier, setMetier] = useState<string>('tous')
 
@@ -118,6 +120,15 @@ export function ArtisansListPage() {
                         <span className="text-muted-foreground"> · {a.societe}</span>
                       )}
                     </p>
+                    {signes?.has(a.id) && (
+                      <Badge
+                        variant="secondary"
+                        className="gap-1 border-emerald-200 bg-emerald-50 text-xs text-emerald-700"
+                      >
+                        <BadgeCheck className="size-3.5" />
+                        Contrat signé
+                      </Badge>
+                    )}
                     {a.telephone && (
                       <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
                         <Phone className="size-3.5 shrink-0" />

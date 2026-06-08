@@ -18,6 +18,7 @@ import { ArtisansListPage } from '@/features/artisans/pages/artisans-list-page'
 import { ArtisanNewPage } from '@/features/artisans/pages/artisan-new-page'
 import { ArtisanDetailPage } from '@/features/artisans/pages/artisan-detail-page'
 import { ArtisanEditPage } from '@/features/artisans/pages/artisan-edit-page'
+import { ParametresSignaturePage } from '@/features/parametres/signature-page'
 
 // Point d'entrée applicatif : providers globaux + routage.
 export default function App() {
@@ -49,6 +50,8 @@ export default function App() {
                 <Route path="/artisans/new" element={<ArtisanNewPage />} />
                 <Route path="/artisans/:id" element={<ArtisanDetailPage />} />
                 <Route path="/artisans/:id/edit" element={<ArtisanEditPage />} />
+
+                <Route path="/parametres/signature" element={<ParametresSignaturePage />} />
               </Route>
             </Route>
 

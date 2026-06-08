@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Map, FolderKanban, Users, StickyNote, LogOut } from 'lucide-react'
+import { Home, Map, FolderKanban, Users, StickyNote, PenTool, LogOut } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,7 @@ const ITEMS = [
   { to: '/projets', label: 'Projets', icon: FolderKanban, end: false },
   { to: '/artisans', label: 'Artisans', icon: Users, end: false },
   { to: '/notes', label: 'Notes', icon: StickyNote, end: false },
+  { to: '/parametres/signature', label: 'Ma signature', icon: PenTool, end: false },
 ]
 
 export function Sidebar() {
