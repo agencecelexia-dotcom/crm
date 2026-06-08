@@ -54,6 +54,7 @@ interface Mission {
     signataire_nom: string | null
     signed_at: string | null
     signature_data: string | null
+    apporteur_signature: string | null
   } | null
 }
 
@@ -195,6 +196,20 @@ function SignatureContrat({
           {finaliserContenu(engagement.contenu, null)}
         </div>
 
+        {/* Côté CELEXIA : déjà signé (apporteur) */}
+        {engagement.apporteur_signature && (
+          <div className="rounded-lg border border-border bg-background p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Pour l'Apporteur (CELEXIA) — M. Thomas Aubigeon, Président
+            </p>
+            <img
+              src={engagement.apporteur_signature}
+              alt="Signature CELEXIA"
+              className="mt-1 h-16 w-auto"
+            />
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <Label htmlFor="nom">Nom du signataire</Label>
           <Input id="nom" className="h-11" value={nom} onChange={(e) => setNom(e.target.value)} />
@@ -258,6 +273,7 @@ function Dossier({
                 signataire: engagement.signataire_nom,
                 signedAt: engagement.signed_at,
                 signatureDataUrl: engagement.signature_data,
+                apporteurSignatureUrl: engagement.apporteur_signature,
               })
             }
           >

@@ -114,6 +114,7 @@ export interface Contrat {
   statut: 'envoye' | 'signe'
   signataire_nom: string | null
   signature_data: string | null
+  apporteur_signature: string | null // signature CELEXIA (apposée à la génération)
   signed_at: string | null
   created_at: string
   updated_at: string
@@ -126,6 +127,8 @@ export interface ContratPublic {
   contenu: string
   statut: 'envoye' | 'signe'
   signataire_nom: string | null
+  signature_data: string | null
+  apporteur_signature: string | null
   signed_at: string | null
   artisan: { nom: string; prenom: string | null; societe: string | null }
 }

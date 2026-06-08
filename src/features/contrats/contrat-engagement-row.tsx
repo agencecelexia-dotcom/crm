@@ -44,6 +44,7 @@ export function ContratEngagementRow({ artisanId }: { artisanId: string | null }
               signataire: contrat.signataire_nom,
               signedAt: contrat.signed_at,
               signatureDataUrl: contrat.signature_data,
+              apporteurSignatureUrl: contrat.apporteur_signature,
             })
           }
         >

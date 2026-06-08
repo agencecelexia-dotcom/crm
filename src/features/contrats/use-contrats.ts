@@ -53,13 +53,19 @@ export function useGenererContrat() {
     mutationFn: async ({
       artisanId,
       contenu,
+      apporteurSignature,
     }: {
       artisanId: string
       contenu: string
+      apporteurSignature?: string | null
     }): Promise<Contrat> => {
       const { data, error } = await supabase
         .from(TABLE)
-        .insert({ artisan_id: artisanId, contenu })
+        .insert({
+          artisan_id: artisanId,
+          contenu,
+          apporteur_signature: apporteurSignature ?? null,
+        })
         .select('*')
         .single()
       if (error) throw error

@@ -116,6 +116,20 @@ export function SignerPage() {
               {finaliserContenu(contrat.contenu, contrat.signed_at)}
             </div>
 
+            {/* Côté CELEXIA : déjà signé (apporteur) */}
+            {contrat.apporteur_signature && (
+              <div className="rounded-lg border border-border bg-background p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Pour l'Apporteur (CELEXIA) — M. Thomas Aubigeon, Président
+                </p>
+                <img
+                  src={contrat.apporteur_signature}
+                  alt="Signature CELEXIA"
+                  className="mt-1 h-16 w-auto"
+                />
+              </div>
+            )}
+
             {/* Nom du signataire */}
             <div className="space-y-1.5">
               <Label htmlFor="nom">Nom du signataire</Label>

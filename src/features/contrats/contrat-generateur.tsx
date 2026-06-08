@@ -22,6 +22,7 @@ import {
   remplirContrat,
 } from './contrat-modele'
 import { useGenererContrat } from './use-contrats'
+import { CLE_SIGNATURE_APPORTEUR, useParametre } from '@/features/parametres/use-parametres'
 
 // Dialog "Préparer le contrat" : variables pré-remplies depuis la fiche artisan,
 // éditables, puis génération du contrat (contenu figé) prêt à signer.
@@ -31,11 +32,12 @@ export function ContratGenerateur({ artisan }: { artisan: Artisan }) {
     variablesParDefaut(artisan),
   )
   const generer = useGenererContrat()
+  const { data: signatureApporteur } = useParametre(CLE_SIGNATURE_APPORTEUR)
 
   function lancer() {
     const contenu = remplirContrat(CONTRAT_MODELE, vars)
     generer.mutate(
-      { artisanId: artisan.id, contenu },
+      { artisanId: artisan.id, contenu, apporteurSignature: signatureApporteur },
       {
         onSuccess: () => {
           toast.success('Contrat généré')
