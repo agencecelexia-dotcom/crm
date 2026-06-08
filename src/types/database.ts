@@ -9,6 +9,7 @@ export type StatutProjet =
   | 'artisan_assigne'
   | 'devis_envoye'
   | 'devis_signe'
+  | 'termine'
   | 'perdu'
 
 /** Un artisan référencé dans la base. */
@@ -105,7 +106,13 @@ export type ProjetInput = Omit<
 > & { photos?: string[] }
 
 /** Entrée de suivi d'un projet (statut déclaré et/ou note, par l'artisan ou l'agence). */
-export type StatutSuivi = 'contacte' | 'rdv_pris' | 'devis_envoye' | 'devis_signe' | 'perdu'
+export type StatutSuivi =
+  | 'contacte'
+  | 'rdv_pris'
+  | 'devis_envoye'
+  | 'devis_signe'
+  | 'termine'
+  | 'perdu'
 export interface Suivi {
   auteur: 'artisan' | 'agence'
   type: 'statut' | 'note'

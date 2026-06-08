@@ -1,12 +1,24 @@
 import { useState } from 'react'
-import { Loader2, Copy, Mail, CheckCircle2, Eye, Download } from 'lucide-react'
+import { Loader2, Copy, Mail, CheckCircle2, Eye, Download, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { formatDate } from '@/lib/format'
 import type { Artisan } from '@/types/database'
+import { useRegenererTokenArtisan } from '@/features/artisans/hooks/use-artisans'
 import { useContratArtisan } from './use-contrats'
 import { ContratGenerateur } from './contrat-generateur'
 import { telechargerContratPdf } from './contrat-pdf'
@@ -16,6 +28,7 @@ import { finaliserContenu } from './contrat-modele'
 export function ContratCard({ artisan }: { artisan: Artisan }) {
   const { data: contrat, isLoading } = useContratArtisan(artisan.id)
   const [signatureVisible, setSignatureVisible] = useState(false)
+  const regenerer = useRegenererTokenArtisan()
 
   const lien = contrat
     ? `${window.location.origin}/signer/${contrat.token}`
@@ -88,6 +101,43 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
               </a>
             </Button>
           </div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full text-muted-foreground" disabled={regenerer.isPending}>
+                {regenerer.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4" />
+                )}
+                Régénérer le lien (révoque l'ancien)
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Régénérer le lien de l'artisan ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Le lien actuel cessera de fonctionner. Il faudra renvoyer le nouveau lien à
+                  l'artisan. Son contrat signé et ses chantiers sont conservés.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() =>
+                    regenerer.mutate(artisan.id, {
+                      onSuccess: () => toast.success('Nouveau lien généré — pensez à le renvoyer'),
+                      onError: (e) =>
+                        toast.error('Échec', {
+                          description: e instanceof Error ? e.message : undefined,
+                        }),
+                    })
+                  }
+                >
+                  Régénérer
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {isLoading ? (

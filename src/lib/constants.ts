@@ -88,6 +88,7 @@ export const STATUTS: Record<
   artisan_assigne: { label: 'Artisan assigné', color: '#3B82F6', textOnColor: '#FFFFFF' },
   devis_envoye: { label: 'Devis envoyé', color: '#F59E0B', textOnColor: '#FFFFFF' },
   devis_signe: { label: 'Devis signé', color: '#22C55E', textOnColor: '#FFFFFF' },
+  termine: { label: 'Terminé', color: '#0F766E', textOnColor: '#FFFFFF' },
   perdu: { label: 'Perdu', color: '#EF4444', textOnColor: '#FFFFFF' },
 }
 
@@ -99,6 +100,7 @@ export const STATUTS_ORDRE: StatutProjet[] = [
   'artisan_assigne',
   'devis_envoye',
   'devis_signe',
+  'termine',
   'perdu',
 ]
 
@@ -108,9 +110,17 @@ export const SUIVI_STATUTS: Record<string, { label: string; color: string; emoji
   rdv_pris: { label: 'RDV pris', color: '#8B5CF6', emoji: '📅' },
   devis_envoye: { label: 'Devis envoyé', color: '#F59E0B', emoji: '📄' },
   devis_signe: { label: 'Devis signé', color: '#22C55E', emoji: '✅' },
+  termine: { label: 'Projet terminé', color: '#0F766E', emoji: '🏁' },
   perdu: { label: 'Pas de suite / Perdu', color: '#EF4444', emoji: '✖️' },
 }
-export const SUIVI_ORDRE = ['contacte', 'rdv_pris', 'devis_envoye', 'devis_signe', 'perdu'] as const
+export const SUIVI_ORDRE = [
+  'contacte',
+  'rdv_pris',
+  'devis_envoye',
+  'devis_signe',
+  'termine',
+  'perdu',
+] as const
 
 /** Taux de commission Celexia (10 %). La valeur réelle est calculée par la base. */
 export const TAUX_COMMISSION = 0.1

@@ -113,20 +113,62 @@ export function EspaceArtisanPage() {
         </p>
       )}
 
-      {/* Liste des chantiers */}
+      {/* Liste des chantiers : en cours / terminés */}
+      <ListeChantiers projets={projets} signe={signe} onChange={() => void refetch()} />
+    </div>
+  )
+}
+
+// Sépare les chantiers en cours et terminés (terminé/perdu), terminés repliables.
+function ListeChantiers({
+  projets,
+  signe,
+  onChange,
+}: {
+  projets: ProjetEspace[]
+  signe: boolean
+  onChange: () => void
+}) {
+  const [voirTermines, setVoirTermines] = useState(false)
+  const estTermine = (p: ProjetEspace) => p.statut === 'termine' || p.statut === 'perdu'
+  const enCours = projets.filter((p) => !estTermine(p))
+  const termines = projets.filter(estTermine)
+
+  return (
+    <>
       <h2 className="mb-2 mt-5 text-sm font-semibold text-muted-foreground">
-        Vos chantiers ({projets.length})
+        En cours ({enCours.length})
       </h2>
-      {projets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucun chantier pour le moment.</p>
+      {enCours.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Aucun chantier en cours.</p>
       ) : (
         <div className="space-y-2">
-          {projets.map((p) => (
-            <ProjetItem key={p.id} projet={p} signe={signe} onChange={() => void refetch()} />
+          {enCours.map((p) => (
+            <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} />
           ))}
         </div>
       )}
-    </div>
+
+      {termines.length > 0 && (
+        <div className="mt-5">
+          <button
+            type="button"
+            onClick={() => setVoirTermines((v) => !v)}
+            className="mb-2 flex w-full items-center justify-between text-sm font-semibold text-muted-foreground"
+          >
+            <span>Terminés ({termines.length})</span>
+            <ChevronDown className={cn('size-4 transition-transform', voirTermines && 'rotate-180')} />
+          </button>
+          {voirTermines && (
+            <div className="space-y-2 opacity-80">
+              {termines.map((p) => (
+                <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   )
 }
 

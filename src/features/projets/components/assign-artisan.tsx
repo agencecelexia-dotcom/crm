@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { UserPlus, MapPin, Check, Loader2 } from 'lucide-react'
+import { UserPlus, UserMinus, MapPin, Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -50,14 +50,30 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
     )
   }
 
+  // Retire l'artisan du projet : il disparaît de l'espace de l'artisan
+  // (get_espace_artisan filtre par artisan_id) et repart dans le pool.
+  function retirer() {
+    patch.mutate(
+      { id: projet.id, patch: { artisan_id: null, statut: 'nouveau' } },
+      {
+        onSuccess: () => toast.success("Artisan retiré — le projet a quitté son espace"),
+        onError: (err) =>
+          toast.error('Retrait impossible', {
+            description: err instanceof Error ? err.message : undefined,
+          }),
+      },
+    )
+  }
+
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button variant="outline" className="w-full">
-          <UserPlus className="size-4" />
-          {projet.artisan ? "Changer d'artisan" : 'Assigner un artisan'}
-        </Button>
-      </SheetTrigger>
+    <div className="space-y-2">
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button variant="outline" className="w-full">
+            <UserPlus className="size-4" />
+            {projet.artisan ? "Changer d'artisan" : 'Assigner un artisan'}
+          </Button>
+        </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Assigner un artisan</SheetTitle>
@@ -132,6 +148,19 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
           )}
         </div>
       </SheetContent>
-    </Sheet>
+      </Sheet>
+
+      {projet.artisan_id && (
+        <Button
+          variant="ghost"
+          className="w-full text-destructive"
+          onClick={retirer}
+          disabled={patch.isPending}
+        >
+          <UserMinus className="size-4" />
+          Retirer l'artisan de ce projet
+        </Button>
+      )}
+    </div>
   )
 }

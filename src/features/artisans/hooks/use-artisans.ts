@@ -100,6 +100,28 @@ export function useUpdateArtisan() {
   })
 }
 
+/** Régénère le token (lien public) d'un artisan → révoque l'ancien lien. */
+export function useRegenererTokenArtisan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string): Promise<string> => {
+      const nouveau = crypto.randomUUID().replace(/-/g, '')
+      const { data, error } = await supabase
+        .from(TABLE)
+        .update({ token: nouveau })
+        .eq('id', id)
+        .select('token')
+        .single()
+      if (error) throw error
+      return data.token as string
+    },
+    onSuccess: (_t, id) => {
+      qc.invalidateQueries({ queryKey: ['artisans'] })
+      qc.invalidateQueries({ queryKey: ['artisans', id] })
+    },
+  })
+}
+
 /** Suppression d'un artisan. */
 export function useDeleteArtisan() {
   const qc = useQueryClient()

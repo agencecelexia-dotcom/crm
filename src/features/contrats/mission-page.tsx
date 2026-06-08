@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Navigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2, CheckCircle2, FileText, Download, Phone, Mail, MapPin } from 'lucide-react'
 import { toast } from 'sonner'
@@ -23,6 +23,7 @@ import type { Suivi } from '@/types/database'
 
 // Structure renvoyée par la fonction SQL get_mission_by_token.
 interface Mission {
+  artisan_token: string | null
   projet: {
     client_nom: string
     client_telephone: string | null
@@ -89,6 +90,12 @@ export function MissionPage() {
         <p className="text-sm text-muted-foreground">Le lien est invalide ou expiré.</p>
       </Centre>
     )
+
+  // Les anciens liens par projet redirigent vers le portail unique de l'artisan
+  // (contrat + tous ses chantiers). Si le projet n'a plus d'artisan, on reste ici.
+  if (mission.artisan_token) {
+    return <Navigate to={`/artisan/${mission.artisan_token}`} replace />
+  }
 
   const engagement = mission.engagement
   const signe = engagement?.statut === 'signe'
