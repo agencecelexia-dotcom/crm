@@ -11,6 +11,9 @@ import {
   MapPin,
   ChevronDown,
   Lock,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -18,6 +21,7 @@ import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent } from '@/components/ui/card'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
@@ -299,9 +303,9 @@ function ProjetItem({
         className="flex w-full items-center gap-3 p-4 text-left"
       >
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <StatutBadge statut={projet.statut} />
-            <span className="text-sm font-medium">{metiers.join(', ')}</span>
+            <span className="min-w-0 truncate text-sm font-medium">{metiers.join(', ')}</span>
           </div>
           <p className="mt-0.5 truncate text-sm text-muted-foreground">
             {signe && projet.client_nom ? projet.client_nom : 'Client confidentiel'}
@@ -323,7 +327,9 @@ function ProjetItem({
               </p>
             )}
             {projet.description && (
-              <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{projet.description}</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
+                {projet.description}
+              </p>
             )}
           </div>
 
@@ -334,33 +340,8 @@ function ProjetItem({
             </div>
           ) : (
             <>
-              {/* Coordonnées client */}
-              <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
-                <p className="font-semibold">{projet.client_nom}</p>
-                {projet.client_telephone && (
-                  <Button asChild className="h-11 w-full">
-                    <a href={`tel:${projet.client_telephone}`}>
-                      <Phone className="size-4" />
-                      Appeler {formatTel(projet.client_telephone)}
-                    </a>
-                  </Button>
-                )}
-                {projet.client_email && (
-                  <a
-                    href={`mailto:${projet.client_email}`}
-                    className="flex items-center gap-2 break-all text-primary"
-                  >
-                    <Mail className="size-4" />
-                    {projet.client_email}
-                  </a>
-                )}
-                {adresse && (
-                  <div className="flex items-start gap-2">
-                    <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span>{adresse}</span>
-                  </div>
-                )}
-              </div>
+              {/* Coordonnées client (éditables sauf le téléphone) */}
+              <ClientBloc projet={projet} adresse={adresse} onChange={onChange} />
 
               {/* Photos */}
               {projet.photos?.length > 0 && (
@@ -407,6 +388,150 @@ function ProjetItem({
         </div>
       )}
     </Card>
+  )
+}
+
+// Coordonnées client : consultation + édition (tout sauf le téléphone).
+function ClientBloc({
+  projet,
+  adresse,
+  onChange,
+}: {
+  projet: ProjetEspace
+  adresse: string
+  onChange: () => void
+}) {
+  const [edition, setEdition] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [f, setF] = useState({
+    nom: projet.client_nom ?? '',
+    email: projet.client_email ?? '',
+    adresse: projet.client_adresse ?? '',
+    cp: projet.client_code_postal ?? '',
+    ville: projet.client_ville ?? '',
+    description: projet.description ?? '',
+    budget: projet.budget_estime != null ? String(projet.budget_estime) : '',
+  })
+  const maj = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }))
+
+  async function enregistrer() {
+    setSaving(true)
+    try {
+      const budget = f.budget.trim() ? parseFloat(f.budget.replace(',', '.')) : null
+      const { data, error } = await supabase.rpc('update_projet_by_token', {
+        p_token: projet.token,
+        p_client_nom: f.nom,
+        p_client_email: f.email,
+        p_client_adresse: f.adresse,
+        p_client_code_postal: f.cp,
+        p_client_ville: f.ville,
+        p_description: f.description,
+        p_budget: budget,
+      })
+      if (error || !(data as { ok?: boolean })?.ok) throw new Error('Échec')
+      toast.success('Infos mises à jour')
+      setEdition(false)
+      onChange()
+    } catch {
+      toast.error("Impossible d'enregistrer")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (edition) {
+    return (
+      <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Nom du prospect</Label>
+          <Input className="h-10" value={f.nom} onChange={(e) => maj('nom', e.target.value)} />
+        </div>
+        <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Lock className="mr-1 inline size-3" />
+          Téléphone (non modifiable) : <strong>{formatTel(projet.client_telephone ?? '')}</strong>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Email</Label>
+          <Input className="h-10" value={f.email} onChange={(e) => maj('email', e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Adresse</Label>
+          <Input className="h-10" value={f.adresse} onChange={(e) => maj('adresse', e.target.value)} />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Code postal</Label>
+            <Input className="h-10" value={f.cp} onChange={(e) => maj('cp', e.target.value)} />
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label className="text-xs">Ville</Label>
+            <Input className="h-10" value={f.ville} onChange={(e) => maj('ville', e.target.value)} />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Budget estimé (€)</Label>
+          <Input
+            type="number"
+            className="h-10"
+            value={f.budget}
+            onChange={(e) => maj('budget', e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Description / notes</Label>
+          <Textarea
+            rows={3}
+            value={f.description}
+            onChange={(e) => maj('description', e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <Button variant="outline" onClick={() => setEdition(false)} disabled={saving}>
+            <X className="size-4" />
+            Annuler
+          </Button>
+          <Button onClick={enregistrer} disabled={saving}>
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            Enregistrer
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 break-words font-semibold">{projet.client_nom}</p>
+        <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setEdition(true)}>
+          <Pencil className="size-4" />
+          Modifier
+        </Button>
+      </div>
+      {projet.client_telephone && (
+        <Button asChild className="h-11 w-full">
+          <a href={`tel:${projet.client_telephone}`}>
+            <Phone className="size-4" />
+            Appeler {formatTel(projet.client_telephone)}
+          </a>
+        </Button>
+      )}
+      {projet.client_email && (
+        <a
+          href={`mailto:${projet.client_email}`}
+          className="flex items-center gap-2 break-all text-primary"
+        >
+          <Mail className="size-4" />
+          {projet.client_email}
+        </a>
+      )}
+      {adresse && (
+        <div className="flex items-start gap-2">
+          <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 break-words">{adresse}</span>
+        </div>
+      )}
+    </div>
   )
 }
 
