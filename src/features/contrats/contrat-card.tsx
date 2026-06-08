@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, Copy, Mail, CheckCircle2, Eye } from 'lucide-react'
+import { Loader2, Copy, Mail, CheckCircle2, Eye, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +9,8 @@ import { formatDate } from '@/lib/format'
 import type { Artisan } from '@/types/database'
 import { useContratArtisan } from './use-contrats'
 import { ContratGenerateur } from './contrat-generateur'
+import { telechargerContratPdf } from './contrat-pdf'
+import { finaliserContenu } from './contrat-modele'
 
 // Carte "Contrat d'engagement" sur la fiche artisan.
 export function ContratCard({ artisan }: { artisan: Artisan }) {
@@ -68,6 +70,23 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
               Signé par <strong>{contrat.signataire_nom}</strong>
               {contrat.signed_at && ` le ${formatDate(contrat.signed_at)}`}
             </p>
+
+            {/* Téléchargement du contrat signé (PDF avec les 2 signatures) */}
+            <Button
+              onClick={() =>
+                telechargerContratPdf({
+                  contenu: finaliserContenu(contrat.contenu, contrat.signed_at),
+                  signataire: contrat.signataire_nom,
+                  signedAt: contrat.signed_at,
+                  signatureDataUrl: contrat.signature_data,
+                  apporteurSignatureUrl: contrat.apporteur_signature,
+                })
+              }
+            >
+              <Download className="size-4" />
+              Télécharger le contrat signé (PDF)
+            </Button>
+
             {contrat.signature_data && (
               <>
                 <Button
