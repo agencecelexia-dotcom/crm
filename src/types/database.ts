@@ -7,6 +7,8 @@ export type StatutProjet =
   | 'a_rappeler'
   | 'en_attente'
   | 'artisan_assigne'
+  | 'contacte'
+  | 'rdv_pris'
   | 'devis_envoye'
   | 'devis_signe'
   | 'termine'
@@ -169,6 +171,8 @@ export interface ProjetEspace {
   sous_metier: string | null
   description: string | null
   budget_estime: number | null
+  montant_devis: number | null
+  montant_devis_signe: number | null
   client_ville: string | null
   photos: string[]
   devis_depose: boolean

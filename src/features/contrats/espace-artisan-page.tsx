@@ -24,13 +24,14 @@ import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pa
 import { StatutBadge } from '@/components/statut-badge'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
+import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatTel, formatDate } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
 import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
-import type { EspaceArtisan, ProjetEspace } from '@/types/database'
+import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
 
 // Espace artisan UNIQUE (/artisan/:token) : il signe son contrat une fois,
 // puis retrouve TOUS ses chantiers. Identité client masquée tant que non signé.
@@ -66,7 +67,7 @@ export function EspaceArtisanPage() {
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
 
   return (
-    <div className="mx-auto min-h-dvh max-w-2xl bg-secondary px-4 py-6">
+    <div className="mx-auto min-h-dvh max-w-3xl bg-secondary px-4 py-6">
       <div className="mb-5 flex flex-col items-center gap-1">
         <BrandLogo className="h-9" />
         <p className="text-sm text-muted-foreground">Espace de {nomArtisan}</p>
@@ -119,7 +120,15 @@ export function EspaceArtisanPage() {
   )
 }
 
-// Sépare les chantiers en cours et terminés (terminé/perdu), terminés repliables.
+// Liste filtrable par statut (chips « Tous » + statuts présents avec compteur).
+const EN_COURS: StatutProjet[] = [
+  'artisan_assigne',
+  'contacte',
+  'rdv_pris',
+  'devis_envoye',
+  'devis_signe',
+]
+
 function ListeChantiers({
   projets,
   signe,
@@ -129,43 +138,55 @@ function ListeChantiers({
   signe: boolean
   onChange: () => void
 }) {
-  const [voirTermines, setVoirTermines] = useState(false)
-  const estTermine = (p: ProjetEspace) => p.statut === 'termine' || p.statut === 'perdu'
-  const enCours = projets.filter((p) => !estTermine(p))
-  const termines = projets.filter(estTermine)
+  const [filtre, setFiltre] = useState<'tous' | 'en_cours' | StatutProjet>('tous')
+
+  // Compteurs par statut (uniquement les statuts réellement présents)
+  const compte = (s: StatutProjet) => projets.filter((p) => p.statut === s).length
+  const nbEnCours = projets.filter((p) => EN_COURS.includes(p.statut)).length
+  const statutsPresents = STATUTS_ORDRE.filter((s) => compte(s) > 0)
+
+  const filtres: { cle: 'tous' | 'en_cours' | StatutProjet; label: string; n: number }[] = [
+    { cle: 'tous', label: 'Tous', n: projets.length },
+    { cle: 'en_cours', label: 'En cours', n: nbEnCours },
+    ...statutsPresents.map((s) => ({ cle: s, label: STATUTS[s].label, n: compte(s) })),
+  ]
+
+  const liste = projets.filter((p) =>
+    filtre === 'tous' ? true : filtre === 'en_cours' ? EN_COURS.includes(p.statut) : p.statut === filtre,
+  )
 
   return (
     <>
       <h2 className="mb-2 mt-5 text-sm font-semibold text-muted-foreground">
-        En cours ({enCours.length})
+        Vos chantiers ({projets.length})
       </h2>
-      {enCours.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucun chantier en cours.</p>
+
+      {/* Filtres par statut */}
+      <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1">
+        {filtres.map((f) => (
+          <button
+            key={f.cle}
+            type="button"
+            onClick={() => setFiltre(f.cle)}
+            className={cn(
+              'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              filtre === f.cle
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border bg-card text-muted-foreground hover:bg-accent',
+            )}
+          >
+            {f.label} ({f.n})
+          </button>
+        ))}
+      </div>
+
+      {liste.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Aucun chantier dans ce filtre.</p>
       ) : (
-        <div className="space-y-2">
-          {enCours.map((p) => (
+        <div className="grid gap-2 md:grid-cols-2">
+          {liste.map((p) => (
             <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} />
           ))}
-        </div>
-      )}
-
-      {termines.length > 0 && (
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => setVoirTermines((v) => !v)}
-            className="mb-2 flex w-full items-center justify-between text-sm font-semibold text-muted-foreground"
-          >
-            <span>Terminés ({termines.length})</span>
-            <ChevronDown className={cn('size-4 transition-transform', voirTermines && 'rotate-180')} />
-          </button>
-          {voirTermines && (
-            <div className="space-y-2 opacity-80">
-              {termines.map((p) => (
-                <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} />
-              ))}
-            </div>
-          )}
         </div>
       )}
     </>
@@ -369,6 +390,7 @@ function ProjetItem({
                   slot="devis"
                   label="Devis"
                   depose={projet.devis_depose}
+                  montantInitial={projet.montant_devis}
                   onDone={onChange}
                 />
                 <UploadDevis
@@ -376,6 +398,7 @@ function ProjetItem({
                   slot="devis_signe"
                   label="Devis signé par le client"
                   depose={projet.devis_signe_depose}
+                  montantInitial={projet.montant_devis_signe}
                   onDone={onChange}
                 />
               </div>
