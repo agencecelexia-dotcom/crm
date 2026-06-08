@@ -257,7 +257,7 @@ function Dossier({
         <CardContent className="space-y-3 py-5">
           <p className="text-lg font-semibold">🎯 À vous de jouer !</p>
           <p className="text-sm">
-            Vous venez de la part d'<strong>Antoine</strong> (Celexia). Un client vous attend
+            Vous venez de la part d'<strong>Antoine</strong>. Un client vous attend
             pour son projet.
           </p>
           <p className="rounded-md bg-[#EF4444]/10 p-2.5 text-sm font-medium text-[#991B1B]">
@@ -273,7 +273,7 @@ function Dossier({
             </Button>
           )}
           <ol className="ml-4 list-decimal space-y-1 text-sm text-muted-foreground">
-            <li>Appelez le client et présentez-vous (de la part d'Antoine — Celexia).</li>
+            <li>Appelez le client et présentez-vous (de la part d'Antoine).</li>
             <li>Convenez d'un rendez-vous sur place.</li>
             <li>Établissez votre devis et déposez-le plus bas.</li>
             <li>Tenez Celexia informé avec les boutons de suivi ci-dessous.</li>
