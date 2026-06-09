@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { formatDate } from '@/lib/format'
+import { N8N_WEBHOOK_URL } from '@/lib/constants'
 import type { Artisan } from '@/types/database'
 import { useRegenererTokenArtisan } from '@/features/artisans/hooks/use-artisans'
 import { useContratArtisan } from './use-contrats'
@@ -28,6 +29,7 @@ import { finaliserContenu } from './contrat-modele'
 export function ContratCard({ artisan }: { artisan: Artisan }) {
   const { data: contrat, isLoading } = useContratArtisan(artisan.id)
   const [signatureVisible, setSignatureVisible] = useState(false)
+  const [envoiMail, setEnvoiMail] = useState(false)
   const regenerer = useRegenererTokenArtisan()
 
   const lien = contrat
@@ -51,11 +53,31 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
     )
   }
 
-  const mailtoEspace = `mailto:${artisan.email ?? ''}?subject=${encodeURIComponent(
-    'Votre espace Celexia',
-  )}&body=${encodeURIComponent(
-    `Bonjour ${artisan.prenom ?? artisan.nom},\n\nVoici votre espace Celexia : signez votre contrat (une seule fois) et retrouvez tous vos chantiers ici :\n${lienEspace}\n\nÀ très vite,\nL'équipe Celexia`,
-  )}`
+  // Envoi automatique du lien espace à l'artisan via n8n (email Gmail), comme
+  // l'ancien envoi par projet — mais ici c'est SON lien unique (tous ses chantiers).
+  async function envoyerEspace() {
+    if (!artisan.email) return
+    setEnvoiMail(true)
+    try {
+      await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'envoyer_lien_mission',
+          email: artisan.email,
+          lien: lienEspace,
+          artisan_prenom: artisan.prenom ?? '',
+          artisan_nom: artisan.nom,
+        }),
+      })
+      toast.success(`Lien envoyé à ${artisan.email}`)
+    } catch {
+      toast.error('Envoi impossible')
+    } finally {
+      setEnvoiMail(false)
+    }
+  }
 
   // Email pré-rempli (envoi manuel pour l'instant ; automatisable via n8n plus tard).
   const mailto = `mailto:${artisan.email ?? ''}?subject=${encodeURIComponent(
@@ -94,11 +116,14 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
               <Copy className="size-4" />
               Copier
             </Button>
-            <Button asChild variant="outline" size="sm" disabled={!artisan.email}>
-              <a href={mailtoEspace}>
-                <Mail className="size-4" />
-                Email
-              </a>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={envoyerEspace}
+              disabled={!artisan.email || envoiMail}
+            >
+              {envoiMail ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+              Envoyer
             </Button>
           </div>
           <AlertDialog>
