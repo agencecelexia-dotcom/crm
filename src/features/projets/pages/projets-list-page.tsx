@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, FolderKanban, ChevronRight, Phone } from 'lucide-react'
+import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -21,12 +21,14 @@ import { cn } from '@/lib/utils'
 import { METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
+import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { QuickProspectDialog } from '../components/quick-prospect-dialog'
 import { KanbanProjets } from '../components/kanban-projets'
 
 // Liste des projets : recherche + filtres statut / métier / ville.
 export function ProjetsListPage() {
   const { data: projets, isLoading } = useProjets()
+  const { data: artisansSignes } = useArtisansSignes()
   const [recherche, setRecherche] = useState('')
   const [statut, setStatut] = useState('tous')
   const [metier, setMetier] = useState('tous')
@@ -158,8 +160,29 @@ export function ProjetsListPage() {
                       {p.metiers.join(', ') || '—'}
                       {p.client_ville && ` · ${p.client_ville}`}
                     </p>
+                    {p.artisan && (
+                      <p className="flex items-center gap-1 text-xs">
+                        {artisansSignes?.has(p.artisan_id ?? '') ? (
+                          <BadgeCheck className="size-3.5 shrink-0 text-[#22C55E]" />
+                        ) : (
+                          <Clock className="size-3.5 shrink-0 text-[#F59E0B]" />
+                        )}
+                        <span className="min-w-0 truncate text-muted-foreground">
+                          {p.artisan.societe ?? p.artisan.nom}
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 font-medium',
+                            artisansSignes?.has(p.artisan_id ?? '')
+                              ? 'text-[#22C55E]'
+                              : 'text-[#F59E0B]',
+                          )}
+                        >
+                          · {artisansSignes?.has(p.artisan_id ?? '') ? 'signé' : 'non signé'}
+                        </span>
+                      </p>
+                    )}
                     <p className="truncate text-xs text-muted-foreground">
-                      {p.artisan ? `${p.artisan.societe ?? p.artisan.nom} · ` : ''}
                       {formatDate(p.created_at)}
                       {p.montant_devis_signe != null && ` · ${formatEuros(p.montant_devis_signe)}`}
                     </p>

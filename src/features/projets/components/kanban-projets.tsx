@@ -1,8 +1,10 @@
 import { useState, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { BadgeCheck, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { usePatchProjet } from '../hooks/use-projets'
+import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import type { ProjetAvecArtisan, StatutProjet } from '@/types/database'
 
 // Vue pipeline (Kanban) : une colonne par statut. On glisse une carte dans une
@@ -10,6 +12,7 @@ import type { ProjetAvecArtisan, StatutProjet } from '@/types/database'
 // la fiche pour changer le statut.
 export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
   const patch = usePatchProjet()
+  const { data: artisansSignes } = useArtisansSignes()
   const [over, setOver] = useState<StatutProjet | null>(null)
 
   function onDrop(statut: StatutProjet, e: DragEvent) {
@@ -61,8 +64,15 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
                       {p.client_ville ? ` · ${p.client_ville}` : ''}
                     </p>
                     {p.artisan && (
-                      <p className="truncate text-xs text-muted-foreground">
-                        {p.artisan.societe || p.artisan.nom}
+                      <p className="flex items-center gap-1 text-xs">
+                        {artisansSignes?.has(p.artisan_id ?? '') ? (
+                          <BadgeCheck className="size-3 shrink-0 text-[#22C55E]" />
+                        ) : (
+                          <Clock className="size-3 shrink-0 text-[#F59E0B]" />
+                        )}
+                        <span className="min-w-0 truncate text-muted-foreground">
+                          {p.artisan.societe || p.artisan.nom}
+                        </span>
                       </p>
                     )}
                   </Link>
