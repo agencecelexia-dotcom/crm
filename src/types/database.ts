@@ -111,6 +111,7 @@ export type ProjetInput = Omit<
 export type StatutSuivi =
   | 'contacte'
   | 'rdv_pris'
+  | 'en_attente'
   | 'devis_envoye'
   | 'devis_signe'
   | 'termine'

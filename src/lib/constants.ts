@@ -112,6 +112,7 @@ export const STATUTS_ORDRE: StatutProjet[] = [
 export const SUIVI_STATUTS: Record<string, { label: string; color: string; emoji: string }> = {
   contacte: { label: 'Client contacté', color: '#3B82F6', emoji: '📞' },
   rdv_pris: { label: 'RDV pris', color: '#8B5CF6', emoji: '📅' },
+  en_attente: { label: 'En attente', color: '#06B6D4', emoji: '⏳' },
   devis_envoye: { label: 'Devis envoyé', color: '#F59E0B', emoji: '📄' },
   devis_signe: { label: 'Devis signé', color: '#22C55E', emoji: '✅' },
   termine: { label: 'Projet terminé', color: '#0F766E', emoji: '🏁' },
@@ -120,6 +121,7 @@ export const SUIVI_STATUTS: Record<string, { label: string; color: string; emoji
 export const SUIVI_ORDRE = [
   'contacte',
   'rdv_pris',
+  'en_attente',
   'devis_envoye',
   'devis_signe',
   'termine',
