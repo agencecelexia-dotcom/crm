@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
+import { useAffectationsCounts } from '../hooks/use-affectations'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { QuickProspectDialog } from '../components/quick-prospect-dialog'
 import { KanbanProjets } from '../components/kanban-projets'
@@ -29,6 +30,7 @@ import { KanbanProjets } from '../components/kanban-projets'
 export function ProjetsListPage() {
   const { data: projets, isLoading } = useProjets()
   const { data: artisansSignes } = useArtisansSignes()
+  const { data: affectationsCounts } = useAffectationsCounts()
   const [recherche, setRecherche] = useState('')
   const [statut, setStatut] = useState('tous')
   const [metier, setMetier] = useState('tous')
@@ -180,6 +182,11 @@ export function ProjetsListPage() {
                         >
                           · {artisansSignes?.has(p.artisan_id ?? '') ? 'signé' : 'non signé'}
                         </span>
+                        {(affectationsCounts?.[p.id] ?? 0) > 1 && (
+                          <span className="shrink-0 text-primary">
+                            +{(affectationsCounts?.[p.id] ?? 0) - 1}
+                          </span>
+                        )}
                       </p>
                     )}
                     <p className="truncate text-xs text-muted-foreground">

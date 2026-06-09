@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase/client'
+import { uploaderDevis } from '@/lib/storage'
 import { cn } from '@/lib/utils'
 import { useDropzone } from '@/hooks/use-dropzone'
 
@@ -60,14 +61,12 @@ export function UploadDevis({
     }
     setEnvoi(true)
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const fr = new FileReader()
-        fr.onload = () => resolve(String(fr.result).split(',')[1] ?? '')
-        fr.onerror = reject
-        fr.readAsDataURL(file)
-      })
-      const { data, error } = await supabase.functions.invoke('upload-devis', {
-        body: { token, slot, filename: file.name, base64 },
+      // Upload dans le bucket dédié (lien imprévisible) puis enregistrement sur l'affectation.
+      const url = await uploaderDevis(token, slot, file)
+      const { data, error } = await supabase.rpc('set_devis_by_token', {
+        p_token: token,
+        p_slot: slot,
+        p_url: url,
       })
       if (error || !(data as { ok?: boolean })?.ok) throw new Error('Envoi impossible')
       // Enregistre aussi le montant saisi, le cas échéant (mécaniquement).

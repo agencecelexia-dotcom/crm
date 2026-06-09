@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { UserPlus, UserMinus, MapPin, Check, Loader2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { UserPlus, MapPin, Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -13,78 +13,81 @@ import {
 } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/empty-state'
+import { cn } from '@/lib/utils'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { artisansCompatibles } from '../lib/artisans-compatibles'
-import { usePatchProjet } from '../hooks/use-projets'
-import type { Artisan, ProjetAvecArtisan } from '@/types/database'
+import {
+  useAffectations,
+  useAffecterArtisans,
+  useRetirerAffectation,
+} from '../hooks/use-affectations'
+import type { ProjetAvecArtisan } from '@/types/database'
 
-// Panneau d'assignation : liste les artisans du même métier, triés par proximité.
+// Assignation MULTIPLE : on confie le projet à un ou plusieurs artisans en
+// parallèle. Chacun le verra de façon isolée (sans savoir qu'il y en a d'autres).
 export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
   const [open, setOpen] = useState(false)
   const { data: artisans } = useArtisans()
-  const patch = usePatchProjet()
-
+  const { data: affectations } = useAffectations(projet.id)
+  const affecter = useAffecterArtisans()
+  const retirer = useRetirerAffectation()
   const compatibles = artisansCompatibles(projet, artisans ?? [])
 
-  function assigner(artisan: Artisan) {
-    // Si le projet est encore "nouveau", on le fait passer en "artisan_assigné".
-    // On reprend aussi le taux de commission par défaut de l'artisan.
-    const base = { artisan_id: artisan.id, taux_commission: artisan.taux_commission }
-    const patchData =
-      projet.statut === 'nouveau'
-        ? { ...base, statut: 'artisan_assigne' as const }
-        : base
+  const assignedIds = useMemo(
+    () => new Set((affectations ?? []).map((a) => a.artisan_id)),
+    [affectations],
+  )
+  const [selection, setSelection] = useState<Set<string>>(new Set())
 
-    patch.mutate(
-      { id: projet.id, patch: patchData },
-      {
-        onSuccess: () => {
-          toast.success('Artisan assigné')
-          setOpen(false)
-        },
-        onError: (err) =>
-          toast.error('Assignation impossible', {
-            description: err instanceof Error ? err.message : undefined,
-          }),
-      },
-    )
+  // Ouverture : on (ré)initialise la sélection sur les artisans déjà assignés.
+  function changerOuverture(o: boolean) {
+    setOpen(o)
+    if (o) setSelection(new Set(assignedIds))
   }
 
-  // Retire l'artisan du projet : il disparaît de l'espace de l'artisan
-  // (get_espace_artisan filtre par artisan_id) et repart dans le pool.
-  function retirer() {
-    patch.mutate(
-      { id: projet.id, patch: { artisan_id: null, statut: 'nouveau' } },
-      {
-        onSuccess: () => toast.success("Artisan retiré — le projet a quitté son espace"),
-        onError: (err) =>
-          toast.error('Retrait impossible', {
-            description: err instanceof Error ? err.message : undefined,
-          }),
-      },
-    )
+  const busy = affecter.isPending || retirer.isPending
+  const nb = affectations?.length ?? 0
+
+  function toggle(id: string) {
+    setSelection((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  async function enregistrer() {
+    const toAdd = [...selection].filter((id) => !assignedIds.has(id))
+    const toRemove = (affectations ?? []).filter((a) => !selection.has(a.artisan_id))
+    try {
+      if (toAdd.length) await affecter.mutateAsync({ projetId: projet.id, artisanIds: toAdd })
+      for (const a of toRemove) await retirer.mutateAsync({ id: a.id, projetId: projet.id })
+      toast.success('Assignation mise à jour')
+      setOpen(false)
+    } catch (e) {
+      toast.error('Échec', { description: e instanceof Error ? e.message : undefined })
+    }
   }
 
   return (
-    <div className="space-y-2">
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <Button variant="outline" className="w-full">
-            <UserPlus className="size-4" />
-            {projet.artisan ? "Changer d'artisan" : 'Assigner un artisan'}
-          </Button>
-        </SheetTrigger>
-      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto">
+    <Sheet open={open} onOpenChange={changerOuverture}>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="w-full">
+          <UserPlus className="size-4" />
+          {nb > 0 ? `Gérer les artisans (${nb})` : 'Assigner des artisans'}
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="bottom" className="flex max-h-[85dvh] flex-col overflow-hidden">
         <SheetHeader>
-          <SheetTitle>Assigner un artisan</SheetTitle>
+          <SheetTitle>Assigner des artisans</SheetTitle>
           <SheetDescription>
-            Tous les artisans
-            {projet.metiers.length ? ` — métier « ${projet.metiers.join(' / ')} » d'abord` : ''},
-            triés par proximité du client.
+            Coche un ou plusieurs artisans. Chacun verra le projet de façon isolée (sans savoir
+            qu'il y en a d'autres).
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-2 px-4 pb-8">
+        <div className="flex-1 space-y-2 overflow-y-auto px-4">
           {compatibles.length === 0 ? (
             <EmptyState
               icon={UserPlus}
@@ -93,15 +96,27 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
             />
           ) : (
             compatibles.map(({ artisan, distance, dansRayon, metierMatch }) => {
-              const estAssigne = artisan.id === projet.artisan_id
+              const checked = selection.has(artisan.id)
               return (
                 <button
                   key={artisan.id}
                   type="button"
-                  disabled={patch.isPending}
-                  onClick={() => assigner(artisan)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent/50 disabled:opacity-60"
+                  onClick={() => toggle(artisan.id)}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors',
+                    checked ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent/50',
+                  )}
                 >
+                  <span
+                    className={cn(
+                      'flex size-5 shrink-0 items-center justify-center rounded border',
+                      checked
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-muted-foreground/40',
+                    )}
+                  >
+                    {checked && <Check className="size-3.5" />}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">
                       {artisan.nom} {artisan.prenom}
@@ -121,9 +136,7 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
                       )}
                     </p>
                   </div>
-                  {estAssigne ? (
-                    <Check className="size-5 shrink-0 text-primary" />
-                  ) : dansRayon === false ? (
+                  {dansRayon === false ? (
                     <Badge
                       className="shrink-0 border-transparent text-xs"
                       style={{ backgroundColor: '#F59E0B', color: '#fff' }}
@@ -141,26 +154,15 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
               )
             })
           )}
-          {patch.isPending && (
-            <div className="flex justify-center py-2">
-              <Loader2 className="size-5 animate-spin text-primary" />
-            </div>
-          )}
+        </div>
+
+        <div className="border-t border-border p-4">
+          <Button className="w-full" onClick={enregistrer} disabled={busy}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+            Enregistrer l'assignation ({selection.size})
+          </Button>
         </div>
       </SheetContent>
-      </Sheet>
-
-      {projet.artisan_id && (
-        <Button
-          variant="ghost"
-          className="w-full text-destructive"
-          onClick={retirer}
-          disabled={patch.isPending}
-        >
-          <UserMinus className="size-4" />
-          Retirer l'artisan de ce projet
-        </Button>
-      )}
-    </div>
+    </Sheet>
   )
 }

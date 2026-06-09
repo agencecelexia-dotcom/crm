@@ -1,16 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import {
-  Loader2,
-  Pencil,
-  Trash2,
-  Phone,
-  Mail,
-  MapPin,
-  User,
-  ChevronRight,
-} from 'lucide-react'
+import { Loader2, Pencil, Trash2, Phone, Mail, MapPin } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { StatutBadge } from '@/components/statut-badge'
@@ -38,8 +29,7 @@ import {
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDateHeure, formatTel } from '@/lib/format'
 import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets'
-import { AssignArtisan } from '../components/assign-artisan'
-import { MissionLinkCard } from '../components/mission-link-card'
+import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { ProjetPhotos } from '../components/projet-photos'
 import { SuiviCard } from '../components/suivi-card'
@@ -139,39 +129,8 @@ export function ProjetDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Artisan assigné */}
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base">Artisan</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {projet.artisan ? (
-            <Link
-              to={`/artisans/${projet.artisan.id}`}
-              className="flex items-center gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-accent/50"
-            >
-              <User className="size-5 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">
-                  {projet.artisan.nom} {projet.artisan.prenom}
-                </p>
-                {projet.artisan.societe && (
-                  <p className="truncate text-sm text-muted-foreground">
-                    {projet.artisan.societe}
-                  </p>
-                )}
-              </div>
-              <ChevronRight className="size-5 text-muted-foreground" />
-            </Link>
-          ) : (
-            <p className="text-sm text-muted-foreground">Aucun artisan assigné.</p>
-          )}
-          <AssignArtisan projet={projet} />
-        </CardContent>
-      </Card>
-
-      {/* Espace artisan (lien à envoyer) — visible une fois l'artisan assigné */}
-      {projet.artisan && <MissionLinkCard projet={projet} />}
+      {/* Artisans assignés (multi-assignation, état isolé par artisan) */}
+      <AffectationsCard projet={projet} />
 
       {/* Coordonnées client */}
       <Card className="mb-4">

@@ -30,6 +30,27 @@ export async function supprimerPhoto(url: string): Promise<void> {
   await supabase.storage.from(BUCKET_PHOTOS).remove([chemin])
 }
 
+const BUCKET_DEVIS = 'devis'
+
+/**
+ * Téléverse un devis (PDF) dans le bucket dédié et renvoie son URL.
+ * Chemin imprévisible préfixé par le token d'affectation → isolation par artisan.
+ */
+export async function uploaderDevis(
+  token: string,
+  slot: 'devis' | 'devis_signe',
+  file: File,
+): Promise<string> {
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
+  const rand = Math.random().toString(36).slice(2)
+  const chemin = `${token}/${slot}-${rand}.${ext}`
+  const { error } = await supabase.storage
+    .from(BUCKET_DEVIS)
+    .upload(chemin, file, { contentType: file.type || 'application/pdf' })
+  if (error) throw error
+  return supabase.storage.from(BUCKET_DEVIS).getPublicUrl(chemin).data.publicUrl
+}
+
 /** Types de documents rattachés à un projet. */
 export type TypeDocument = 'contrat' | 'devis' | 'devis_signe'
 
