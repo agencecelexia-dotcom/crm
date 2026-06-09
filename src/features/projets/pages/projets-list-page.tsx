@@ -34,6 +34,7 @@ export function ProjetsListPage() {
   const [recherche, setRecherche] = useState('')
   const [statut, setStatut] = useState('tous')
   const [metier, setMetier] = useState('tous')
+  const [tri, setTri] = useState<'recent' | 'statut' | 'a_signer'>('recent')
   const [vue, setVue] = useState<'liste' | 'pipeline'>('liste')
 
   // Recherche + métier (communs aux 2 vues)
@@ -55,11 +56,28 @@ export function ProjetsListPage() {
     })
   }, [projets, recherche, metier])
 
-  // Vue liste : on applique aussi le filtre statut
-  const resultats = useMemo(
-    () => base.filter((p) => statut === 'tous' || p.statut === statut),
-    [base, statut],
-  )
+  // Vue liste : on applique aussi le filtre statut, puis le tri choisi.
+  const resultats = useMemo(() => {
+    const filtres = base.filter((p) => statut === 'tous' || p.statut === statut)
+    const rangStatut = (s: string) => {
+      const i = STATUTS_ORDRE.indexOf(s as (typeof STATUTS_ORDRE)[number])
+      return i === -1 ? 99 : i
+    }
+    const dateDesc = (a: (typeof filtres)[number], b: (typeof filtres)[number]) =>
+      b.created_at.localeCompare(a.created_at)
+    const arr = [...filtres]
+    if (tri === 'statut') {
+      // Regroupe par statut (ordre du pipeline), puis par date
+      arr.sort((a, b) => rangStatut(a.statut) - rangStatut(b.statut) || dateDesc(a, b))
+    } else if (tri === 'a_signer') {
+      // D'abord les projets dont l'artisan assigné n'a PAS signé son contrat
+      const aSigner = (p: (typeof filtres)[number]) =>
+        p.artisan_id && !artisansSignes?.has(p.artisan_id) ? 0 : 1
+      arr.sort((a, b) => aSigner(a) - aSigner(b) || dateDesc(a, b))
+    }
+    // 'recent' : on garde l'ordre d'origine (déjà du plus récent au plus ancien)
+    return arr
+  }, [base, statut, tri, artisansSignes])
 
   return (
     <div>
@@ -117,6 +135,19 @@ export function ProjetsListPage() {
             </SelectContent>
           </Select>
         </div>
+        {/* Tri (vue liste) : regrouper par statut, contrat à signer, ou récent */}
+        {vue === 'liste' && (
+          <Select value={tri} onValueChange={(v) => setTri(v as typeof tri)}>
+            <SelectTrigger className="h-11 w-full">
+              <SelectValue placeholder="Trier" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">Trier : plus récents</SelectItem>
+              <SelectItem value="statut">Trier : par statut (groupé)</SelectItem>
+              <SelectItem value="a_signer">Trier : contrat à signer d'abord</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {isLoading ? (
