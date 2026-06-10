@@ -71,11 +71,14 @@ export function EspaceArtisanPage() {
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
 
   return (
-    <div className="mx-auto min-h-dvh max-w-5xl bg-secondary px-4 py-6 sm:px-6 sm:py-10">
-      <div className="mb-5 flex flex-col items-center gap-1 sm:mb-8">
-        <BrandLogo className="h-9 sm:h-10" />
-        <p className="text-sm text-muted-foreground">Espace de {nomArtisan}</p>
-      </div>
+    <div className="min-h-dvh bg-gradient-to-b from-accent/60 via-secondary to-secondary">
+      <div className="mx-auto max-w-5xl px-4 py-7 sm:px-6 sm:py-12">
+      <header className="mb-6 flex flex-col items-center gap-2.5 sm:mb-10">
+        <BrandLogo className="h-10 mix-blend-multiply sm:h-11" />
+        <p className="rounded-full bg-white/70 px-3.5 py-1 text-sm font-medium text-secondary-foreground shadow-sm backdrop-blur-sm">
+          Espace de {nomArtisan}
+        </p>
+      </header>
 
       {/* Contrat + intro gardés dans une colonne lisible (centrée) même sur grand écran */}
       <div className="mx-auto max-w-2xl">
@@ -115,7 +118,7 @@ export function EspaceArtisanPage() {
 
       {/* Intro */}
       {signe && (
-        <p className="mb-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+        <p className="mb-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5 text-sm leading-relaxed text-foreground/90">
           Vous venez de la part d'<strong>Antoine</strong>. Voici vos chantiers — contactez vos
           clients dès que possible et tenez-nous informés avec les boutons de suivi.
         </p>
@@ -124,6 +127,7 @@ export function EspaceArtisanPage() {
 
       {/* Liste des chantiers : en cours / terminés */}
       <ListeChantiers projets={projets} signe={signe} onChange={() => void refetch()} />
+      </div>
     </div>
   )
 }
@@ -164,23 +168,25 @@ function ListeChantiers({
   )
 
   return (
-    <>
-      <h2 className="mb-2 mt-5 text-sm font-semibold text-muted-foreground">
-        Vos chantiers ({projets.length})
+    <section className="mt-8">
+      <h2 className="mb-3 text-lg font-semibold">
+        Vos chantiers <span className="text-muted-foreground">({projets.length})</span>
       </h2>
 
       {/* Filtres par statut */}
-      <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="scrollbar-hide -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
         {filtres.map((f) => (
           <button
             key={f.cle}
             type="button"
             onClick={() => setFiltre(f.cle)}
+            aria-pressed={filtre === f.cle}
             className={cn(
-              'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              'shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
               filtre === f.cle
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-card text-muted-foreground hover:bg-accent',
+                ? 'border-transparent bg-primary text-primary-foreground shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >
             {f.label} ({f.n})
@@ -189,15 +195,17 @@ function ListeChantiers({
       </div>
 
       {liste.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Aucun chantier dans ce filtre.</p>
+        <p className="rounded-xl border border-dashed border-border bg-card/50 p-6 text-center text-sm text-muted-foreground">
+          Aucun chantier dans ce filtre.
+        </p>
       ) : (
-        <div className="grid items-start gap-3 sm:grid-cols-2">
+        <div className="space-y-3">
           {liste.map((p) => (
             <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} />
           ))}
         </div>
       )}
-    </>
+    </section>
   )
 }
 
@@ -247,7 +255,7 @@ function SignatureContrat({
           </p>
         </div>
 
-        <div className="max-h-[45dvh] overflow-y-auto rounded-lg border border-border sm:max-h-[55dvh]">
+        <div className="max-h-[45dvh] overflow-y-auto rounded-xl border border-border bg-white sm:max-h-[55dvh]">
           <ContratFormate
             contenu={finaliserContenu(engagement.contenu, engagement.signed_at)}
             apporteurSignature={engagement.apporteur_signature}
@@ -300,74 +308,90 @@ function ProjetItem({
     .join(', ')
 
   return (
-    <Card className="overflow-hidden shadow-card">
+    <Card className="overflow-hidden shadow-card transition-shadow hover:shadow-card-hover">
       <button
         type="button"
         onClick={() => setOuvert((v) => !v)}
-        className="flex w-full items-center gap-3 p-4 text-left"
+        aria-expanded={ouvert}
+        className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-5"
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <StatutBadge statut={projet.statut} />
-            <span className="min-w-0 truncate text-sm font-medium">{metiers.join(', ')}</span>
+            <span className="min-w-0 truncate text-sm font-semibold sm:text-base">{metiers.join(', ')}</span>
           </div>
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">
+          <p className="mt-1 truncate text-sm text-muted-foreground">
             {signe && projet.client_nom ? projet.client_nom : 'Client confidentiel'}
             {projet.client_ville && ` · ${projet.client_ville}`}
           </p>
         </div>
-        <ChevronDown
-          className={cn('size-5 shrink-0 text-muted-foreground transition-transform', ouvert && 'rotate-180')}
-        />
+        <span
+          className={cn(
+            'flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground transition-transform',
+            ouvert && 'rotate-180',
+          )}
+        >
+          <ChevronDown className="size-5" />
+        </span>
       </button>
 
       {ouvert && (
-        <div className="space-y-4 border-t border-border p-4">
+        <div className="space-y-4 border-t border-border p-4 sm:p-5">
           {/* Détails non confidentiels (toujours visibles) */}
-          <div className="text-sm">
-            {projet.budget_estime != null && (
-              <p className="text-muted-foreground">
-                Budget estimé : {formatEuros(projet.budget_estime)}
-              </p>
-            )}
-            {projet.description && (
-              <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
-                {projet.description}
-              </p>
-            )}
-          </div>
+          {(projet.budget_estime != null || projet.description) && (
+            <div className="rounded-xl bg-muted/40 p-3 text-sm">
+              {projet.budget_estime != null && (
+                <p className="text-muted-foreground">
+                  Budget estimé : <span className="font-medium text-foreground">{formatEuros(projet.budget_estime)}</span>
+                </p>
+              )}
+              {projet.description && (
+                <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
+                  {projet.description}
+                </p>
+              )}
+            </div>
+          )}
 
           {!signe ? (
-            <div className="flex items-start gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/10 p-3 text-sm text-[#92400E]">
+            <div className="flex items-start gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/10 p-3.5 text-sm text-[#92400E]">
               <Lock className="mt-0.5 size-4 shrink-0" />
               Signez le contrat en haut pour accéder aux coordonnées du client et déposer votre devis.
             </div>
           ) : (
-            <>
-              {/* Coordonnées client (éditables sauf le téléphone) */}
-              <ClientBloc projet={projet} adresse={adresse} onChange={onChange} />
+            <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+              {/* Colonne gauche : client + suivi */}
+              <div className="space-y-4">
+                {/* Coordonnées client (éditables sauf le téléphone) */}
+                <ClientBloc projet={projet} adresse={adresse} onChange={onChange} />
 
-              {/* Photos */}
-              {projet.photos?.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
-                  {projet.photos.map((url) => (
-                    <a
-                      key={url}
-                      href={url}
-                      target="_blank"
-                      rel="noopener"
-                      className="aspect-square overflow-hidden rounded-lg border border-border"
-                    >
-                      <img src={url} alt="Photo chantier" className="size-full object-cover" />
-                    </a>
-                  ))}
-                </div>
-              )}
+                {/* Photos */}
+                {projet.photos?.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {projet.photos.map((url) => (
+                      <a
+                        key={url}
+                        href={url}
+                        target="_blank"
+                        rel="noopener"
+                        className="aspect-square overflow-hidden rounded-lg border border-border transition-opacity hover:opacity-90"
+                      >
+                        <img src={url} alt="Photo chantier" className="size-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
 
-              {/* Suivi (statut + notes) */}
-              <SuiviArtisan token={projet.token} suivis={projet.suivis ?? []} onChange={onChange} />
+                {/* Suivi (statut + notes) */}
+                <SuiviArtisan
+                  token={projet.token}
+                  suivis={projet.suivis ?? []}
+                  onChange={onChange}
+                  statutActuel={projet.statut}
+                />
+              </div>
 
-              {/* Dépôt devis */}
+              {/* Colonne droite : documents */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">Documents</p>
                 <UploadDevis
@@ -387,7 +411,7 @@ function ProjetItem({
                   onDone={onChange}
                 />
               </div>
-            </>
+            </div>
           )}
         </div>
       )}

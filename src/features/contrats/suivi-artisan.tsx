@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Upload } from 'lucide-react'
+import { Upload, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { SUIVI_ORDRE, SUIVI_STATUTS } from '@/lib/constants'
 import type { Suivi } from '@/types/database'
@@ -17,10 +18,13 @@ export function SuiviArtisan({
   token,
   suivis,
   onChange,
+  statutActuel,
 }: {
   token: string
   suivis: Suivi[]
   onChange: () => void
+  /** Statut courant du chantier — sert UNIQUEMENT à mettre le bouton en surbrillance. */
+  statutActuel?: string
 }) {
   const [note, setNote] = useState('')
   const [envoi, setEnvoi] = useState(false)
@@ -54,19 +58,43 @@ export function SuiviArtisan({
         <p className="text-sm text-muted-foreground">
           Indiquez votre avancement (Celexia est tenu informé en temps réel) :
         </p>
-        <div className="grid grid-cols-2 gap-2">
-          {SUIVI_ORDRE.map((s) => (
-            <Button
-              key={s}
-              variant="outline"
-              disabled={envoi}
-              onClick={() => poster(s)}
-              className="justify-start"
-              style={{ borderColor: SUIVI_STATUTS[s].color }}
-            >
-              <span>{SUIVI_STATUTS[s].emoji}</span> {SUIVI_STATUTS[s].label}
-            </Button>
-          ))}
+        <div
+          className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+          role="group"
+          aria-label="Mettre à jour le statut du chantier"
+        >
+          {SUIVI_ORDRE.map((s) => {
+            const conf = SUIVI_STATUTS[s]
+            const actif = statutActuel === s
+            return (
+              <button
+                key={s}
+                type="button"
+                disabled={envoi}
+                onClick={() => poster(s)}
+                aria-pressed={actif}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-all',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  actif
+                    ? 'border-transparent text-white shadow-sm'
+                    : 'bg-card text-foreground hover:-translate-y-px hover:shadow-sm active:translate-y-0',
+                )}
+                style={
+                  actif
+                    ? { backgroundColor: conf.color }
+                    : { borderColor: `${conf.color}55` }
+                }
+              >
+                <span className="text-base leading-none" aria-hidden>
+                  {conf.emoji}
+                </span>
+                <span className="min-w-0 flex-1">{conf.label}</span>
+                {actif && <Check className="size-4 shrink-0" aria-hidden />}
+              </button>
+            )
+          })}
         </div>
         <div className="space-y-2">
           <Textarea
@@ -74,6 +102,7 @@ export function SuiviArtisan({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
+            aria-label="Note de suivi"
           />
           <Button
             onClick={() => poster(undefined, note.trim())}

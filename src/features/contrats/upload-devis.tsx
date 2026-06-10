@@ -84,8 +84,15 @@ export function UploadDevis({
   const { dragActive, handlers } = useDropzone(traiter)
 
   return (
-    <div className="space-y-2 rounded-lg border border-border p-3">
-      <p className="text-sm font-medium">{label}</p>
+    <div className="space-y-3 rounded-xl border border-border bg-card p-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">{label}</p>
+        {depose && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#22C55E]/10 px-2 py-0.5 text-xs font-medium text-[#16A34A]">
+            <CheckCircle2 className="size-3" /> Reçu
+          </span>
+        )}
+      </div>
 
       {/* Montant TTC */}
       <div className="flex items-center gap-2">
@@ -97,12 +104,14 @@ export function UploadDevis({
             value={montant}
             onChange={(e) => setMontant(e.target.value)}
             className="h-10 pr-7"
+            aria-label={`Montant TTC — ${label}`}
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
         </div>
         <Button
           variant="outline"
           size="sm"
+          className="h-10"
           onClick={() => void enregistrerMontant()}
           disabled={majMontant || !montant.trim()}
           aria-label="Enregistrer le montant"
@@ -111,29 +120,36 @@ export function UploadDevis({
         </Button>
       </div>
 
-      {/* Dépôt du PDF */}
+      {/* Dépôt du PDF — zone drag & drop */}
       <div
         {...handlers}
         className={cn(
-          'flex items-center gap-3 rounded-lg border p-3 transition-colors',
-          dragActive ? 'border-primary border-dashed bg-primary/5' : 'border-border',
+          'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-colors',
+          dragActive
+            ? 'border-primary bg-primary/5'
+            : depose
+              ? 'border-[#22C55E]/40 bg-[#22C55E]/5'
+              : 'border-input bg-muted/30 hover:border-primary/40 hover:bg-muted/50',
         )}
       >
-        <FileText className={depose ? 'size-5 text-primary' : 'size-5 text-muted-foreground'} />
-        <p className="flex min-w-0 flex-1 items-center gap-1 text-xs text-muted-foreground">
-          {dragActive ? (
-            'Déposez le PDF ici…'
-          ) : depose ? (
-            <>
-              <CheckCircle2 className="size-3 text-[#22C55E]" /> Reçu par Celexia
-            </>
-          ) : (
-            'Glissez le PDF ou cliquez'
+        <span
+          className={cn(
+            'flex size-10 items-center justify-center rounded-full',
+            depose ? 'bg-[#22C55E]/15 text-[#16A34A]' : 'bg-primary/10 text-primary',
           )}
+        >
+          <FileText className="size-5" />
+        </span>
+        <p className="text-xs text-muted-foreground">
+          {dragActive
+            ? 'Déposez le PDF ici…'
+            : depose
+              ? 'Document reçu par Celexia'
+              : 'Glissez votre PDF ici, ou'}
         </p>
         <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={envoi}>
           {envoi ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          {depose ? 'Remplacer' : 'Déposer'}
+          {depose ? 'Remplacer le document' : 'Choisir un PDF'}
         </Button>
       </div>
       <input
