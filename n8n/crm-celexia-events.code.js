@@ -85,6 +85,18 @@ if (d.event === 'envoyer_lien_mission') {
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Déposé par <b>${esc(d.artisan)}</b>${d.societe ? ' (' + esc(d.societe) + ')' : ''} pour le client <b>${esc(d.client_nom)}</b> (${esc(d.metier)}${d.client_ville ? ', ' + esc(d.client_ville) : ''}).</p>
     ${d.lien ? btn(esc(d.lien), 'Ouvrir le projet →') : ''}
     <p style="margin:8px 0 0;color:#6b7280;font-size:13px;">Pense à valider l'encaissement de la commission une fois reçue (case « Commission encaissée »).</p>`);
+} else if (d.event === 'changement_statut') {
+  const LABELS = {
+    contacte: 'Client contacté', rdv_pris: 'RDV pris', en_attente: 'En attente',
+    devis_envoye: 'Devis envoyé', devis_signe: 'Devis signé',
+    termine: 'Projet terminé', perdu: 'Pas de suite / Perdu',
+  };
+  const st = LABELS[d.statut] || d.statut || 'Mise à jour';
+  subject = '🔔 ' + st + ' — ' + (d.client_nom || 'Client') + (d.artisan ? ' (' + d.artisan + ')' : '');
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:18px;color:#111827;">Nouveau statut : ${esc(st)} 🔔</h1>
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;"><b>${esc(d.artisan || 'Un artisan')}</b> a mis à jour le projet <b>${esc(d.client_nom || '')}</b>${d.metier ? ' (' + esc(d.metier) + (d.client_ville ? ', ' + esc(d.client_ville) : '') + ')' : ''} en <b>${esc(st)}</b>.</p>
+    ${d.lien ? btn(esc(d.lien), 'Ouvrir le projet →') : ''}`);
 } else {
   return []; // événement inconnu → aucun envoi
 }
