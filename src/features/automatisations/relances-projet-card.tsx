@@ -8,6 +8,7 @@ const LABEL: Record<string, string> = {
   contrat_escalade: 'Escalade « à appeler »',
   inaction: 'Relance inaction → artisan',
   inaction_escalade: 'Escalade « à appeler »',
+  post_rdv: 'Relance post-RDV → artisan',
 }
 
 // Timeline des relances automatiques envoyées pour ce projet.

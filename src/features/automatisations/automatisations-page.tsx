@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { formatDateHeure } from '@/lib/format'
-import { useReglages, useSetReglage, useRelances } from './use-automatisations'
+import { useReglages, useSetReglage, useRelances, destinataireRelance } from './use-automatisations'
 
 const TYPE_LABEL: Record<string, { label: string; color: string }> = {
   contrat: { label: 'Relance contrat', color: '#F59E0B' },
   contrat_escalade: { label: 'Escalade contrat (à appeler)', color: '#EF4444' },
   inaction: { label: 'Relance inaction', color: '#3B82F6' },
   inaction_escalade: { label: 'Escalade inaction (à appeler)', color: '#EF4444' },
+  post_rdv: { label: 'Relance post-RDV', color: '#8B5CF6' },
   orphelin: { label: 'Digest leads non attribués', color: '#0F766E' },
 }
 
@@ -60,6 +61,12 @@ export function AutomatisationsPage() {
                 onChange={(v) => toggle('auto_inaction', v)}
               />
               <Bascule
+                titre="Suivi post-RDV"
+                desc="Relance l'artisan 24 h après son rendez-vous s'il n'a pas mis à jour le suivi (« comment s'est passé le RDV, pensez au devis »)."
+                on={r.auto_post_rdv}
+                onChange={(v) => toggle('auto_post_rdv', v)}
+              />
+              <Bascule
                 titre="Leads non attribués"
                 desc="Digest quotidien à l'agence des projets « nouveau » sans artisan depuis +24 h."
                 on={r.auto_orphelin}
@@ -77,6 +84,8 @@ export function AutomatisationsPage() {
               <Champ label="Intervalle relances (h)" cle="relance_interval_h" val={r.relance_interval_h} onSave={setNum} />
               <Champ label="Escalade Thomas (h)" cle="relance_escalade_h" val={r.relance_escalade_h} onSave={setNum} />
               <div />
+              <Champ label="Post-RDV : 1ʳᵉ relance (h)" cle="post_rdv_premier_h" val={r.post_rdv_premier_h} onSave={setNum} />
+              <Champ label="Post-RDV : 2ᵉ relance (h)" cle="post_rdv_relance_h" val={r.post_rdv_relance_h} onSave={setNum} />
               <Champ label="Envois à partir de (h)" cle="heure_debut" val={r.heure_debut} onSave={setNum} />
               <Champ label="Envois jusqu'à (h)" cle="heure_fin" val={r.heure_fin} onSave={setNum} />
               <p className="col-span-2 text-xs text-muted-foreground">
@@ -103,7 +112,8 @@ export function AutomatisationsPage() {
                             {t.label}
                           </Badge>
                           <span className="truncate text-muted-foreground">
-                            {x.projet?.client_nom ?? '—'} · {x.cible}
+                            → {destinataireRelance(x)}
+                            {x.projet?.client_nom ? ` · projet ${x.projet.client_nom}` : ''}
                           </span>
                         </div>
                         <span className="shrink-0 text-xs text-muted-foreground">

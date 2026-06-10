@@ -7,9 +7,12 @@ export interface Reglages {
   auto_contrat: boolean
   auto_inaction: boolean
   auto_orphelin: boolean
+  auto_post_rdv: boolean
   relance_premier_h: string
   relance_interval_h: string
   relance_escalade_h: string
+  post_rdv_premier_h: string
+  post_rdv_relance_h: string
   heure_debut: string
   heure_fin: string
 }
@@ -18,9 +21,12 @@ const DEFAUTS: Reglages = {
   auto_contrat: true,
   auto_inaction: true,
   auto_orphelin: true,
+  auto_post_rdv: true,
   relance_premier_h: '24',
   relance_interval_h: '12',
   relance_escalade_h: '48',
+  post_rdv_premier_h: '24',
+  post_rdv_relance_h: '24',
   heure_debut: '8',
   heure_fin: '20',
 }
@@ -36,9 +42,12 @@ export function useReglages() {
         auto_contrat: (map.auto_contrat ?? 'on') === 'on',
         auto_inaction: (map.auto_inaction ?? 'on') === 'on',
         auto_orphelin: (map.auto_orphelin ?? 'on') === 'on',
+        auto_post_rdv: (map.auto_post_rdv ?? 'on') === 'on',
         relance_premier_h: map.relance_premier_h ?? DEFAUTS.relance_premier_h,
         relance_interval_h: map.relance_interval_h ?? DEFAUTS.relance_interval_h,
         relance_escalade_h: map.relance_escalade_h ?? DEFAUTS.relance_escalade_h,
+        post_rdv_premier_h: map.post_rdv_premier_h ?? DEFAUTS.post_rdv_premier_h,
+        post_rdv_relance_h: map.post_rdv_relance_h ?? DEFAUTS.post_rdv_relance_h,
         heure_debut: map.heure_debut ?? DEFAUTS.heure_debut,
         heure_fin: map.heure_fin ?? DEFAUTS.heure_fin,
       }
@@ -65,6 +74,17 @@ export interface RelanceLigne {
   cible: string
   sent_at: string
   projet: { client_nom: string } | null
+  affectation: {
+    artisan: { prenom: string | null; nom: string; societe: string | null } | null
+  } | null
+}
+
+/** Nom lisible du destinataire d'une relance (artisan visé, ou l'agence). */
+export function destinataireRelance(r: RelanceLigne): string {
+  if (r.cible === 'agence') return 'Agence'
+  const a = r.affectation?.artisan
+  if (!a) return 'Artisan'
+  return a.societe || [a.prenom, a.nom].filter(Boolean).join(' ') || 'Artisan'
 }
 
 /** Historique global des relances (pour la page Automatisations). */
@@ -74,7 +94,9 @@ export function useRelances(limit = 100) {
     queryFn: async (): Promise<RelanceLigne[]> => {
       const { data, error } = await supabase
         .from('relances')
-        .select('id, type, cible, sent_at, projet:projets(client_nom)')
+        .select(
+          'id, type, cible, sent_at, projet:projets(client_nom), affectation:affectations(artisan:artisans(prenom, nom, societe))',
+        )
         .order('sent_at', { ascending: false })
         .limit(limit)
       if (error) throw error
@@ -91,7 +113,9 @@ export function useRelancesProjet(projetId: string | undefined) {
     queryFn: async (): Promise<RelanceLigne[]> => {
       const { data, error } = await supabase
         .from('relances')
-        .select('id, type, cible, sent_at, projet:projets(client_nom)')
+        .select(
+          'id, type, cible, sent_at, projet:projets(client_nom), affectation:affectations(artisan:artisans(prenom, nom, societe))',
+        )
         .eq('projet_id', projetId!)
         .order('sent_at', { ascending: false })
       if (error) throw error
