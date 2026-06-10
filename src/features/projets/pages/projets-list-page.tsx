@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock } from 'lucide-react'
 
@@ -57,6 +57,23 @@ export function ProjetsListPage() {
   const setMetier = (v: string) => setParam('metier', v, 'tous')
   const setTri = (v: string) => setParam('tri', v, 'recent')
   const setVue = (v: string) => setParam('vue', v, 'liste')
+
+  // Filet de sécurité : on garde les derniers filtres en sessionStorage. Si on
+  // revient sur une liste « nue » (flèche logiciel, menu, retour navigateur qui
+  // perd la query…), on les ré-applique automatiquement.
+  const STORAGE_KEY = 'projets-filtres'
+  const restaure = useRef(false)
+  useEffect(() => {
+    if (restaure.current) return
+    restaure.current = true
+    if (params.toString() === '') {
+      const saved = sessionStorage.getItem(STORAGE_KEY)
+      if (saved) setParams(new URLSearchParams(saved), { replace: true })
+    }
+  }, [params, setParams])
+  useEffect(() => {
+    sessionStorage.setItem(STORAGE_KEY, params.toString())
+  }, [params])
 
   // Recherche + métier (communs aux 2 vues)
   const base = useMemo(() => {
