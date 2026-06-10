@@ -71,12 +71,14 @@ export function EspaceArtisanPage() {
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
 
   return (
-    <div className="mx-auto min-h-dvh max-w-3xl bg-secondary px-4 py-6">
-      <div className="mb-5 flex flex-col items-center gap-1">
-        <BrandLogo className="h-9" />
+    <div className="mx-auto min-h-dvh max-w-5xl bg-secondary px-4 py-6 sm:px-6 sm:py-10">
+      <div className="mb-5 flex flex-col items-center gap-1 sm:mb-8">
+        <BrandLogo className="h-9 sm:h-10" />
         <p className="text-sm text-muted-foreground">Espace de {nomArtisan}</p>
       </div>
 
+      {/* Contrat + intro gardés dans une colonne lisible (centrée) même sur grand écran */}
+      <div className="mx-auto max-w-2xl">
       {/* Contrat (signé une fois pour tous les chantiers).
           Si contrat signé HORS application : on n'affiche aucun bloc contrat. */}
       {contrat_externe ? null : signe ? (
@@ -118,6 +120,7 @@ export function EspaceArtisanPage() {
           clients dès que possible et tenez-nous informés avec les boutons de suivi.
         </p>
       )}
+      </div>
 
       {/* Liste des chantiers : en cours / terminés */}
       <ListeChantiers projets={projets} signe={signe} onChange={() => void refetch()} />
@@ -188,7 +191,7 @@ function ListeChantiers({
       {liste.length === 0 ? (
         <p className="text-sm text-muted-foreground">Aucun chantier dans ce filtre.</p>
       ) : (
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid items-start gap-3 sm:grid-cols-2">
           {liste.map((p) => (
             <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} />
           ))}
@@ -244,7 +247,7 @@ function SignatureContrat({
           </p>
         </div>
 
-        <div className="max-h-[45dvh] overflow-y-auto rounded-lg border border-border">
+        <div className="max-h-[45dvh] overflow-y-auto rounded-lg border border-border sm:max-h-[55dvh]">
           <ContratFormate
             contenu={finaliserContenu(engagement.contenu, engagement.signed_at)}
             apporteurSignature={engagement.apporteur_signature}
