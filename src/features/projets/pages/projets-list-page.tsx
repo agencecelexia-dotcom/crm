@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
@@ -31,11 +31,32 @@ export function ProjetsListPage() {
   const { data: projets, isLoading } = useProjets()
   const { data: artisansSignes } = useArtisansSignes()
   const { data: affectationsCounts } = useAffectationsCounts()
-  const [recherche, setRecherche] = useState('')
-  const [statut, setStatut] = useState('tous')
-  const [metier, setMetier] = useState('tous')
-  const [tri, setTri] = useState<'recent' | 'statut' | 'a_signer' | 'gros'>('recent')
-  const [vue, setVue] = useState<'liste' | 'pipeline'>('liste')
+  // Filtres conservés dans l'URL (?q=…&statut=…&metier=…&tri=…&vue=…) : ils
+  // survivent au bouton « retour » du navigateur et sont partageables/favoris.
+  const [params, setParams] = useSearchParams()
+  const recherche = params.get('q') ?? ''
+  const statut = params.get('statut') ?? 'tous'
+  const metier = params.get('metier') ?? 'tous'
+  const tri = (params.get('tri') as 'recent' | 'statut' | 'a_signer' | 'gros') || 'recent'
+  const vue = (params.get('vue') as 'liste' | 'pipeline') || 'liste'
+
+  // Met à jour un paramètre (valeur par défaut → on le retire pour garder l'URL propre).
+  function setParam(cle: string, valeur: string, defaut: string) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (!valeur || valeur === defaut) next.delete(cle)
+        else next.set(cle, valeur)
+        return next
+      },
+      { replace: true },
+    )
+  }
+  const setRecherche = (v: string) => setParam('q', v, '')
+  const setStatut = (v: string) => setParam('statut', v, 'tous')
+  const setMetier = (v: string) => setParam('metier', v, 'tous')
+  const setTri = (v: string) => setParam('tri', v, 'recent')
+  const setVue = (v: string) => setParam('vue', v, 'liste')
 
   // Recherche + métier (communs aux 2 vues)
   const base = useMemo(() => {
