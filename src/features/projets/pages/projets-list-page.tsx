@@ -34,7 +34,7 @@ export function ProjetsListPage() {
   const [recherche, setRecherche] = useState('')
   const [statut, setStatut] = useState('tous')
   const [metier, setMetier] = useState('tous')
-  const [tri, setTri] = useState<'recent' | 'statut' | 'a_signer'>('recent')
+  const [tri, setTri] = useState<'recent' | 'statut' | 'a_signer' | 'gros'>('recent')
   const [vue, setVue] = useState<'liste' | 'pipeline'>('liste')
 
   // Recherche + métier (communs aux 2 vues)
@@ -74,6 +74,10 @@ export function ProjetsListPage() {
       const aSigner = (p: (typeof filtres)[number]) =>
         p.artisan_id && !artisansSignes?.has(p.artisan_id) ? 0 : 1
       arr.sort((a, b) => aSigner(a) - aSigner(b) || dateDesc(a, b))
+    } else if (tri === 'gros') {
+      // Plus gros projets d'abord (estimation interne décroissante, sans estim. en dernier)
+      const estim = (p: (typeof filtres)[number]) => p.estimation_interne ?? -1
+      arr.sort((a, b) => estim(b) - estim(a) || dateDesc(a, b))
     }
     // 'recent' : on garde l'ordre d'origine (déjà du plus récent au plus ancien)
     return arr
@@ -143,6 +147,7 @@ export function ProjetsListPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="recent">Trier : plus récents</SelectItem>
+              <SelectItem value="gros">Trier : plus gros projets (€)</SelectItem>
               <SelectItem value="statut">Trier : par statut (groupé)</SelectItem>
               <SelectItem value="a_signer">Trier : contrat à signer d'abord</SelectItem>
             </SelectContent>
@@ -220,9 +225,16 @@ export function ProjetsListPage() {
                         )}
                       </p>
                     )}
-                    <p className="truncate text-xs text-muted-foreground">
-                      {formatDate(p.created_at)}
-                      {p.montant_devis_signe != null && ` · ${formatEuros(p.montant_devis_signe)}`}
+                    <p className="flex items-center gap-2 truncate text-xs text-muted-foreground">
+                      <span>{formatDate(p.created_at)}</span>
+                      {p.montant_devis_signe != null && (
+                        <span>· {formatEuros(p.montant_devis_signe)}</span>
+                      )}
+                      {p.estimation_interne != null && (
+                        <span className="shrink-0 font-medium text-primary">
+                          · 🔒 {formatEuros(p.estimation_interne)}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <ChevronRight className="size-5 shrink-0 text-muted-foreground" />

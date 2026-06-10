@@ -85,6 +85,40 @@ export function useAffecterArtisans() {
   })
 }
 
+/** Assigne PLUSIEURS projets à un même artisan d'un coup. */
+export function useAffecterProjets() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ artisanId, projetIds }: { artisanId: string; projetIds: string[] }) => {
+      if (projetIds.length === 0) return
+      const rows = projetIds.map((pid) => ({
+        projet_id: pid,
+        artisan_id: artisanId,
+        statut: 'artisan_assigne' as const,
+      }))
+      const { error } = await supabase
+        .from('affectations')
+        .upsert(rows, { onConflict: 'projet_id,artisan_id', ignoreDuplicates: true })
+      if (error) throw error
+      // Artisan principal (compat) + passage en "artisan assigné" pour les projets concernés
+      const { data: ps } = await supabase
+        .from('projets')
+        .select('id, artisan_id, statut')
+        .in('id', projetIds)
+      for (const p of ps ?? []) {
+        const patch: Record<string, unknown> = {}
+        if (!p.artisan_id) patch.artisan_id = artisanId
+        if (p.statut === 'nouveau') patch.statut = 'artisan_assigne'
+        if (Object.keys(patch).length) await supabase.from('projets').update(patch).eq('id', p.id)
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['affectations'] })
+      qc.invalidateQueries({ queryKey: ['projets'] })
+    },
+  })
+}
+
 /** Retire une affectation (le projet quitte l'espace de cet artisan). */
 export function useRetirerAffectation() {
   const qc = useQueryClient()
