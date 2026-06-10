@@ -30,6 +30,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
   const [taux, setTaux] = useState(
     String(Math.round((projet.taux_commission ?? 0.1) * 100)),
   )
+  const [estim, setEstim] = useState(projet.estimation_interne?.toString() ?? '')
 
   function toNum(v: string): number | null {
     const n = parseFloat(v.replace(',', '.'))
@@ -43,6 +44,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
         patch: {
           montant_devis: toNum(devis),
           montant_devis_signe: toNum(devisSigne),
+          estimation_interne: toNum(estim),
           date_signature: dateSign ? format(dateSign, 'yyyy-MM-dd') : null,
           taux_commission: (() => {
             const t = parseFloat(taux.replace(',', '.'))
@@ -143,6 +145,21 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
             className="h-11"
             value={taux}
             onChange={(e) => setTaux(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-1.5 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
+          <Label htmlFor="estim" className="text-sm">
+            🔒 Estimation interne (€){' '}
+            <span className="text-xs font-normal text-muted-foreground">— potentiel, jamais visible par l'artisan</span>
+          </Label>
+          <Input
+            id="estim"
+            type="number"
+            inputMode="decimal"
+            className="h-11"
+            value={estim}
+            onChange={(e) => setEstim(e.target.value)}
           />
         </div>
 

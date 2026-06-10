@@ -77,6 +77,7 @@ export interface Projet {
   // Argent
   montant_devis: number | null
   montant_devis_signe: number | null
+  estimation_interne: number | null // potentiel estimé (INTERNE, jamais visible par l'artisan)
   taux_commission: number // taux appliqué à ce projet (ex: 0.10)
   commission: number | null // colonne calculée par la base (montant signé × taux)
   commission_encaissee: boolean
@@ -109,7 +110,8 @@ export type ProjetInput = Omit<
   | 'created_at'
   | 'updated_at'
   | 'photos'
-> & { photos?: string[] }
+  | 'estimation_interne'
+> & { photos?: string[]; estimation_interne?: number | null }
 
 /** Entrée de suivi d'un projet (statut déclaré et/ou note, par l'artisan ou l'agence). */
 export type StatutSuivi =

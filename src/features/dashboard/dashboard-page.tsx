@@ -144,6 +144,17 @@ export function DashboardPage() {
     return { leads, assignes, devis, signes }
   }, [projetsPeriode])
 
+  // Potentiel du pipeline (estimation INTERNE, jamais visible des artisans) :
+  // somme des estimations des projets encore en cours.
+  const pipeline = useMemo(() => {
+    const actifs = (projets ?? []).filter(
+      (p) => !['perdu', 'termine', 'devis_signe'].includes(p.statut),
+    )
+    const total = actifs.reduce((s, p) => s + (p.estimation_interne ?? 0), 0)
+    const nb = actifs.filter((p) => p.estimation_interne != null).length
+    return { total, commission: Math.round(total * 0.1), nb }
+  }, [projets])
+
   return (
     <div>
       <PageHeader titre="Tableau de bord" />
@@ -192,6 +203,33 @@ export function DashboardPage() {
               accent
             />
           </div>
+
+          {/* Potentiel du pipeline (estimation interne — non visible des artisans) */}
+          <Card className="mt-3 border-primary/30 bg-primary/5">
+            <CardContent className="py-4">
+              <p className="text-sm font-medium">
+                Potentiel du pipeline{' '}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (estimation interne · invisible artisans)
+                </span>
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">CA potentiel</p>
+                  <p className="montant text-xl font-semibold">{formatEuros(pipeline.total)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Commission potentielle</p>
+                  <p className="montant text-xl font-semibold text-primary">
+                    {formatEuros(pipeline.commission)}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {pipeline.nb} projet(s) en cours estimés
+              </p>
+            </CardContent>
+          </Card>
 
           {/* Commission encaissée vs à encaisser */}
           <Card className="mt-3">
