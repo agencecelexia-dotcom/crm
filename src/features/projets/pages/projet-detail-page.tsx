@@ -33,6 +33,7 @@ import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { ProjetPhotos } from '../components/projet-photos'
 import { SuiviCard } from '../components/suivi-card'
+import { RelancesProjetCard } from '@/features/automatisations/relances-projet-card'
 import { DocumentRow } from '../components/document-row'
 import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
 import type { ProjetInput, StatutProjet } from '@/types/database'
@@ -183,6 +184,9 @@ export function ProjetDetailPage() {
 
       {/* Suivi du chantier (parcours déclaré par l'artisan + notes) */}
       <SuiviCard projetId={projet.id} />
+
+      {/* Relances automatiques (anti-inaction) */}
+      <RelancesProjetCard projetId={projet.id} />
 
       {/* Argent / commission */}
       <MontantsCard projet={projet} />

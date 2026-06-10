@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/lib/auth/use-auth'
+import { NotificationsBell } from '@/features/automatisations/notifications-bell'
 
 // En-tête fixe : logo Celexia + menu compte (email + déconnexion).
 export function Header() {
@@ -21,6 +22,8 @@ export function Header() {
     <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur md:hidden">
       <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-4">
         <BrandLogo className="h-7" />
+        <div className="flex items-center gap-1">
+        <NotificationsBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Menu du compte">
@@ -44,6 +47,7 @@ export function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
       </div>
     </header>
   )

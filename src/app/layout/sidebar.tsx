@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Map, FolderKanban, Users, StickyNote, PenTool, LogOut } from 'lucide-react'
+import { Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
+import { NotificationsBell } from '@/features/automatisations/notifications-bell'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/use-auth'
@@ -12,6 +13,7 @@ const ITEMS = [
   { to: '/projets', label: 'Projets', icon: FolderKanban, end: false },
   { to: '/artisans', label: 'Artisans', icon: Users, end: false },
   { to: '/notes', label: 'Notes', icon: StickyNote, end: false },
+  { to: '/parametres/automatisations', label: 'Automatisations', icon: Zap, end: false },
   { to: '/parametres/signature', label: 'Ma signature', icon: PenTool, end: false },
 ]
 
@@ -19,8 +21,9 @@ export function Sidebar() {
   const { session, signOut } = useAuth()
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border bg-card md:flex">
-      <div className="flex h-16 items-center border-b border-border px-5">
+      <div className="flex h-16 items-center justify-between border-b border-border px-5">
         <BrandLogo className="h-7" />
+        <NotificationsBell />
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
