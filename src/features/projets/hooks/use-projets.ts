@@ -61,17 +61,30 @@ export function useProjetsByArtisan(artisanId: string | undefined) {
   })
 }
 
-/** Géocode l'adresse client si renseignée. */
+/** Géocode l'adresse client : on tente du plus précis au moins précis
+ *  (adresse complète → ville+CP → ville → CP) pour TOUJOURS avoir un point
+ *  dès qu'on a au moins une ville ou un code postal. */
 async function enrichirAvecCoordonnees(
   input: ProjetInput,
 ): Promise<ProjetInput> {
-  const adresse = composerAdresse({
-    adresse: input.client_adresse,
-    code_postal: input.client_code_postal,
-    ville: input.client_ville,
-  })
-  if (!adresse) return { ...input, latitude: null, longitude: null }
-  const coord = await geocoder(adresse)
+  const candidats = [
+    composerAdresse({
+      adresse: input.client_adresse,
+      code_postal: input.client_code_postal,
+      ville: input.client_ville,
+    }),
+    composerAdresse({ code_postal: input.client_code_postal, ville: input.client_ville }),
+    composerAdresse({ ville: input.client_ville }),
+    composerAdresse({ code_postal: input.client_code_postal }),
+  ].filter((a, i, arr): a is string => !!a && arr.indexOf(a) === i)
+
+  if (candidats.length === 0) return { ...input, latitude: null, longitude: null }
+
+  let coord = null
+  for (const c of candidats) {
+    coord = await geocoder(c)
+    if (coord) break
+  }
   return {
     ...input,
     latitude: coord?.lat ?? null,
