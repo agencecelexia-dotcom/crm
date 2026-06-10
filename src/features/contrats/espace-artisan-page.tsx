@@ -67,7 +67,7 @@ export function EspaceArtisanPage() {
       </Centre>
     )
 
-  const { artisan, engagement, signe, projets } = data
+  const { artisan, engagement, signe, contrat_externe, projets } = data
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
 
   return (
@@ -77,8 +77,9 @@ export function EspaceArtisanPage() {
         <p className="text-sm text-muted-foreground">Espace de {nomArtisan}</p>
       </div>
 
-      {/* Contrat (signé une fois pour tous les chantiers) */}
-      {signe ? (
+      {/* Contrat (signé une fois pour tous les chantiers).
+          Si contrat signé HORS application : on n'affiche aucun bloc contrat. */}
+      {contrat_externe ? null : signe ? (
         <Card className="mb-4 shadow-card">
           <CardContent className="flex items-center justify-between gap-3 py-4">
             <p className="flex items-center gap-2 text-sm font-medium">

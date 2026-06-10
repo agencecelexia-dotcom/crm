@@ -33,12 +33,17 @@ export function useArtisansSignes() {
   return useQuery({
     queryKey: ['contrats', 'signes'],
     queryFn: async (): Promise<Set<string>> => {
-      const { data, error } = await supabase
-        .from(TABLE)
-        .select('artisan_id')
-        .eq('statut', 'signe')
+      const ids = new Set<string>()
+      const { data, error } = await supabase.from(TABLE).select('artisan_id').eq('statut', 'signe')
       if (error) throw error
-      return new Set((data ?? []).map((c) => c.artisan_id))
+      for (const c of data ?? []) ids.add(c.artisan_id)
+      // Artisans dont le contrat a été signé HORS application
+      const { data: ext } = await supabase
+        .from('artisans')
+        .select('id')
+        .eq('contrat_externe', true)
+      for (const a of ext ?? []) ids.add(a.id)
+      return ids
     },
   })
 }

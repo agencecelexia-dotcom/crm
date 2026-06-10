@@ -122,6 +122,25 @@ export function useRegenererTokenArtisan() {
   })
 }
 
+/** Marque (ou non) le contrat d'un artisan comme signé HORS application. */
+export function useSetContratExterne() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, valeur }: { id: string; valeur: boolean }) => {
+      const { error } = await supabase
+        .from(TABLE)
+        .update({ contrat_externe: valeur })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ['artisans'] })
+      qc.invalidateQueries({ queryKey: ['artisans', id] })
+      qc.invalidateQueries({ queryKey: ['contrats', 'signes'] })
+    },
+  })
+}
+
 /** Suppression d'un artisan. */
 export function useDeleteArtisan() {
   const qc = useQueryClient()

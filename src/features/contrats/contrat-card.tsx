@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +20,7 @@ import {
 import { formatDate } from '@/lib/format'
 import { N8N_WEBHOOK_URL } from '@/lib/constants'
 import type { Artisan } from '@/types/database'
-import { useRegenererTokenArtisan } from '@/features/artisans/hooks/use-artisans'
+import { useRegenererTokenArtisan, useSetContratExterne } from '@/features/artisans/hooks/use-artisans'
 import { useContratArtisan } from './use-contrats'
 import { ContratGenerateur } from './contrat-generateur'
 import { telechargerContratPdf } from './contrat-pdf'
@@ -31,6 +32,7 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
   const [signatureVisible, setSignatureVisible] = useState(false)
   const [envoiMail, setEnvoiMail] = useState(false)
   const regenerer = useRegenererTokenArtisan()
+  const setExterne = useSetContratExterne()
 
   const lien = contrat
     ? `${window.location.origin}/signer/${contrat.token}`
@@ -163,6 +165,36 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </div>
+
+        {/* Contrat signé hors application (email) : by-pass de la signature dans l'espace */}
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Contrat déjà signé (hors application)</p>
+            <p className="text-xs text-muted-foreground">
+              Active si l'artisan a signé par email : son espace n'affichera ni signature ni
+              téléchargement de contrat, ses chantiers sont débloqués directement.
+            </p>
+          </div>
+          <Switch
+            checked={artisan.contrat_externe}
+            disabled={setExterne.isPending}
+            onCheckedChange={(v) =>
+              setExterne.mutate(
+                { id: artisan.id, valeur: v },
+                {
+                  onSuccess: () =>
+                    toast.success(
+                      v ? 'Contrat marqué signé (hors app)' : 'Désactivé',
+                    ),
+                  onError: (e) =>
+                    toast.error('Échec', {
+                      description: e instanceof Error ? e.message : undefined,
+                    }),
+                },
+              )
+            }
+          />
         </div>
 
         {isLoading ? (

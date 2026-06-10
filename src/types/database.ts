@@ -41,12 +41,16 @@ export interface Artisan {
   qualite_representant: string | null
   taux_commission: number // taux par défaut de l'artisan (ex: 0.10)
   token: string // lien public "espace artisan" (/artisan/:token)
+  contrat_externe: boolean // contrat signé hors application (pas de signature dans l'espace)
   created_at: string
   updated_at: string
 }
 
 /** Données d'insertion / mise à jour d'un artisan (champs gérés par la base exclus). */
-export type ArtisanInput = Omit<Artisan, 'id' | 'token' | 'created_at' | 'updated_at'>
+export type ArtisanInput = Omit<
+  Artisan,
+  'id' | 'token' | 'contrat_externe' | 'created_at' | 'updated_at'
+>
 
 /** Un projet = un appel client. */
 export interface Projet {
@@ -200,5 +204,6 @@ export interface EspaceArtisan {
     apporteur_signature: string | null
   }
   signe: boolean
+  contrat_externe: boolean
   projets: ProjetEspace[]
 }
