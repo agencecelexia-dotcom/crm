@@ -119,6 +119,16 @@ if (d.event === 'envoyer_lien_mission') {
     <h1 style="margin:0 0 10px;font-size:19px;color:#111827;">${salutG(d)},</h1>
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Le chantier <b>${esc(d.client_nom || '')}</b> attend votre prochaine action${d.statut ? ' (statut : ' + esc(d.statut) + ')' : ''}. <b>Le client est chaud</b> — recontactez-le et mettez à jour votre avancement.</p>
     ${btn(esc(d.lien), 'Ouvrir mon espace →')}`);
+} else if (d.event === 'relance_post_rdv') {
+  to = d.email; if (!to) return [];           // ➜ artisan
+  const chantier = d.client_nom || ((d.metier || '') + (d.client_ville ? ' à ' + d.client_ville : '')) || 'votre rendez-vous';
+  subject = d.rappel > 1 ? '⏰ Rappel : comment s\'est passé votre RDV ?' : 'Comment s\'est passé votre rendez-vous ?';
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:19px;color:#111827;">${salutG(d)},</h1>
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Vous aviez un rendez-vous pour le chantier <b>${esc(chantier)}</b>. <b>Comment ça s'est passé ?</b></p>
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Mettez à jour votre avancement en 30 secondes — et <b>si vous avez fait un devis, pensez à le déposer</b> dans votre espace :</p>
+    ${btn(esc(d.lien), 'Mettre à jour mon RDV →')}
+    <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Quelques mots sur le rendez-vous (besoin, budget, prochaine étape) nous aident à vous accompagner.</p>`);
 } else if (d.event === 'escalade') {
   const motif = d.sujet === 'contrat' ? 'n\'a toujours pas signé son contrat' : 'n\'a pas avancé sur le chantier';
   const chantier = d.client_nom || ((d.metier || '') + (d.client_ville ? ' à ' + d.client_ville : '')) || 'le chantier';

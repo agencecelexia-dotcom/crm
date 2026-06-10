@@ -38,13 +38,14 @@ export function SuiviArtisan({
   const [rdvDate, setRdvDate] = useState<Date | undefined>(undefined)
   const [rdvHeure, setRdvHeure] = useState('')
 
-  async function poster(statut?: string, message?: string): Promise<boolean> {
+  async function poster(statut?: string, message?: string, dateRdv?: string): Promise<boolean> {
     setEnvoi(true)
     try {
       const { data, error } = await supabase.rpc('add_suivi_by_token', {
         p_token: token,
         p_statut: statut ?? null,
         p_message: message ?? null,
+        p_date_rdv: dateRdv ?? null,
       })
       const ok = (data as { ok?: boolean } | null)?.ok
       if (error || !ok) throw new Error('Échec')
@@ -60,13 +61,21 @@ export function SuiviArtisan({
     }
   }
 
-  // Confirme « RDV pris » avec sa date (et heure éventuelle) consignée dans le suivi.
+  // Confirme « RDV pris » avec sa date (et heure éventuelle) : consignée dans le
+  // suivi ET enregistrée en clair (date_rdv) pour la relance post-RDV automatique.
   async function confirmerRdv() {
     if (!rdvDate) return toast.error('Choisissez la date du rendez-vous')
     const txt = `RDV pris le ${format(rdvDate, 'EEEE d MMMM yyyy', { locale: fr })}${
       rdvHeure.trim() ? ` à ${rdvHeure.trim()}` : ''
     }`
-    if (await poster('rdv_pris', txt)) {
+    const dt = new Date(rdvDate)
+    if (rdvHeure.trim()) {
+      const [h, m] = rdvHeure.split(':')
+      dt.setHours(Number(h) || 0, Number(m) || 0, 0, 0)
+    } else {
+      dt.setHours(12, 0, 0, 0)
+    }
+    if (await poster('rdv_pris', txt, dt.toISOString())) {
       setRdvMode(false)
       setRdvHeure('')
     }
