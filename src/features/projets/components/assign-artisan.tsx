@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { UserPlus, MapPin, Check, Loader2 } from 'lucide-react'
+import { UserPlus, MapPin, Check, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Sheet,
   SheetContent,
@@ -38,11 +39,26 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
     [affectations],
   )
   const [selection, setSelection] = useState<Set<string>>(new Set())
+  const [recherche, setRecherche] = useState('')
+
+  // Recherche par nom / société / ville (tape pour retrouver vite un artisan).
+  const liste = useMemo(() => {
+    const q = recherche.trim().toLowerCase()
+    if (!q) return compatibles
+    return compatibles.filter(({ artisan: a }) =>
+      [a.nom, a.prenom, a.societe, a.ville, (a.metiers ?? []).join(' ')]
+        .filter(Boolean)
+        .some((v) => v!.toLowerCase().includes(q)),
+    )
+  }, [compatibles, recherche])
 
   // Ouverture : on (ré)initialise la sélection sur les artisans déjà assignés.
   function changerOuverture(o: boolean) {
     setOpen(o)
-    if (o) setSelection(new Set(assignedIds))
+    if (o) {
+      setSelection(new Set(assignedIds))
+      setRecherche('')
+    }
   }
 
   const busy = affecter.isPending || retirer.isPending
@@ -87,6 +103,20 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
           </SheetDescription>
         </SheetHeader>
 
+        {/* Recherche par nom d'artisan */}
+        <div className="px-4 pb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 pl-9"
+              placeholder="Rechercher un artisan (nom, société, ville)…"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              autoFocus={false}
+            />
+          </div>
+        </div>
+
         <div className="flex-1 space-y-2 overflow-y-auto px-4">
           {compatibles.length === 0 ? (
             <EmptyState
@@ -94,8 +124,12 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
               titre="Aucun artisan en base"
               description="Ajoute un artisan depuis l'onglet Artisans pour pouvoir l'assigner."
             />
+          ) : liste.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Aucun artisan ne correspond à « {recherche} ».
+            </p>
           ) : (
-            compatibles.map(({ artisan, distance, dansRayon, metierMatch }) => {
+            liste.map(({ artisan, distance, dansRayon, metierMatch }) => {
               const checked = selection.has(artisan.id)
               return (
                 <button

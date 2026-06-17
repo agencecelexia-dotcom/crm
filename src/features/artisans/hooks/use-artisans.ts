@@ -42,11 +42,24 @@ export function useArtisan(id: string | undefined) {
   })
 }
 
-/** Géocode l'adresse de l'artisan si renseignée et renvoie le payload enrichi. */
+/** Géocode l'adresse de l'artisan : du plus précis au moins précis
+ *  (adresse complète → CP+ville → ville → CP) pour TOUJOURS le placer sur la
+ *  carte dès qu'on a au moins une ville ou un code postal. */
 async function enrichirAvecCoordonnees(input: ArtisanInput): Promise<ArtisanInput> {
-  const adresse = composerAdresse(input)
-  if (!adresse) return { ...input, latitude: null, longitude: null }
-  const coord = await geocoder(adresse)
+  const candidats = [
+    composerAdresse({ adresse: input.adresse, code_postal: input.code_postal, ville: input.ville }),
+    composerAdresse({ code_postal: input.code_postal, ville: input.ville }),
+    composerAdresse({ ville: input.ville }),
+    composerAdresse({ code_postal: input.code_postal }),
+  ].filter((a, i, arr): a is string => !!a && arr.indexOf(a) === i)
+
+  if (candidats.length === 0) return { ...input, latitude: null, longitude: null }
+
+  let coord = null
+  for (const c of candidats) {
+    coord = await geocoder(c)
+    if (coord) break
+  }
   return {
     ...input,
     latitude: coord?.lat ?? null,
