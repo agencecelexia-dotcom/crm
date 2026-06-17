@@ -6,6 +6,7 @@ export interface Tache {
   titre: string
   details: string | null
   priorite: number // 1 haute, 2 moyenne, 3 basse
+  valeur: number | null // valeur € (pour trier les plus gros d'abord)
   type: 'manuel' | 'auto'
   categorie: string | null
   projet_id: string | null
@@ -87,6 +88,25 @@ export function useAppelSansReponse() {
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qc_key }),
+  })
+}
+
+/** Synchro deux sens : encaisser la commission depuis la to-do → met à jour le
+ *  CRM (projets.commission_encaissee), ce qui fait disparaître la tâche auto. */
+export function useEncaisserCommission() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (projetId: string) => {
+      const { error } = await supabase
+        .from('projets')
+        .update({ commission_encaissee: true })
+        .eq('id', projetId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qc_key })
+      qc.invalidateQueries({ queryKey: ['projets'] })
+    },
   })
 }
 

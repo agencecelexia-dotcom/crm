@@ -23,6 +23,7 @@ import {
   useAjouterTache,
   useToggleTache,
   useAppelSansReponse,
+  useEncaisserCommission,
   useSupprimerTache,
   type Tache,
 } from './use-taches'
@@ -60,6 +61,7 @@ export function TachesPage() {
       .sort(
         (a, b) =>
           (snoozed(a) ? 1 : 0) - (snoozed(b) ? 1 : 0) ||
+          (b.valeur ?? 0) - (a.valeur ?? 0) ||
           a.created_at.localeCompare(b.created_at),
       )
     const groupes: Record<number, Tache[]> = { 1: [], 2: [], 3: [] }
@@ -192,6 +194,7 @@ export function TachesPage() {
 function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
   const toggle = useToggleTache()
   const sansReponse = useAppelSansReponse()
+  const encaisser = useEncaisserCommission()
   const supprimer = useSupprimerTache()
   const fait = t.statut === 'fait'
   const cat = CAT[t.categorie ?? 'autre'] ?? CAT.autre
@@ -248,6 +251,21 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
 
           {!fait && (t.tel || t.projet_id) && (
             <div className="mt-2 flex flex-wrap gap-1.5 pl-8">
+              {t.categorie === 'commission' && t.projet_id && (
+                <Button
+                  size="sm"
+                  className="h-8 rounded-full bg-[#22C55E] hover:bg-[#16A34A]"
+                  disabled={encaisser.isPending}
+                  onClick={() =>
+                    encaisser.mutate(t.projet_id!, {
+                      onSuccess: () => toast.success('Commission encaissée'),
+                    })
+                  }
+                >
+                  <Check className="size-3.5" />
+                  Encaissée
+                </Button>
+              )}
               {t.tel && (
                 <>
                   <Button asChild size="sm" variant="outline" className="h-8 rounded-full">
