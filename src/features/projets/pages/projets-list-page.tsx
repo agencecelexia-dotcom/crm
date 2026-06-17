@@ -202,6 +202,14 @@ export function ProjetsListPage() {
         )}
       </div>
 
+      {/* Valeur totale (potentiel 🔒) des projets affichés — discret, tout en haut */}
+      {vue === 'liste' && resultats.length > 0 && (
+        <p className="mb-2 text-xs text-muted-foreground">
+          {resultats.length} projet{resultats.length > 1 ? 's' : ''} · 🔒{' '}
+          {formatEuros(resultats.reduce((s, p) => s + (p.estimation_interne ?? 0), 0))} de potentiel
+        </p>
+      )}
+
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
