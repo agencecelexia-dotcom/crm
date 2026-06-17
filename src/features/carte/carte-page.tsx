@@ -26,9 +26,6 @@ import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { useProjets } from '@/features/projets/hooks/use-projets'
 import { artisansCompatibles } from '@/features/projets/lib/artisans-compatibles'
 
-// Rayon (km) au-delà duquel on ne considère plus un artisan « autour » du projet.
-const RAYON_AUTOUR_KM = 80
-
 function pinIcon(color: string) {
   return L.divIcon({
     className: 'celexia-pin',
@@ -85,17 +82,17 @@ export function CartePage() {
     [projets, focusId],
   )
 
-  // Artisans « autour » d'un projet en focus : même métier + à portée.
+  // Projet en focus : on affiche TOUS les artisans du même métier (placés sur la
+  // carte), sans filtre de distance — c'est l'agence qui juge qui est trop loin.
   const autour = useMemo(() => {
     if (!focusProjet) return []
     return artisansCompatibles(focusProjet, artisans ?? [])
-      .filter(
-        (c) =>
-          c.metierMatch &&
-          c.distance != null &&
-          (c.dansRayon === true || c.distance <= RAYON_AUTOUR_KM),
-      )
-      .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
+      .filter((c) => c.metierMatch && c.artisan.latitude != null && c.artisan.longitude != null)
+      .sort((a, b) => {
+        if (a.distance == null) return 1
+        if (b.distance == null) return -1
+        return a.distance - b.distance
+      })
   }, [focusProjet, artisans])
 
   const artisansAffiches = useMemo(() => {
@@ -133,8 +130,8 @@ export function CartePage() {
               <span className="text-muted-foreground"> · {focusProjet.metiers.join(', ')}</span>
             </p>
             <p className="text-xs text-muted-foreground">
-              {autour.length} artisan{autour.length > 1 ? 's' : ''} compatible
-              {autour.length > 1 ? 's' : ''} autour ({RAYON_AUTOUR_KM} km)
+              {autour.length} artisan{autour.length > 1 ? 's' : ''} {focusProjet.metiers[0] || ''} sur
+              la carte — à vous de juger la distance
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => setParam('projet', '', '')}>
