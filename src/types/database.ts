@@ -107,6 +107,7 @@ export type ProjetInput = Omit<
   | 'commission'
   | 'token'
   | 'perdu_at'
+  | 'deleted_at'
   | 'created_by'
   | 'created_at'
   | 'updated_at'
