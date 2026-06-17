@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Phone, PhoneOff, Trash2, ListChecks, Loader2, ChevronRight } from 'lucide-react'
+import { Plus, Phone, PhoneOff, Trash2, ListChecks, Loader2, ChevronRight, Check, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page-header'
@@ -8,7 +8,6 @@ import { EmptyState } from '@/components/empty-state'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -38,9 +37,9 @@ const CAT: Record<string, { emoji: string; label: string; color: string }> = {
   autre: { emoji: '📝', label: 'Tâche', color: '#64748B' },
 }
 const PRIO: Record<number, { label: string; color: string }> = {
-  1: { label: 'Haute', color: '#EF4444' },
-  2: { label: 'Moyenne', color: '#F59E0B' },
-  3: { label: 'Basse', color: '#64748B' },
+  1: { label: 'Priorité haute', color: '#EF4444' },
+  2: { label: 'Priorité moyenne', color: '#F59E0B' },
+  3: { label: 'Priorité basse', color: '#64748B' },
 }
 
 export function TachesPage() {
@@ -51,24 +50,24 @@ export function TachesPage() {
   const [tel, setTel] = useState('')
   const [prio, setPrio] = useState('2')
 
-  // Heure de référence figée au montage (suffit pour trier/afficher les reports).
   const [now] = useState(() => Date.now())
   const snoozed = (t: Tache) => !!t.rappel_at && new Date(t.rappel_at).getTime() > now
 
-  const { aFaire, faites } = useMemo(() => {
+  const { groupes, faites, nbAFaire } = useMemo(() => {
     const list = taches ?? []
     const aFaire = list
       .filter((t) => t.statut === 'a_faire')
       .sort(
         (a, b) =>
           (snoozed(a) ? 1 : 0) - (snoozed(b) ? 1 : 0) ||
-          a.priorite - b.priorite ||
           a.created_at.localeCompare(b.created_at),
       )
+    const groupes: Record<number, Tache[]> = { 1: [], 2: [], 3: [] }
+    for (const t of aFaire) (groupes[t.priorite] ?? groupes[2]).push(t)
     const faites = list
       .filter((t) => t.statut === 'fait')
       .sort((a, b) => (b.done_at ?? '').localeCompare(a.done_at ?? ''))
-    return { aFaire, faites }
+    return { groupes, faites, nbAFaire: aFaire.length }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taches])
 
@@ -90,10 +89,10 @@ export function TachesPage() {
   }
 
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       <PageHeader
         titre="À faire"
-        sousTitre="Tâches prioritaires (auto + manuelles) — cochées, elles disparaissent après 24 h"
+        sousTitre={nbAFaire > 0 ? `${nbAFaire} tâche${nbAFaire > 1 ? 's' : ''} en attente` : 'Tout est à jour'}
         action={
           <Button size="sm" onClick={() => setOuvert((v) => !v)}>
             <Plus className="size-4" />
@@ -102,14 +101,16 @@ export function TachesPage() {
         }
       />
 
-      {/* Formulaire d'ajout manuel */}
+      {/* Ajout manuel */}
       {ouvert && (
-        <Card className="mb-4 space-y-2 p-3">
+        <Card className="mb-4 space-y-2 rounded-2xl p-4 shadow-card">
           <Input
             placeholder="Que faut-il faire ? (ex. Rappeler M. Durand pour le devis)"
             value={titre}
             onChange={(e) => setTitre(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && ajouterTache()}
             className="h-11"
+            autoFocus
           />
           <div className="flex gap-2">
             <Input
@@ -120,7 +121,7 @@ export function TachesPage() {
               inputMode="tel"
             />
             <Select value={prio} onValueChange={setPrio}>
-              <SelectTrigger className="h-11 w-32">
+              <SelectTrigger className="h-11 w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -140,36 +141,47 @@ export function TachesPage() {
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-xl" />
+            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
           ))}
         </div>
-      ) : aFaire.length === 0 && faites.length === 0 ? (
+      ) : nbAFaire === 0 && faites.length === 0 ? (
         <EmptyState
           icon={ListChecks}
           titre="Rien à faire 🎉"
           description="Les tâches (leads, contrats, relances, commissions) apparaîtront ici automatiquement."
         />
       ) : (
-        <div className="space-y-5">
-          {aFaire.length > 0 && (
-            <ul className="space-y-2">
-              {aFaire.map((t) => (
-                <TacheItem key={t.id} t={t} snoozed={snoozed(t)} />
-              ))}
-            </ul>
+        <div className="space-y-6">
+          {[1, 2, 3].map((p) =>
+            groupes[p].length === 0 ? null : (
+              <section key={p}>
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: PRIO[p].color }} />
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {PRIO[p].label}
+                  </h3>
+                  <span className="text-xs text-muted-foreground">· {groupes[p].length}</span>
+                </div>
+                <ul className="space-y-2">
+                  {groupes[p].map((t) => (
+                    <TacheItem key={t.id} t={t} snoozed={snoozed(t)} />
+                  ))}
+                </ul>
+              </section>
+            ),
           )}
 
           {faites.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">
+            <section>
+              <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Terminé · suppression auto 24 h ({faites.length})
-              </p>
-              <ul className="space-y-2 opacity-60">
+              </div>
+              <ul className="space-y-2">
                 {faites.map((t) => (
                   <TacheItem key={t.id} t={t} snoozed={false} />
                 ))}
               </ul>
-            </div>
+            </section>
           )}
         </div>
       )}
@@ -183,49 +195,62 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
   const supprimer = useSupprimerTache()
   const fait = t.statut === 'fait'
   const cat = CAT[t.categorie ?? 'autre'] ?? CAT.autre
-  const prio = PRIO[t.priorite] ?? PRIO[2]
 
   return (
     <li>
       <Card
-        className="flex items-start gap-3 border-l-4 p-3"
-        style={{ borderLeftColor: fait ? '#cbd5e1' : prio.color }}
+        className={cn(
+          'flex items-start gap-3 rounded-2xl p-3.5 shadow-sm transition-all',
+          fait ? 'opacity-55' : 'hover:shadow-card',
+        )}
       >
-        <Checkbox
-          checked={fait}
-          onCheckedChange={(v) => toggle.mutate({ id: t.id, fait: v === true })}
-          className="mt-0.5"
+        {/* Case ronde */}
+        <button
+          type="button"
+          onClick={() => toggle.mutate({ id: t.id, fait: !fait })}
           aria-label={fait ? 'Marquer à faire' : 'Marquer fait'}
-        />
+          className={cn(
+            'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+            fait
+              ? 'border-transparent bg-[#22C55E] text-white'
+              : 'border-muted-foreground/30 hover:border-primary',
+          )}
+        >
+          {fait && <Check className="size-3.5" />}
+        </button>
 
         <div className="min-w-0 flex-1">
-          <p className={cn('text-sm font-medium', fait && 'line-through')}>
-            <span className="mr-1" aria-hidden>
+          <div className="flex items-center gap-2">
+            <span
+              className="flex size-6 shrink-0 items-center justify-center rounded-lg text-sm"
+              style={{ backgroundColor: `${cat.color}1a` }}
+              aria-hidden
+            >
               {cat.emoji}
             </span>
-            {t.titre}
-          </p>
-          {t.details && <p className="truncate text-xs text-muted-foreground">{t.details}</p>}
-
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-            {!fait && (
-              <span className="font-medium" style={{ color: prio.color }}>
-                {prio.label}
-              </span>
-            )}
-            {t.nb_appels > 0 && (
-              <span>
-                📞 appelé {t.nb_appels}×{snoozed ? ' · à rappeler plus tard' : ''}
-              </span>
-            )}
+            <p className={cn('min-w-0 flex-1 truncate text-sm font-medium', fait && 'line-through')}>
+              {t.titre}
+            </p>
           </div>
 
-          {/* Actions */}
-          {!fait && (
-            <div className="mt-2 flex flex-wrap gap-2">
+          {t.details && <p className="mt-0.5 truncate pl-8 text-xs text-muted-foreground">{t.details}</p>}
+
+          {(t.nb_appels > 0 || snoozed) && (
+            <p className="mt-1 flex items-center gap-1 pl-8 text-[11px] text-muted-foreground">
+              {t.nb_appels > 0 && <span>📞 appelé {t.nb_appels}×</span>}
+              {snoozed && (
+                <span className="flex items-center gap-0.5">
+                  <Clock className="size-3" /> à rappeler plus tard
+                </span>
+              )}
+            </p>
+          )}
+
+          {!fait && (t.tel || t.projet_id) && (
+            <div className="mt-2 flex flex-wrap gap-1.5 pl-8">
               {t.tel && (
                 <>
-                  <Button asChild size="sm" variant="outline" className="h-8">
+                  <Button asChild size="sm" variant="outline" className="h-8 rounded-full">
                     <a href={`tel:${t.tel}`}>
                       <Phone className="size-3.5" />
                       {formatTel(t.tel)}
@@ -234,7 +259,7 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-8 text-muted-foreground"
+                    className="h-8 rounded-full text-muted-foreground"
                     disabled={sansReponse.isPending}
                     onClick={() =>
                       sansReponse.mutate(t, {
@@ -248,7 +273,7 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
                 </>
               )}
               {t.projet_id && (
-                <Button asChild size="sm" variant="ghost" className="h-8">
+                <Button asChild size="sm" variant="ghost" className="h-8 rounded-full">
                   <Link to={`/projets/${t.projet_id}`}>
                     Ouvrir <ChevronRight className="size-3.5" />
                   </Link>
@@ -262,7 +287,7 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
           <Button
             size="icon"
             variant="ghost"
-            className="size-8 shrink-0 text-muted-foreground"
+            className="size-8 shrink-0 rounded-full text-muted-foreground"
             aria-label="Supprimer la tâche"
             onClick={() => supprimer.mutate(t.id)}
           >
