@@ -20,6 +20,7 @@ import {
   CARTE_ZOOM,
 } from '@/lib/constants'
 import { formatEuros } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { useProjets } from '@/features/projets/hooks/use-projets'
 
@@ -42,6 +43,7 @@ export function CartePage() {
   const { data: projets } = useProjets()
   const [metier, setMetier] = useState('tous')
   const [statut, setStatut] = useState('tous')
+  const [fond, setFond] = useState<'plan' | 'satellite'>('plan')
 
   // Icône artisan (constante) + cache des icônes statut.
   const iconArtisan = useMemo(() => pinIcon(COULEUR_ARTISAN), [])
@@ -109,16 +111,45 @@ export function CartePage() {
       {/* Carte — `isolate` crée un contexte d'empilement pour confiner les z-index
           internes de Leaflet (sinon ils passent au-dessus des menus déroulants des filtres) */}
       <div className="relative isolate h-[calc(100dvh-16rem)] w-full">
+        {/* Bascule fond de carte : Plan (CARTO Voyager) / Satellite (Esri) */}
+        <div className="absolute right-3 top-3 z-[1000] flex overflow-hidden rounded-lg border border-border bg-card shadow-card">
+          {(['plan', 'satellite'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFond(f)}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium transition-colors',
+                fond === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
+              )}
+            >
+              {f === 'plan' ? 'Plan' : 'Satellite'}
+            </button>
+          ))}
+        </div>
+
         <MapContainer
           center={CARTE_CENTRE}
           zoom={CARTE_ZOOM}
           scrollWheelZoom
           className="size-full"
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          {fond === 'plan' ? (
+            <TileLayer
+              key="plan"
+              detectRetina
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              subdomains="abcd"
+            />
+          ) : (
+            <TileLayer
+              key="satellite"
+              attribution='&copy; <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          )}
 
           {/* Pins artisans (violet) */}
           {artisansAffiches.map((a) => (
