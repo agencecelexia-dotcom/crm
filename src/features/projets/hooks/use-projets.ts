@@ -20,6 +20,7 @@ export function useProjets() {
       const { data, error } = await supabase
         .from(TABLE)
         .select(SELECT_AVEC_ARTISAN)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
       if (error) throw error
       return (data ?? []) as unknown as ProjetAvecArtisan[]
@@ -54,6 +55,7 @@ export function useProjetsByArtisan(artisanId: string | undefined) {
         .from(TABLE)
         .select('*')
         .eq('artisan_id', artisanId!)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
       if (error) throw error
       return data ?? []
@@ -168,14 +170,60 @@ export function usePatchProjet() {
   })
 }
 
-/** Suppression d'un projet. */
+/** Suppression d'un projet → CORBEILLE (soft-delete, restaurable). */
 export function useDeleteProjet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const { error } = await supabase
+        .from(TABLE)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => invalider(qc),
+  })
+}
+
+/** Liste des projets en corbeille (supprimés, restaurables). */
+export function useProjetsSupprimes() {
+  return useQuery({
+    queryKey: ['projets', 'corbeille'],
+    queryFn: async (): Promise<ProjetAvecArtisan[]> => {
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select(SELECT_AVEC_ARTISAN)
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as unknown as ProjetAvecArtisan[]
+    },
+  })
+}
+
+/** Restaure un projet depuis la corbeille. */
+export function useRestaurerProjet() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const { error } = await supabase.from(TABLE).update({ deleted_at: null }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      invalider(qc)
+      qc.invalidateQueries({ queryKey: ['projets', 'corbeille'] })
+    },
+  })
+}
+
+/** Suppression DÉFINITIVE depuis la corbeille (irréversible). */
+export function useSupprimerDefinitivement() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
       const { error } = await supabase.from(TABLE).delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalider(qc),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projets', 'corbeille'] }),
   })
 }

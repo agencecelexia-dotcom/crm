@@ -83,6 +83,7 @@ export interface Projet {
   commission_encaissee: boolean
   date_signature: string | null
   perdu_at: string | null // date de passage en "perdu" (purge auto 48h après)
+  deleted_at: string | null // corbeille : si renseigné, projet masqué mais restaurable
   // Fichiers
   contrat_url: string | null
   devis_url: string | null

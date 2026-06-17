@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock } from 'lucide-react'
+import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -125,7 +125,16 @@ export function ProjetsListPage() {
     <div>
       <PageHeader
         titre="Projets"
-        action={<QuickProspectDialog />}
+        action={
+          <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="icon" aria-label="Corbeille" title="Corbeille">
+              <Link to="/projets/corbeille">
+                <Trash2 className="size-5" />
+              </Link>
+            </Button>
+            <QuickProspectDialog />
+          </div>
+        }
       />
 
       {/* Bascule Liste / Pipeline (Kanban) */}

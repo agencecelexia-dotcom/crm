@@ -12,6 +12,7 @@ import { DashboardPage } from '@/features/dashboard/dashboard-page'
 import { CartePage } from '@/features/carte/carte-page'
 import { NotesPage } from '@/features/notes/notes-page'
 import { ProjetsListPage } from '@/features/projets/pages/projets-list-page'
+import { CorbeillePage } from '@/features/projets/pages/corbeille-page'
 import { ProjetNewPage } from '@/features/projets/pages/projet-new-page'
 import { ProjetEditPage } from '@/features/projets/pages/projet-edit-page'
 import { ProjetDetailPage } from '@/features/projets/pages/projet-detail-page'
@@ -46,6 +47,7 @@ export default function App() {
                 <Route path="/notes" element={<NotesPage />} />
 
                 <Route path="/projets" element={<ProjetsListPage />} />
+                <Route path="/projets/corbeille" element={<CorbeillePage />} />
                 <Route path="/projets/new" element={<ProjetNewPage />} />
                 <Route path="/projets/:id" element={<ProjetDetailPage />} />
                 <Route path="/projets/:id/edit" element={<ProjetEditPage />} />
