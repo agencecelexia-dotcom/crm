@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { useEffect, useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { X } from 'lucide-react'
 import L from 'leaflet'
 
 import {
@@ -23,8 +24,11 @@ import { formatEuros } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { useProjets } from '@/features/projets/hooks/use-projets'
+import { artisansCompatibles } from '@/features/projets/lib/artisans-compatibles'
 
-// Crée une pastille colorée (DivIcon) pour un marqueur.
+// Rayon (km) au-delà duquel on ne considère plus un artisan « autour » du projet.
+const RAYON_AUTOUR_KM = 80
+
 function pinIcon(color: string) {
   return L.divIcon({
     className: 'celexia-pin',
@@ -38,14 +42,36 @@ function pinIcon(color: string) {
   })
 }
 
+// Recentre la carte quand on entre/sort du mode focus.
+function Recentrer({ lat, lon, zoom }: { lat: number; lon: number; zoom: number }) {
+  const map = useMap()
+  useEffect(() => {
+    map.flyTo([lat, lon], zoom, { duration: 0.8 })
+  }, [lat, lon, zoom, map])
+  return null
+}
+
 export function CartePage() {
   const { data: artisans } = useArtisans()
   const { data: projets } = useProjets()
-  const [metier, setMetier] = useState('tous')
-  const [statut, setStatut] = useState('tous')
-  const [fond, setFond] = useState<'plan' | 'satellite'>('plan')
+  const [params, setParams] = useSearchParams()
+  const metier = params.get('metier') ?? 'tous'
+  const statut = params.get('statut') ?? 'tous'
+  const fond = (params.get('fond') as 'plan' | 'satellite') || 'plan'
+  const focusId = params.get('projet')
 
-  // Icône artisan (constante) + cache des icônes statut.
+  function setParam(cle: string, valeur: string, defaut: string) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (!valeur || valeur === defaut) next.delete(cle)
+        else next.set(cle, valeur)
+        return next
+      },
+      { replace: true },
+    )
+  }
+
   const iconArtisan = useMemo(() => pinIcon(COULEUR_ARTISAN), [])
   const iconsStatut = useMemo(() => {
     const m: Record<string, L.DivIcon> = {}
@@ -53,71 +79,108 @@ export function CartePage() {
     return m
   }, [])
 
-  const artisansAffiches = useMemo(
-    () =>
-      (artisans ?? []).filter(
+  // Projet en focus (cliqué ou ouvert via « Voir sur la carte »).
+  const focusProjet = useMemo(
+    () => (focusId ? (projets ?? []).find((p) => p.id === focusId) ?? null : null),
+    [projets, focusId],
+  )
+
+  // Artisans « autour » d'un projet en focus : même métier + à portée.
+  const autour = useMemo(() => {
+    if (!focusProjet) return []
+    return artisansCompatibles(focusProjet, artisans ?? [])
+      .filter(
+        (c) =>
+          c.metierMatch &&
+          c.distance != null &&
+          (c.dansRayon === true || c.distance <= RAYON_AUTOUR_KM),
+      )
+      .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0))
+  }, [focusProjet, artisans])
+
+  const artisansAffiches = useMemo(() => {
+    if (focusProjet) return autour.map((c) => ({ a: c.artisan, distance: c.distance }))
+    return (artisans ?? [])
+      .filter(
         (a) =>
           a.latitude != null &&
           a.longitude != null &&
           (metier === 'tous' || a.metiers.includes(metier)),
-      ),
-    [artisans, metier],
-  )
+      )
+      .map((a) => ({ a, distance: null as number | null }))
+  }, [focusProjet, autour, artisans, metier])
 
-  const projetsAffiches = useMemo(
-    () =>
-      (projets ?? []).filter(
-        (p) =>
-          p.latitude != null &&
-          p.longitude != null &&
-          (metier === 'tous' || p.metiers.includes(metier)) &&
-          (statut === 'tous' || p.statut === statut),
-      ),
-    [projets, metier, statut],
-  )
+  const projetsAffiches = useMemo(() => {
+    if (focusProjet)
+      return focusProjet.latitude != null && focusProjet.longitude != null ? [focusProjet] : []
+    return (projets ?? []).filter(
+      (p) =>
+        p.latitude != null &&
+        p.longitude != null &&
+        (metier === 'tous' || p.metiers.includes(metier)) &&
+        (statut === 'tous' || p.statut === statut),
+    )
+  }, [focusProjet, projets, metier, statut])
 
   return (
     <div className="-mx-4 -mt-4">
-      {/* Filtres */}
-      <div className="grid grid-cols-2 gap-2 px-4 pb-3 pt-1">
-        <Select value={metier} onValueChange={setMetier}>
-          <SelectTrigger className="h-10 w-full">
-            <SelectValue placeholder="Métier" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="tous">Tous métiers</SelectItem>
-            {METIERS.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statut} onValueChange={setStatut}>
-          <SelectTrigger className="h-10 w-full">
-            <SelectValue placeholder="Statut projet" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="tous">Tous statuts</SelectItem>
-            {STATUTS_ORDRE.map((s) => (
-              <SelectItem key={s} value={s}>
-                {STATUTS[s].label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Barre : filtres OU bandeau focus */}
+      {focusProjet ? (
+        <div className="flex items-center justify-between gap-2 bg-primary/5 px-4 py-2.5">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">
+              {focusProjet.client_nom}
+              <span className="text-muted-foreground"> · {focusProjet.metiers.join(', ')}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {autour.length} artisan{autour.length > 1 ? 's' : ''} compatible
+              {autour.length > 1 ? 's' : ''} autour ({RAYON_AUTOUR_KM} km)
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setParam('projet', '', '')}>
+            <X className="size-4" />
+            Voir tout
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 px-4 pb-3 pt-1">
+          <Select value={metier} onValueChange={(v) => setParam('metier', v, 'tous')}>
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="Métier" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tous">Tous métiers</SelectItem>
+              {METIERS.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statut} onValueChange={(v) => setParam('statut', v, 'tous')}>
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="Statut projet" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tous">Tous statuts</SelectItem>
+              {STATUTS_ORDRE.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STATUTS[s].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
-      {/* Carte — `isolate` crée un contexte d'empilement pour confiner les z-index
-          internes de Leaflet (sinon ils passent au-dessus des menus déroulants des filtres) */}
       <div className="relative isolate h-[calc(100dvh-16rem)] w-full">
-        {/* Bascule fond de carte : Plan (CARTO Voyager) / Satellite (Esri) */}
+        {/* Bascule fond de carte */}
         <div className="absolute right-3 top-3 z-[1000] flex overflow-hidden rounded-lg border border-border bg-card shadow-card">
           {(['plan', 'satellite'] as const).map((f) => (
             <button
               key={f}
               type="button"
-              onClick={() => setFond(f)}
+              onClick={() => setParam('fond', f, 'plan')}
               className={cn(
                 'px-3 py-1.5 text-xs font-medium transition-colors',
                 fond === f ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
@@ -128,12 +191,7 @@ export function CartePage() {
           ))}
         </div>
 
-        <MapContainer
-          center={CARTE_CENTRE}
-          zoom={CARTE_ZOOM}
-          scrollWheelZoom
-          className="size-full"
-        >
+        <MapContainer center={CARTE_CENTRE} zoom={CARTE_ZOOM} scrollWheelZoom className="size-full">
           {fond === 'plan' ? (
             <TileLayer
               key="plan"
@@ -151,19 +209,22 @@ export function CartePage() {
             />
           )}
 
+          {focusProjet && focusProjet.latitude != null && focusProjet.longitude != null && (
+            <Recentrer lat={focusProjet.latitude} lon={focusProjet.longitude} zoom={10} />
+          )}
+
           {/* Pins artisans (violet) */}
-          {artisansAffiches.map((a) => (
-            <Marker
-              key={`a-${a.id}`}
-              position={[a.latitude!, a.longitude!]}
-              icon={iconArtisan}
-            >
+          {artisansAffiches.map(({ a, distance }) => (
+            <Marker key={`a-${a.id}`} position={[a.latitude!, a.longitude!]} icon={iconArtisan}>
               <Popup>
                 <p className="font-medium">
                   {a.nom} {a.prenom}
                 </p>
                 {a.societe && <p className="text-xs">{a.societe}</p>}
                 <p className="text-xs text-muted-foreground">{a.metiers.join(', ')}</p>
+                {distance != null && (
+                  <p className="text-xs font-medium text-primary">~{Math.round(distance)} km du projet</p>
+                )}
                 <Button asChild size="sm" variant="link" className="h-auto p-0">
                   <Link to={`/artisans/${a.id}`}>Voir la fiche →</Link>
                 </Button>
@@ -171,12 +232,13 @@ export function CartePage() {
             </Marker>
           ))}
 
-          {/* Pins projets (couleur = statut) */}
+          {/* Pins projets (couleur = statut) — clic = focus */}
           {projetsAffiches.map((p) => (
             <Marker
               key={`p-${p.id}`}
               position={[p.latitude!, p.longitude!]}
               icon={iconsStatut[p.statut]}
+              eventHandlers={{ click: () => setParam('projet', p.id, '') }}
             >
               <Popup>
                 <p className="font-medium">{p.client_nom}</p>
@@ -186,8 +248,19 @@ export function CartePage() {
                 {p.montant_devis_signe != null && (
                   <p className="text-xs">Signé : {formatEuros(p.montant_devis_signe)}</p>
                 )}
+                {!focusProjet && (
+                  <Button
+                    size="sm"
+                    variant="link"
+                    className="h-auto p-0"
+                    onClick={() => setParam('projet', p.id, '')}
+                  >
+                    Voir les artisans autour →
+                  </Button>
+                )}
+                <br />
                 <Button asChild size="sm" variant="link" className="h-auto p-0">
-                  <Link to={`/projets/${p.id}`}>Voir le projet →</Link>
+                  <Link to={`/projets/${p.id}`}>Ouvrir le projet →</Link>
                 </Button>
               </Popup>
             </Marker>

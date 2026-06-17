@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { Loader2, Pencil, Trash2, Phone, Mail, MapPin } from 'lucide-react'
+import { Loader2, Pencil, Trash2, Phone, Mail, MapPin, Map } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { StatutBadge } from '@/components/statut-badge'
@@ -162,6 +162,14 @@ export function ProjetDetailPage() {
               <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               <span>{adresseClient}</span>
             </div>
+          )}
+          {projet.latitude != null && projet.longitude != null && (
+            <Button asChild variant="outline" size="sm" className="w-full">
+              <Link to={`/carte?projet=${projet.id}`}>
+                <Map className="size-4" />
+                Voir sur la carte (artisans autour)
+              </Link>
+            </Button>
           )}
           {projet.budget_estime != null && (
             <p className="text-muted-foreground">
