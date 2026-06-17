@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Users, ChevronRight, Phone, BadgeCheck } from 'lucide-react'
+import { Plus, Search, Users, ChevronRight, Phone, BadgeCheck, BarChart3 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -51,12 +51,19 @@ export function ArtisansListPage() {
       <PageHeader
         titre="Artisans"
         action={
-          <Button asChild size="sm">
-            <Link to="/artisans/new">
-              <Plus className="size-4" />
-              Nouveau
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="icon" aria-label="Performance" title="Performance">
+              <Link to="/artisans/stats">
+                <BarChart3 className="size-5" />
+              </Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link to="/artisans/new">
+                <Plus className="size-4" />
+                Nouveau
+              </Link>
+            </Button>
+          </div>
         }
       />
 
