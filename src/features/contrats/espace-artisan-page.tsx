@@ -14,6 +14,7 @@ import {
   Pencil,
   Save,
   X,
+  FilePlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -35,7 +36,12 @@ import { finaliserContenu } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
 import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
+import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
+import { useListeDevis } from '@/features/devis/use-devis'
 import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
+
+// Le générateur de devis n'est activé QUE pour cet artisan (Metbach) pour l'instant.
+const METBACH_ID = '98a39398-2b7f-4a44-b9bc-aa6f893e9d32'
 
 // Espace artisan UNIQUE (/artisan/:token) : il signe son contrat une fois,
 // puis retrouve TOUS ses chantiers. Identité client masquée tant que non signé.
@@ -51,6 +57,7 @@ export function EspaceArtisanPage() {
       return (data as EspaceArtisan) ?? null
     },
   })
+  const [devisInitial, setDevisInitial] = useState<DevisInitial | null>(null)
 
   if (isLoading)
     return (
@@ -69,6 +76,20 @@ export function EspaceArtisanPage() {
 
   const { artisan, engagement, signe, contrat_externe, projets } = data
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
+  const isMetbach = artisan.id === METBACH_ID
+
+  function ouvrirDevisProjet(p: ProjetEspace) {
+    setDevisInitial({
+      affectation_token: p.token,
+      client_nom: p.client_nom,
+      client_adresse: p.client_adresse,
+      client_cp: p.client_code_postal,
+      client_ville: p.client_ville,
+      client_email: p.client_email,
+      client_tel: p.client_telephone,
+      objet: p.metiers?.length ? p.metiers.join(', ') : p.metier,
+    })
+  }
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-accent/60 via-secondary to-secondary">
@@ -78,6 +99,12 @@ export function EspaceArtisanPage() {
         <p className="rounded-full bg-white/70 px-3.5 py-1 text-sm font-medium text-secondary-foreground shadow-sm backdrop-blur-sm">
           Espace de {nomArtisan}
         </p>
+        {isMetbach && (
+          <Button size="sm" variant="outline" className="mt-1 bg-white/80" onClick={() => setDevisInitial({})}>
+            <FilePlus className="size-4" />
+            Nouveau devis
+          </Button>
+        )}
       </header>
 
       {/* Contrat + intro gardés dans une colonne lisible (centrée) même sur grand écran */}
@@ -125,10 +152,71 @@ export function EspaceArtisanPage() {
       )}
       </div>
 
+      {/* Devis (Metbach uniquement) */}
+      {isMetbach && token && <MesDevis token={token} />}
+
       {/* Liste des chantiers : en cours / terminés */}
-      <ListeChantiers projets={projets} signe={signe} onChange={() => void refetch()} />
+      <ListeChantiers
+        projets={projets}
+        signe={signe}
+        onChange={() => void refetch()}
+        onCreerDevis={isMetbach ? ouvrirDevisProjet : undefined}
+      />
       </div>
+
+      {/* Générateur de devis (Metbach) */}
+      {isMetbach && token && devisInitial && (
+        <DevisBuilder
+          key={devisInitial.affectation_token ?? 'standalone'}
+          token={token}
+          vendeur={artisan}
+          initial={devisInitial}
+          onClose={() => setDevisInitial(null)}
+          onDone={() => void refetch()}
+        />
+      )}
     </div>
+  )
+}
+
+// Liste des devis générés par l'artisan (Metbach).
+function MesDevis({ token }: { token: string }) {
+  const { data: devis } = useListeDevis(token)
+  if (!devis || devis.length === 0) return null
+  return (
+    <section className="mt-8">
+      <h2 className="mb-3 text-lg font-semibold">
+        Mes devis <span className="text-muted-foreground">({devis.length})</span>
+      </h2>
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {devis.map((d) => (
+          <li key={d.id}>
+            <Card className="flex items-center gap-3 p-3.5 shadow-card">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {d.numero} · {d.client_nom ?? '—'}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {formatEuros(d.total)} ·{' '}
+                  <span className={d.statut === 'envoye' ? 'text-[#22C55E]' : ''}>
+                    {d.statut === 'envoye' ? 'Envoyé' : 'Brouillon'}
+                  </span>
+                  {d.objet ? ` · ${d.objet}` : ''}
+                </p>
+              </div>
+              {d.pdf_url && (
+                <Button asChild size="sm" variant="outline" className="shrink-0">
+                  <a href={d.pdf_url} target="_blank" rel="noopener">
+                    <Download className="size-4" />
+                    PDF
+                  </a>
+                </Button>
+              )}
+            </Card>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -145,10 +233,12 @@ function ListeChantiers({
   projets,
   signe,
   onChange,
+  onCreerDevis,
 }: {
   projets: ProjetEspace[]
   signe: boolean
   onChange: () => void
+  onCreerDevis?: (p: ProjetEspace) => void
 }) {
   const [filtre, setFiltre] = useState<'tous' | 'en_cours' | StatutProjet>('tous')
 
@@ -201,7 +291,7 @@ function ListeChantiers({
       ) : (
         <div className="space-y-3">
           {liste.map((p) => (
-            <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} />
+            <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} onCreerDevis={onCreerDevis} />
           ))}
         </div>
       )}
@@ -296,10 +386,12 @@ function ProjetItem({
   projet,
   signe,
   onChange,
+  onCreerDevis,
 }: {
   projet: ProjetEspace
   signe: boolean
   onChange: () => void
+  onCreerDevis?: (p: ProjetEspace) => void
 }) {
   const [ouvert, setOuvert] = useState(false)
   const metiers = projet.metiers?.length ? projet.metiers : [projet.metier]
@@ -394,6 +486,12 @@ function ProjetItem({
               {/* Colonne droite : documents */}
               <div className="space-y-2">
                 <p className="text-sm font-medium">Documents</p>
+                {onCreerDevis && (
+                  <Button className="w-full" onClick={() => onCreerDevis(projet)}>
+                    <FilePlus className="size-4" />
+                    Créer un devis
+                  </Button>
+                )}
                 <UploadDevis
                   token={projet.token}
                   slot="devis"

@@ -51,6 +51,21 @@ export async function uploaderDevis(
   return supabase.storage.from(BUCKET_DEVIS).getPublicUrl(chemin).data.publicUrl
 }
 
+/** Téléverse un devis GÉNÉRÉ (PDF blob) dans le bucket public `devis` et renvoie son URL. */
+export async function uploaderDevisGenere(
+  token: string,
+  numero: string,
+  blob: Blob,
+): Promise<string> {
+  const rand = Math.random().toString(36).slice(2)
+  const chemin = `${token}/genere-${numero}-${rand}.pdf`
+  const { error } = await supabase.storage
+    .from(BUCKET_DEVIS)
+    .upload(chemin, blob, { contentType: 'application/pdf' })
+  if (error) throw error
+  return supabase.storage.from(BUCKET_DEVIS).getPublicUrl(chemin).data.publicUrl
+}
+
 /** Types de documents rattachés à un projet. */
 export type TypeDocument = 'contrat' | 'devis' | 'devis_signe'
 

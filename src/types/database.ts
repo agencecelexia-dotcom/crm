@@ -195,9 +195,47 @@ export interface ProjetEspace {
   client_code_postal: string | null
 }
 
+/** Identité + infos société de l'artisan (en-tête de devis). */
+export interface ArtisanEspace {
+  id: string
+  nom: string
+  prenom: string | null
+  societe: string | null
+  adresse: string | null
+  code_postal: string | null
+  ville: string | null
+  siren: string | null
+  forme_juridique: string | null
+  telephone: string | null
+  email: string | null
+  representant: string | null
+}
+
+/** Une ligne de devis. */
+export interface DevisLigne {
+  designation: string
+  quantite: number
+  unite: string
+  prix_unitaire: number
+}
+
+/** Un devis (généré par l'artisan). */
+export interface Devis {
+  id: string
+  numero: string
+  client_nom: string | null
+  objet: string | null
+  total: number
+  statut: 'brouillon' | 'envoye'
+  pdf_url: string | null
+  date_devis: string
+  sent_at: string | null
+  projet_id: string | null
+}
+
 /** Réponse de get_espace_artisan : contrat unique + tous les chantiers de l'artisan. */
 export interface EspaceArtisan {
-  artisan: { nom: string; prenom: string | null; societe: string | null }
+  artisan: ArtisanEspace
   engagement: {
     token: string
     statut: 'envoye' | 'signe'

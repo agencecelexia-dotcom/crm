@@ -129,6 +129,18 @@ if (d.event === 'envoyer_lien_mission') {
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Mettez à jour votre avancement en 30 secondes — et <b>si vous avez fait un devis, pensez à le déposer</b> dans votre espace :</p>
     ${btn(esc(d.lien), 'Mettre à jour mon RDV →')}
     <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Quelques mots sur le rendez-vous (besoin, budget, prochaine étape) nous aident à vous accompagner.</p>`);
+} else if (d.event === 'envoyer_devis') {
+  to = d.email; if (!to) return [];           // ➜ CLIENT
+  const cap = (s) => esc(s).toLowerCase().replace(/(^|[\s'’-])([a-zà-ÿ])/g, (m, sep, c) => sep + c.toUpperCase());
+  const bonjour = (d.client_nom || '').trim() ? ('Bonjour ' + cap(d.client_nom)) : 'Bonjour';
+  const montant = d.montant != null ? Number(d.montant).toLocaleString('fr-FR') + ' €' : '';
+  subject = 'Votre devis ' + esc(d.numero || '') + (d.artisan ? ' — ' + esc(d.artisan) : '');
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:19px;color:#111827;">${bonjour},</h1>
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Voici votre devis${d.artisan ? ' de la part de <b>' + esc(d.artisan) + '</b>' : ''}${montant ? ' — <b>' + montant + '</b>' : ''}. Vous pouvez le consulter et le télécharger ici :</p>
+    ${btn(esc(d.lien), 'Voir / télécharger le devis →')}
+    <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Pour valider, répondez à cet email ou retournez le devis signé avec la mention « Bon pour accord ».</p>
+    <p style="margin:8px 0 0;color:#6b7280;font-size:13px;">Si le bouton ne fonctionne pas, copiez ce lien :<br><a href="${esc(d.lien)}" style="color:#7C3AED;word-break:break-all;">${esc(d.lien)}</a></p>`);
 } else if (d.event === 'escalade') {
   const motif = d.sujet === 'contrat' ? 'n\'a toujours pas signé son contrat' : 'n\'a pas avancé sur le chantier';
   const chantier = d.client_nom || ((d.metier || '') + (d.client_ville ? ' à ' + d.client_ville : '')) || 'le chantier';
