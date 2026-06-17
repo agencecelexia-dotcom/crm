@@ -1,14 +1,14 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Map, FolderKanban, Users, StickyNote } from 'lucide-react'
+import { Home, Map, FolderKanban, Users, ListChecks } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // Barre de navigation fixe en bas (mobile-first). Cibles de tap ≥ 48px.
 const ITEMS = [
   { to: '/', label: 'Accueil', icon: Home, end: true },
-  { to: '/carte', label: 'Carte', icon: Map, end: false },
+  { to: '/taches', label: 'À faire', icon: ListChecks, end: false },
   { to: '/projets', label: 'Projets', icon: FolderKanban, end: false },
   { to: '/artisans', label: 'Artisans', icon: Users, end: false },
-  { to: '/notes', label: 'Notes', icon: StickyNote, end: false },
+  { to: '/carte', label: 'Carte', icon: Map, end: false },
 ]
 
 export function BottomNav() {

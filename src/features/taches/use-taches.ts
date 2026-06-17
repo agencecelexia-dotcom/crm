@@ -1,0 +1,102 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@/lib/supabase/client'
+
+export interface Tache {
+  id: string
+  titre: string
+  details: string | null
+  priorite: number // 1 haute, 2 moyenne, 3 basse
+  type: 'manuel' | 'auto'
+  categorie: string | null
+  projet_id: string | null
+  artisan_id: string | null
+  tel: string | null
+  statut: 'a_faire' | 'fait'
+  done_at: string | null
+  nb_appels: number
+  dernier_appel: string | null
+  rappel_at: string | null
+  created_at: string
+}
+
+const qc_key = ['taches']
+
+/** Liste des tâches : régénère les tâches auto puis récupère tout. */
+export function useTaches() {
+  return useQuery({
+    queryKey: qc_key,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<Tache[]> => {
+      await supabase.rpc('rafraichir_taches')
+      const { data, error } = await supabase
+        .from('taches')
+        .select('*')
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return (data ?? []) as Tache[]
+    },
+  })
+}
+
+export function useAjouterTache() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (t: { titre: string; details?: string; priorite: number; tel?: string }) => {
+      const { error } = await supabase.from('taches').insert({
+        titre: t.titre,
+        details: t.details || null,
+        priorite: t.priorite,
+        tel: t.tel || null,
+        type: 'manuel',
+        categorie: t.tel ? 'appel' : 'autre',
+      })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qc_key }),
+  })
+}
+
+/** Coche / décoche une tâche (faite → supprimée auto 24 h après). */
+export function useToggleTache() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, fait }: { id: string; fait: boolean }) => {
+      const { error } = await supabase
+        .from('taches')
+        .update({ statut: fait ? 'fait' : 'a_faire', done_at: fait ? new Date().toISOString() : null })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qc_key }),
+  })
+}
+
+/** Appel sans réponse : mémorise l'appel et reporte la tâche de 4 h. */
+export function useAppelSansReponse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (t: Tache) => {
+      const { error } = await supabase
+        .from('taches')
+        .update({
+          nb_appels: t.nb_appels + 1,
+          dernier_appel: new Date().toISOString(),
+          rappel_at: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+        })
+        .eq('id', t.id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qc_key }),
+  })
+}
+
+export function useSupprimerTache() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('taches').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qc_key }),
+  })
+}

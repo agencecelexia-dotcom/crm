@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut, BadgeEuro } from 'lucide-react'
+import { Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut, BadgeEuro, ListChecks } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { NotificationsBell } from '@/features/automatisations/notifications-bell'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth/use-auth'
 // Navigation latérale — affichée uniquement sur écrans larges (md+).
 const ITEMS = [
   { to: '/', label: 'Accueil', icon: Home, end: true },
+  { to: '/taches', label: 'À faire', icon: ListChecks, end: false },
   { to: '/carte', label: 'Carte', icon: Map, end: false },
   { to: '/projets', label: 'Projets', icon: FolderKanban, end: false },
   { to: '/commissions', label: 'Commissions', icon: BadgeEuro, end: false },
