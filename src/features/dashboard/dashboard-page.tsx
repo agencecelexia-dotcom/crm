@@ -25,6 +25,7 @@ import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate } from '@/lib/format'
 import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
+import { ActionDuJour } from './action-du-jour'
 
 // Petite carte KPI réutilisable.
 function KpiCard({
@@ -158,6 +159,8 @@ export function DashboardPage() {
   return (
     <div>
       <PageHeader titre="Tableau de bord" />
+
+      <ActionDuJour />
 
       {/* Filtre période */}
       <Tabs
