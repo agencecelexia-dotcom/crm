@@ -10,6 +10,7 @@ import { MissionPage } from '@/features/contrats/mission-page'
 import { EspaceArtisanPage } from '@/features/contrats/espace-artisan-page'
 import { DashboardPage } from '@/features/dashboard/dashboard-page'
 import { CartePage } from '@/features/carte/carte-page'
+import { CommissionsPage } from '@/features/commissions/commissions-page'
 import { NotesPage } from '@/features/notes/notes-page'
 import { ProjetsListPage } from '@/features/projets/pages/projets-list-page'
 import { CorbeillePage } from '@/features/projets/pages/corbeille-page'
@@ -44,6 +45,7 @@ export default function App() {
               <Route element={<AppLayout />}>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/carte" element={<CartePage />} />
+                <Route path="/commissions" element={<CommissionsPage />} />
                 <Route path="/notes" element={<NotesPage />} />
 
                 <Route path="/projets" element={<ProjetsListPage />} />

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut } from 'lucide-react'
+import { Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut, BadgeEuro } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { NotificationsBell } from '@/features/automatisations/notifications-bell'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ const ITEMS = [
   { to: '/', label: 'Accueil', icon: Home, end: true },
   { to: '/carte', label: 'Carte', icon: Map, end: false },
   { to: '/projets', label: 'Projets', icon: FolderKanban, end: false },
+  { to: '/commissions', label: 'Commissions', icon: BadgeEuro, end: false },
   { to: '/artisans', label: 'Artisans', icon: Users, end: false },
   { to: '/notes', label: 'Notes', icon: StickyNote, end: false },
   { to: '/parametres/automatisations', label: 'Automatisations', icon: Zap, end: false },
