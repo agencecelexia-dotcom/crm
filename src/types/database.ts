@@ -42,6 +42,8 @@ export interface Artisan {
   taux_commission: number // taux par défaut de l'artisan (ex: 0.10)
   token: string // lien public "espace artisan" (/artisan/:token)
   contrat_externe: boolean // contrat signé hors application (pas de signature dans l'espace)
+  ecarte_at: string | null // "pas fiable" : écarté (hors liste active) mais conservé
+  ecarte_motif: string | null // raison de la mise à l'écart
   created_at: string
   updated_at: string
 }
@@ -49,7 +51,7 @@ export interface Artisan {
 /** Données d'insertion / mise à jour d'un artisan (champs gérés par la base exclus). */
 export type ArtisanInput = Omit<
   Artisan,
-  'id' | 'token' | 'contrat_externe' | 'created_at' | 'updated_at'
+  'id' | 'token' | 'contrat_externe' | 'ecarte_at' | 'ecarte_motif' | 'created_at' | 'updated_at'
 >
 
 /** Un projet = un appel client. */

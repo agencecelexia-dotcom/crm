@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
@@ -8,11 +9,14 @@ import {
   Mail,
   MapPin,
   TrendingUp,
+  ShieldOff,
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { StatutBadge } from '@/components/statut-badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -28,7 +32,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
-import { useArtisan, useDeleteArtisan } from '../hooks/use-artisans'
+import { useArtisan, useDeleteArtisan, useEcarterArtisan } from '../hooks/use-artisans'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
 import { ContratCard } from '@/features/contrats/contrat-card'
 
@@ -39,6 +43,8 @@ export function ArtisanDetailPage() {
   const { data: artisan, isLoading } = useArtisan(id)
   const { data: projets } = useProjetsByArtisan(id)
   const remove = useDeleteArtisan()
+  const ecarter = useEcarterArtisan()
+  const [motif, setMotif] = useState('')
 
   if (isLoading || !artisan) {
     return (
@@ -196,7 +202,56 @@ export function ArtisanDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Suppression */}
+      {/* Écarter (pas fiable) — alternative recommandée à la suppression */}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" className="mb-2 w-full">
+            <ShieldOff className="size-4" />
+            Écarter (pas fiable)
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Écarter cet artisan ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Il quitte la liste active (plus assignable ni relancé), mais reste conservé dans
+              « Artisans écartés » — pour ne pas le recontacter par erreur. Réversible à tout moment.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Motif (facultatif)</Label>
+            <Input
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              placeholder="Ex. ne répond pas, devis hors prix, peu sérieux…"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                ecarter.mutate(
+                  { id: artisan.id, motif: motif.trim() || undefined },
+                  {
+                    onSuccess: () => {
+                      toast.success('Artisan écarté (conservé dans « Pas fiables »)')
+                      navigate('/artisans', { replace: true })
+                    },
+                    onError: (err) =>
+                      toast.error('Échec', {
+                        description: err instanceof Error ? err.message : undefined,
+                      }),
+                  },
+                )
+              }
+            >
+              Écarter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Suppression définitive */}
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button variant="ghost" className="w-full text-destructive">

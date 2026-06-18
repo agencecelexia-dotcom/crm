@@ -18,6 +18,7 @@ export function useArtisans() {
       const { data, error } = await supabase
         .from(TABLE)
         .select('*')
+        .is('ecarte_at', null)
         .order('nom', { ascending: true })
       if (error) throw error
       return data ?? []
@@ -129,6 +130,58 @@ export function useRegenererTokenArtisan() {
       return data.token as string
     },
     onSuccess: (_t, id) => {
+      qc.invalidateQueries({ queryKey: ['artisans'] })
+      qc.invalidateQueries({ queryKey: ['artisans', id] })
+    },
+  })
+}
+
+/** Liste des artisans ÉCARTÉS (« pas fiables »), conservés à part. */
+export function useArtisansEcartes() {
+  return useQuery({
+    queryKey: ['artisans', 'ecartes'],
+    queryFn: async (): Promise<Artisan[]> => {
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select('*')
+        .not('ecarte_at', 'is', null)
+        .order('ecarte_at', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    },
+  })
+}
+
+/** Écarte un artisan (« pas fiable ») : il quitte la liste active, conservé à part. */
+export function useEcarterArtisan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, motif }: { id: string; motif?: string }) => {
+      const { error } = await supabase
+        .from(TABLE)
+        .update({ ecarte_at: new Date().toISOString(), ecarte_motif: motif || null })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ['artisans'] })
+      qc.invalidateQueries({ queryKey: ['artisans', id] })
+    },
+  })
+}
+
+/** Réintègre un artisan écarté dans la liste active. */
+export function useReactiverArtisan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from(TABLE)
+        .update({ ecarte_at: null, ecarte_motif: null })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ['artisans'] })
       qc.invalidateQueries({ queryKey: ['artisans', id] })
     },
