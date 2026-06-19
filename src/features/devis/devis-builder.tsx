@@ -28,7 +28,7 @@ import {
   useCreerDevis,
   useSetDevisPdf,
   useEnvoyerDevis,
-  envoyerDevisEmail,
+  envoyerDevisPdfEmail,
   type DevisPayload,
 } from './use-devis'
 
@@ -197,19 +197,12 @@ export function DevisBuilder({
       await setPdf.mutateAsync({ id, url })
 
       if (avecEnvoi) {
-        const r = await envoyer.mutateAsync(id)
-        if (r.client_email) {
-          await envoyerDevisEmail({
-            email: r.client_email,
-            client_nom: cli.nom,
-            artisan: ent.nom,
-            numero: r.numero,
-            montant: r.total,
-            lien: url,
-          })
-          toast.success(`Devis ${numero} envoyé à ${r.client_email}`)
+        await envoyer.mutateAsync(id) // met à jour le CRM si le devis vient d'un projet
+        if (vendeur.email) {
+          await envoyerDevisPdfEmail({ email: vendeur.email, numero, client_nom: cli.nom, pdf: blob })
+          toast.success(`Devis ${numero} envoyé à ${vendeur.email} (PDF en pièce jointe)`)
         } else {
-          toast.success(`Devis ${numero} créé (pas d'email client — envoi manuel)`)
+          toast.success(`Devis ${numero} créé — ajoute ton email dans l'en-tête pour l'envoi`)
         }
       } else {
         await telechargerDevis(construireData(numero))
@@ -230,7 +223,8 @@ export function DevisBuilder({
         <SheetHeader>
           <SheetTitle>Créer un devis</SheetTitle>
           <SheetDescription>
-            Remplissez les lignes, prévisualisez, puis téléchargez ou envoyez au client.
+            Remplissez les lignes (prix par ligne, total automatique), prévisualisez, puis
+            téléchargez ou recevez le PDF par email.
           </SheetDescription>
         </SheetHeader>
 
@@ -289,7 +283,7 @@ export function DevisBuilder({
                 />
                 <div className="flex items-center gap-2">
                   <Input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     placeholder="Qté"
                     value={l.quantite}
@@ -311,7 +305,7 @@ export function DevisBuilder({
                   </Select>
                   <div className="relative flex-1">
                     <Input
-                      type="number"
+                      type="text"
                       inputMode="decimal"
                       placeholder="Prix unitaire"
                       value={l.prix_unitaire}
@@ -372,7 +366,7 @@ export function DevisBuilder({
           </Button>
           <Button onClick={() => enregistrer(true)} disabled={busy} className="col-span-2 sm:col-span-1">
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            Enregistrer & envoyer
+            Enregistrer & me l'envoyer
           </Button>
         </div>
       </SheetContent>

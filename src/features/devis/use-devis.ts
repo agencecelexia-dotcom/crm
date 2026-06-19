@@ -86,19 +86,37 @@ export function useEnvoyerDevis(token: string | undefined) {
   })
 }
 
-/** Envoie l'email du devis au client (lien vers le PDF) via n8n. */
-export async function envoyerDevisEmail(p: {
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(((reader.result as string) || '').split(',')[1] || '')
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+/** Envoie le devis (PDF en PIÈCE JOINTE) à l'email de l'artisan, via n8n. */
+export async function envoyerDevisPdfEmail(p: {
   email: string
-  client_nom?: string | null
-  artisan: string
   numero: string
-  montant: number
-  lien: string
+  client_nom?: string | null
+  pdf: Blob
 }) {
+  const pdf_base64 = await blobToBase64(p.pdf)
   await fetch(N8N_WEBHOOK_URL, {
     method: 'POST',
     mode: 'no-cors',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ event: 'envoyer_devis', ...p }),
+    body: JSON.stringify({
+      event: 'envoyer_devis_pdf',
+      email: p.email,
+      numero: p.numero,
+      filename: `devis-${p.numero}.pdf`,
+      subject: `Votre devis ${p.numero}${p.client_nom ? ' — ' + p.client_nom : ''}`,
+      html: `<p>Bonjour,</p><p>Voici votre devis <b>${p.numero}</b>${
+        p.client_nom ? ' pour <b>' + p.client_nom + '</b>' : ''
+      } en pièce jointe (PDF).</p><p>— Celexia</p>`,
+      pdf_base64,
+    }),
   })
 }

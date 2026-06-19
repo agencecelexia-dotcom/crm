@@ -4,6 +4,22 @@ let d = $input.first().json.body;
 if (d === undefined || d === null) d = $input.first().json;
 if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
 d = d || {};
+
+// Envoi d'un devis EN PIÈCE JOINTE (PDF en base64) → routé vers le node Gmail
+// "Envoyer devis PDF" via le IF sur has_pdf. Doit être traité en premier.
+if (d.event === 'envoyer_devis_pdf') {
+  if (!d.email || !d.pdf_base64) return [];
+  return [{
+    json: {
+      to: d.email,
+      subject: d.subject || ('Votre devis ' + (d.numero || '')),
+      html: d.html || '<p>Bonjour,<br><br>Votre devis est en pièce jointe.<br><br>Celexia</p>',
+      has_pdf: true,
+    },
+    binary: { devis: { data: d.pdf_base64, mimeType: 'application/pdf', fileName: d.filename || 'devis.pdf' } },
+  }];
+}
+
 const AGENCE = 'agence.celexia@gmail.com';
 const LOGO = 'https://crm-ci7k.vercel.app/logo.png';
 const esc = (s) => String(s == null ? '' : s)
