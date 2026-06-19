@@ -54,6 +54,35 @@ export type ArtisanInput = Omit<
   'id' | 'token' | 'contrat_externe' | 'ecarte_at' | 'ecarte_motif' | 'created_at' | 'updated_at'
 >
 
+/** Statut de démarchage d'une société (prospect). */
+export type StatutProspect =
+  | 'a_contacter'
+  | 'pas_repondu'
+  | 'negatif'
+  | 'ok_autre_metier'
+  | 'interesse'
+  | 'converti'
+
+/** Une société à démarcher (pool de prospection, distinct des artisans). */
+export interface Prospect {
+  id: string
+  company_name: string | null
+  profession: string | null
+  metiers: string[]
+  tel: string | null
+  tel2: string | null
+  email: string | null
+  city: string | null
+  code_postal: string | null
+  departement: string | null
+  website: string | null
+  google_maps_url: string | null
+  statut: StatutProspect
+  nb_appels: number
+  notes: string | null
+  distance_km?: number // renvoyé par prospects_autour
+}
+
 /** Un projet = un appel client. */
 export interface Projet {
   id: string

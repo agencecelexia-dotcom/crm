@@ -22,6 +22,7 @@ import {
   useAffecterArtisans,
   useRetirerAffectation,
 } from '../hooks/use-affectations'
+import { ProspectsPanel } from '@/features/prospects/prospects-panel'
 import type { ProjetAvecArtisan } from '@/types/database'
 
 // Assignation MULTIPLE : on confie le projet à un ou plusieurs artisans en
@@ -40,6 +41,7 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
   )
   const [selection, setSelection] = useState<Set<string>>(new Set())
   const [recherche, setRecherche] = useState('')
+  const [showProspects, setShowProspects] = useState(false)
 
   // Recherche par nom / société / ville (tape pour retrouver vite un artisan).
   const liste = useMemo(() => {
@@ -87,6 +89,7 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
   }
 
   return (
+    <>
     <Sheet open={open} onOpenChange={changerOuverture}>
       <SheetTrigger asChild>
         <Button variant="outline" className="w-full">
@@ -190,13 +193,35 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
           )}
         </div>
 
-        <div className="border-t border-border p-4">
+        <div className="space-y-2 border-t border-border p-4">
           <Button className="w-full" onClick={enregistrer} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
             Enregistrer l'assignation ({selection.size})
           </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setOpen(false)
+              setShowProspects(true)
+            }}
+          >
+            <Search className="size-4" />
+            Aucun artisan proche ? Démarcher des sociétés autour
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
+
+    {showProspects && (
+      <ProspectsPanel
+        lat={projet.latitude}
+        lon={projet.longitude}
+        metierDefault={projet.metiers?.[0] ?? null}
+        contexte={[projet.client_nom, projet.client_ville].filter(Boolean).join(' · ')}
+        onClose={() => setShowProspects(false)}
+      />
+    )}
+    </>
   )
 }
