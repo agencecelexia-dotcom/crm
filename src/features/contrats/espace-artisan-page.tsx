@@ -197,7 +197,7 @@ function MesDevis({ token }: { token: string }) {
                   {d.numero} · {d.client_nom ?? '—'}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(d.total || 0)} € ·{' '}
+                  {new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(d.total || 0).replace(/[\u202f\u00a0]/g, ' ')} € ·{' '}
                   <span className={d.statut === 'envoye' ? 'text-[#22C55E]' : ''}>
                     {d.statut === 'envoye' ? 'Envoyé' : 'Brouillon'}
                   </span>

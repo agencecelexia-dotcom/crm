@@ -37,9 +37,11 @@ const GRIS_CLAIR: [number, number, number] = [120, 120, 120]
 const BORD: [number, number, number] = [208, 208, 208]
 
 const eur = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    n || 0,
-  ) + ' €'
+  new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(n || 0)
+    // Intl FR sépare les milliers par une espace fine insécable (U+202F) absente
+    // de la police Helvetica de jsPDF → s'affiche en barre. On met une espace simple.
+    .replace(/[\u202f\u00a0]/g, ' ') + ' €'
 
 function chargerImage(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {

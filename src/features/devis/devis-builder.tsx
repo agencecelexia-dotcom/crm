@@ -35,9 +35,9 @@ const UNITES = ['u', 'm²', 'ml', 'm³', 'forfait', 'h', 'j', 'ens.']
 
 // Montant avec centimes (les devis ont besoin du détail à 2 décimales).
 const euro2 = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    n || 0,
-  ) + ' €'
+  new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(n || 0)
+    .replace(/[\u202f\u00a0]/g, ' ') + ' €'
 
 interface LigneState {
   designation: string
