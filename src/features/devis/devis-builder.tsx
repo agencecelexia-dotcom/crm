@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { formatEuros } from '@/lib/format'
 import { uploaderDevisGenere } from '@/lib/storage'
 import type { ArtisanEspace } from '@/types/database'
 import { telechargerDevis, devisEnBlob, type DevisData } from './devis-pdf'
@@ -33,6 +32,12 @@ import {
 } from './use-devis'
 
 const UNITES = ['u', 'm²', 'ml', 'm³', 'forfait', 'h', 'j', 'ens.']
+
+// Montant avec centimes (les devis ont besoin du détail à 2 décimales).
+const euro2 = (n: number) =>
+  new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+    n || 0,
+  ) + ' €'
 
 interface LigneState {
   designation: string
@@ -281,6 +286,7 @@ export function DevisBuilder({
                   rows={2}
                   aria-label="Désignation"
                 />
+                {/* Rangée 1 : quantité + unité + total de ligne + supprimer */}
                 <div className="flex items-center gap-2">
                   <Input
                     type="text"
@@ -288,11 +294,11 @@ export function DevisBuilder({
                     placeholder="Qté"
                     value={l.quantite}
                     onChange={(e) => majLigne(i, 'quantite', e.target.value)}
-                    className="h-10 w-20"
+                    className="h-11 w-16 shrink-0"
                     aria-label="Quantité"
                   />
                   <Select value={l.unite} onValueChange={(v) => majLigne(i, 'unite', v)}>
-                    <SelectTrigger className="h-10 w-24">
+                    <SelectTrigger className="h-11 w-24 shrink-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -303,20 +309,8 @@ export function DevisBuilder({
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="relative flex-1">
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="Prix unitaire"
-                      value={l.prix_unitaire}
-                      onChange={(e) => majLigne(i, 'prix_unitaire', e.target.value)}
-                      className="h-10 pr-7"
-                      aria-label="Prix unitaire"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
-                  </div>
-                  <span className="w-24 shrink-0 text-right text-sm font-medium">
-                    {formatEuros(num(l.quantite) * num(l.prix_unitaire))}
+                  <span className="min-w-0 flex-1 truncate text-right text-sm font-medium">
+                    {euro2(num(l.quantite) * num(l.prix_unitaire))}
                   </span>
                   {lignes.length > 1 && (
                     <Button
@@ -330,6 +324,19 @@ export function DevisBuilder({
                     </Button>
                   )}
                 </div>
+                {/* Rangée 2 : prix unitaire en pleine largeur (grande zone tactile mobile) */}
+                <div className="relative">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Prix unitaire"
+                    value={l.prix_unitaire}
+                    onChange={(e) => majLigne(i, 'prix_unitaire', e.target.value)}
+                    className="h-11 w-full pr-8"
+                    aria-label="Prix unitaire"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
+                </div>
               </div>
             ))}
             <Button variant="outline" className="w-full" onClick={ajouterLigne}>
@@ -341,7 +348,7 @@ export function DevisBuilder({
           {/* Total */}
           <div className="flex items-center justify-between rounded-xl bg-primary/5 p-3">
             <span className="text-sm font-medium">Net à payer</span>
-            <span className="montant text-xl font-semibold text-primary">{formatEuros(total)}</span>
+            <span className="montant text-xl font-semibold text-primary">{euro2(total)}</span>
           </div>
           <p className="text-xs text-muted-foreground">TVA non applicable, art. 293 B du CGI.</p>
 

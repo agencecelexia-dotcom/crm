@@ -48,8 +48,9 @@ export function useCreerDevis(token: string | undefined) {
   })
 }
 
-/** Enregistre l'URL du PDF généré sur le devis. */
+/** Enregistre l'URL du PDF généré sur le devis (+ rafraîchit « Mes devis »). */
 export function useSetDevisPdf(token: string | undefined) {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, url }: { id: string; url: string }) => {
       const { error } = await supabase.rpc('set_devis_pdf_by_token', {
@@ -59,6 +60,7 @@ export function useSetDevisPdf(token: string | undefined) {
       })
       if (error) throw error
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['devis', token] }),
   })
 }
 
