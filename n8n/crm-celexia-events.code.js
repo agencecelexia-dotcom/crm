@@ -179,6 +179,17 @@ if (d.event === 'envoyer_lien_mission') {
     <p style="margin:0 0 10px;color:#374151;font-size:15px;line-height:1.5;">${list.length} projet(s) attendent un artisan, triés par budget :</p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">${rows}</table>
     ${btn('https://crm-ci7k.vercel.app/projets', 'Attribuer maintenant →')}`);
+} else if (d.event === 'rappel_interne') {
+  to = d.to || AGENCE;                         // ➜ équipe interne (boîte agence par défaut)
+  const nom = (d.pour || '').trim();
+  const qui = nom ? capG(nom).toUpperCase() : '';
+  subject = '🔔 ' + (qui ? qui + ' ' : '') + "T'AS DU TAFF !" + (d.titre ? ' — ' + d.titre : '');
+  html = frame(`
+    <h1 style="margin:0 0 12px;font-size:21px;color:#111827;">🔔 ${qui ? esc(qui) + ", t'as du taff !" : "T'as du taff !"}</h1>
+    <p style="margin:0 0 8px;color:#111827;font-size:16px;line-height:1.5;font-weight:bold;">${esc(d.titre)}</p>
+    ${d.details ? `<p style="margin:0 0 10px;color:#374151;font-size:14px;line-height:1.6;">${esc(d.details)}</p>` : ''}
+    ${d.echeance ? `<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">⏰ Pour le <b>${esc(d.echeance)}</b></p>` : ''}
+    ${d.lien ? btn(esc(d.lien), 'Ouvrir dans le CRM →') : ''}`);
 } else {
   return []; // événement inconnu → aucun envoi
 }

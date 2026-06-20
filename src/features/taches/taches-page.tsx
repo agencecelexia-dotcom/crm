@@ -21,6 +21,7 @@ import { formatTel } from '@/lib/format'
 import {
   useTaches,
   useAjouterTache,
+  useAjouterRappel,
   useToggleTache,
   useAppelSansReponse,
   useEncaisserCommission,
@@ -35,6 +36,7 @@ const CAT: Record<string, { emoji: string; label: string; color: string }> = {
   devis: { emoji: '📄', label: 'Devis', color: '#0EA5E9' },
   commission: { emoji: '💰', label: 'Commission', color: '#22C55E' },
   appel: { emoji: '📞', label: 'Appel', color: '#6366F1' },
+  rappel: { emoji: '⏰', label: 'Rappel', color: '#7C3AED' },
   autre: { emoji: '📝', label: 'Tâche', color: '#64748B' },
 }
 const PRIO: Record<number, { label: string; color: string }> = {
@@ -46,10 +48,13 @@ const PRIO: Record<number, { label: string; color: string }> = {
 export function TachesPage() {
   const { data: taches, isLoading } = useTaches()
   const ajouter = useAjouterTache()
+  const rappeler = useAjouterRappel()
   const [ouvert, setOuvert] = useState(false)
   const [titre, setTitre] = useState('')
   const [tel, setTel] = useState('')
   const [prio, setPrio] = useState('2')
+  const [quand, setQuand] = useState('') // datetime-local → si rempli = rappel daté + email
+  const [pour, setPour] = useState('') // nom dans l'objet du mail (« Thomas »)
 
   const [now] = useState(() => Date.now())
   const snoozed = (t: Tache) => !!t.rappel_at && new Date(t.rappel_at).getTime() > now
@@ -73,19 +78,48 @@ export function TachesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taches])
 
+  function reset() {
+    setTitre('')
+    setTel('')
+    setPrio('2')
+    setQuand('')
+    setPour('')
+    setOuvert(false)
+  }
+
   function ajouterTache() {
     if (!titre.trim()) return toast.error('Donnez un titre à la tâche')
+    const onError = (e: unknown) =>
+      toast.error('Échec', { description: e instanceof Error ? e.message : undefined })
+
+    // Une date renseignée → RAPPEL daté (email à l'échéance + tâche dans la liste).
+    if (quand) {
+      rappeler.mutate(
+        {
+          titre: titre.trim(),
+          priorite: Number(prio),
+          rappel_at: new Date(quand).toISOString(),
+          pour: pour.trim() || undefined,
+        },
+        {
+          onSuccess: () => {
+            toast.success('Rappel programmé — tu recevras un email à l\'heure dite')
+            reset()
+          },
+          onError,
+        },
+      )
+      return
+    }
+
     ajouter.mutate(
       { titre: titre.trim(), tel: tel.trim() || undefined, priorite: Number(prio) },
       {
         onSuccess: () => {
           toast.success('Tâche ajoutée')
-          setTitre('')
-          setTel('')
-          setPrio('2')
-          setOuvert(false)
+          reset()
         },
-        onError: (e) => toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
+        onError,
       },
     )
   }
@@ -115,13 +149,15 @@ export function TachesPage() {
             autoFocus
           />
           <div className="flex gap-2">
-            <Input
-              placeholder="Téléphone (facultatif)"
-              value={tel}
-              onChange={(e) => setTel(e.target.value)}
-              className="h-11 flex-1"
-              inputMode="tel"
-            />
+            {!quand && (
+              <Input
+                placeholder="Téléphone (facultatif)"
+                value={tel}
+                onChange={(e) => setTel(e.target.value)}
+                className="h-11 flex-1"
+                inputMode="tel"
+              />
+            )}
             <Select value={prio} onValueChange={setPrio}>
               <SelectTrigger className="h-11 w-36">
                 <SelectValue />
@@ -133,9 +169,42 @@ export function TachesPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button className="w-full" onClick={ajouterTache} disabled={ajouter.isPending}>
-            {ajouter.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-            Ajouter à ma liste
+
+          {/* Rappel daté : si une date est mise, ça devient un rappel (email à l'échéance). */}
+          <div className="rounded-xl border border-dashed border-[#7C3AED]/30 bg-[#7C3AED]/5 p-3">
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[#6D28D9]">
+              <Clock className="size-3.5" />
+              Me le rappeler le… (optionnel → email + tâche à la date)
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="datetime-local"
+                value={quand}
+                onChange={(e) => setQuand(e.target.value)}
+                className="h-11 flex-1"
+              />
+              {quand && (
+                <Input
+                  placeholder="Pour qui ? (objet du mail, ex. Thomas)"
+                  value={pour}
+                  onChange={(e) => setPour(e.target.value)}
+                  className="h-11 flex-1"
+                />
+              )}
+            </div>
+          </div>
+
+          <Button
+            className="w-full"
+            onClick={ajouterTache}
+            disabled={ajouter.isPending || rappeler.isPending}
+          >
+            {ajouter.isPending || rappeler.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            {quand ? 'Programmer le rappel' : 'Ajouter à ma liste'}
           </Button>
         </Card>
       )}
@@ -238,13 +307,26 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
 
           {t.details && <p className="mt-0.5 truncate pl-8 text-xs text-muted-foreground">{t.details}</p>}
 
-          {(t.nb_appels > 0 || snoozed) && (
-            <p className="mt-1 flex items-center gap-1 pl-8 text-[11px] text-muted-foreground">
+          {(t.nb_appels > 0 || snoozed || (t.categorie === 'rappel' && t.rappel_at)) && (
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-8 text-[11px] text-muted-foreground">
               {t.nb_appels > 0 && <span>📞 appelé {t.nb_appels}×</span>}
-              {snoozed && (
+              {t.categorie === 'rappel' && t.rappel_at ? (
                 <span className="flex items-center gap-0.5">
-                  <Clock className="size-3" /> à rappeler plus tard
+                  <Clock className="size-3" /> rappel le{' '}
+                  {new Date(t.rappel_at).toLocaleString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                  {t.notifie_at ? ' · email envoyé ✓' : ''}
                 </span>
+              ) : (
+                snoozed && (
+                  <span className="flex items-center gap-0.5">
+                    <Clock className="size-3" /> à rappeler plus tard
+                  </span>
+                )
               )}
             </p>
           )}

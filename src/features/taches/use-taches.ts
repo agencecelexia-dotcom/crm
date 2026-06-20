@@ -17,6 +17,9 @@ export interface Tache {
   nb_appels: number
   dernier_appel: string | null
   rappel_at: string | null
+  notifie_at: string | null
+  rappel_pour: string | null
+  rappel_email: string | null
   created_at: string
 }
 
@@ -50,6 +53,35 @@ export function useAjouterTache() {
         tel: t.tel || null,
         type: 'manuel',
         categorie: t.tel ? 'appel' : 'autre',
+      })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qc_key }),
+  })
+}
+
+/** Crée un RAPPEL : une tâche datée (categorie='rappel') qui s'envoie aussi par
+ *  email à l'échéance (cf. traiter_rappels côté base). Apparaît dans la to-do. */
+export function useAjouterRappel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (t: {
+      titre: string
+      details?: string
+      priorite?: number
+      rappel_at: string // ISO (datetime de l'échéance)
+      pour?: string // nom pour l'objet du mail (« Thomas »)
+      projet_id?: string
+    }) => {
+      const { error } = await supabase.from('taches').insert({
+        titre: t.titre,
+        details: t.details || null,
+        priorite: t.priorite ?? 2,
+        type: 'manuel',
+        categorie: 'rappel',
+        rappel_at: t.rappel_at,
+        rappel_pour: t.pour || null,
+        projet_id: t.projet_id || null,
       })
       if (error) throw error
     },
