@@ -33,6 +33,7 @@ import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { ProjetPhotos } from '../components/projet-photos'
 import { SuiviCard } from '../components/suivi-card'
+import { NotesInternesCard } from '../components/notes-internes-card'
 import { RelancesProjetCard } from '@/features/automatisations/relances-projet-card'
 import { DocumentRow } from '../components/document-row'
 import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
@@ -190,8 +191,11 @@ export function ProjetDetailPage() {
       {/* Photos du chantier (vues par l'artisan après signature) */}
       <ProjetPhotos projet={projet} />
 
-      {/* Suivi du chantier (parcours déclaré par l'artisan + notes) */}
+      {/* Suivi du chantier (parcours déclaré par l'artisan + notes) — PARTAGÉ avec l'artisan */}
       <SuiviCard projetId={projet.id} />
+
+      {/* Notes internes PRIVÉES (agence uniquement — jamais visibles par l'artisan) */}
+      <NotesInternesCard projetId={projet.id} valeur={projet.notes_internes} />
 
       {/* Relances automatiques (anti-inaction) */}
       <RelancesProjetCard projetId={projet.id} />

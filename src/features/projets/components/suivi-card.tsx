@@ -44,7 +44,7 @@ export function SuiviCard({ projetId }: { projetId: string }) {
 
         <div className="space-y-2 border-t border-border pt-3">
           <Textarea
-            placeholder="Note interne (visible aussi par l'artisan dans son espace)…"
+            placeholder="Message de suivi — VISIBLE par l'artisan dans son espace…"
             value={msg}
             onChange={(e) => setMsg(e.target.value)}
             rows={2}
