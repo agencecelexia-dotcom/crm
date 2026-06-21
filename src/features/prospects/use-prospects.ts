@@ -71,11 +71,13 @@ export function useConvertirEnArtisan() {
     mutationFn: async ({
       prospectId,
       sousMetiers = [],
-      rayonKm = 30,
+      rayonKm = null,
+      departements = [],
     }: {
       prospectId: string
       sousMetiers?: string[]
-      rayonKm?: number
+      rayonKm?: number | null // mode rayon (km autour de l'adresse)
+      departements?: string[] // mode départements desservis
     }): Promise<string> => {
       const { data: p, error: e1 } = await supabase
         .from('prospects')
@@ -94,6 +96,7 @@ export function useConvertirEnArtisan() {
           metiers: p.metiers ?? [],
           sous_metiers: sousMetiers,
           rayon_km: rayonKm,
+          departements_couverts: departements,
           adresse: p.address && p.address !== '·' ? p.address : null,
           ville: p.city,
           code_postal: p.code_postal,

@@ -25,7 +25,8 @@ export interface Artisan {
   metiers: string[]
   sous_metiers: string[]
   zone_intervention: string | null
-  rayon_km: number | null
+  rayon_km: number | null // rayon de service autour de l'adresse (mode rayon)
+  departements_couverts: string[] // départements desservis déclarés (mode départements)
   adresse: string | null
   ville: string | null
   code_postal: string | null
@@ -51,8 +52,15 @@ export interface Artisan {
 /** Données d'insertion / mise à jour d'un artisan (champs gérés par la base exclus). */
 export type ArtisanInput = Omit<
   Artisan,
-  'id' | 'token' | 'contrat_externe' | 'ecarte_at' | 'ecarte_motif' | 'created_at' | 'updated_at'
->
+  | 'id'
+  | 'token'
+  | 'contrat_externe'
+  | 'ecarte_at'
+  | 'ecarte_motif'
+  | 'created_at'
+  | 'updated_at'
+  | 'departements_couverts'
+> & { departements_couverts?: string[] }
 
 /** Statut de démarchage d'une société (prospect). */
 export type StatutProspect =

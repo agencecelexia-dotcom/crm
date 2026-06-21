@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -103,6 +104,8 @@ export function ProspectRow({ p }: { p: Prospect }) {
   const [recruiting, setRecruiting] = useState(false)
   const [sousNiches, setSousNiches] = useState<string[]>([])
   const [rayon, setRayon] = useState(30)
+  const [coverageMode, setCoverageMode] = useState<'rayon' | 'departements'>('rayon')
+  const [deptsInput, setDeptsInput] = useState(p.code_postal?.slice(0, 2) ?? '')
   const busy = maj.isPending || pasRep.isPending || convertir.isPending
 
   const tel = p.tel || p.tel2
@@ -110,6 +113,23 @@ export function ProspectRow({ p }: { p: Prospect }) {
     setTags((t) => (t.includes(m) ? t.filter((x) => x !== m) : [...t, m]))
   const toggleSousNiche = (s: string) =>
     setSousNiches((t) => (t.includes(s) ? t.filter((x) => x !== s) : [...t, s]))
+  // Coche / décoche TOUTES les sous-niches d'un métier ("clôture générale").
+  const toggleToutMetier = (m: string) => {
+    const all = SOUS_METIERS[m] ?? []
+    setSousNiches((cur) =>
+      all.every((s) => cur.includes(s))
+        ? cur.filter((s) => !all.includes(s))
+        : [...new Set([...cur, ...all])],
+    )
+  }
+  const parseDepts = (s: string) => [
+    ...new Set(
+      s
+        .split(/[\s,;]+/)
+        .map((x) => x.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ]
 
   return (
     <Card className="space-y-2 p-3.5">
@@ -187,13 +207,26 @@ export function ProspectRow({ p }: { p: Prospect }) {
           </div>
         </div>
       ) : recruiting ? (
-        <div className="space-y-2 rounded-lg border border-border p-2">
-          <p className="text-xs font-medium">Recruter comme apporteur — que fait-il exactement ?</p>
+        <div className="space-y-3 rounded-lg border border-border p-2">
+          <p className="text-xs font-medium">Recruter comme apporteur</p>
+
+          {/* 1) Ce qu'il fait — coche les sous-niches (ou « tout le métier ») */}
           <div className="space-y-2">
             {(p.metiers?.length ? p.metiers : METIERS).map((m) =>
               SOUS_METIERS[m] ? (
                 <div key={m} className="space-y-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground">{m}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-muted-foreground">{m}</p>
+                    <button
+                      type="button"
+                      onClick={() => toggleToutMetier(m)}
+                      className="text-[11px] font-medium text-primary hover:underline"
+                    >
+                      {(SOUS_METIERS[m] ?? []).every((s) => sousNiches.includes(s))
+                        ? 'Tout retirer'
+                        : 'Tout le métier'}
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {SOUS_METIERS[m].map((s) => (
                       <button
@@ -215,21 +248,59 @@ export function ProspectRow({ p }: { p: Prospect }) {
               ) : null,
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Rayon d'intervention</span>
-            <Select value={String(rayon)} onValueChange={(v) => setRayon(Number(v))}>
-              <SelectTrigger className="h-9 w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[15, 30, 50, 80].map((r) => (
-                  <SelectItem key={r} value={String(r)}>
-                    {r} km
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+          {/* 2) Zone desservie — rayon autour de son adresse OU liste de départements */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-medium">Zone desservie :</span>
+              {(['rayon', 'departements'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setCoverageMode(mode)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                    coverageMode === mode
+                      ? 'border-transparent bg-primary text-primary-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:bg-accent',
+                  )}
+                >
+                  {mode === 'rayon' ? 'Rayon (km)' : 'Départements'}
+                </button>
+              ))}
+            </div>
+            {coverageMode === 'rayon' ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Autour de son adresse :</span>
+                <Select value={String(rayon)} onValueChange={(v) => setRayon(Number(v))}>
+                  <SelectTrigger className="h-9 w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[15, 30, 50, 80, 120].map((r) => (
+                      <SelectItem key={r} value={String(r)}>
+                        {r} km
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Input
+                  value={deptsInput}
+                  onChange={(e) => setDeptsInput(e.target.value)}
+                  placeholder="Départements desservis (ex. 35 44 56)"
+                  className="h-9"
+                  inputMode="numeric"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Sépare par des espaces ou des virgules.
+                </p>
+              </div>
+            )}
           </div>
+
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="flex-1" onClick={() => setRecruiting(false)}>
               Annuler
@@ -237,10 +308,21 @@ export function ProspectRow({ p }: { p: Prospect }) {
             <Button
               size="sm"
               className="flex-1"
-              disabled={busy || sousNiches.length === 0}
+              disabled={
+                busy ||
+                sousNiches.length === 0 ||
+                (coverageMode === 'departements' && parseDepts(deptsInput).length === 0)
+              }
               onClick={() =>
                 convertir.mutate(
-                  { prospectId: p.id, sousMetiers: sousNiches, rayonKm: rayon },
+                  coverageMode === 'rayon'
+                    ? { prospectId: p.id, sousMetiers: sousNiches, rayonKm: rayon }
+                    : {
+                        prospectId: p.id,
+                        sousMetiers: sousNiches,
+                        departements: parseDepts(deptsInput),
+                        rayonKm: null,
+                      },
                   {
                     onSuccess: () =>
                       toast.success(`${p.company_name || 'Société'} recruté comme apporteur`),
