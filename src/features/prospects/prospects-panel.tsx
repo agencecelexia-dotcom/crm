@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Phone, PhoneOff, Ban, Tag, Check, UserPlus, Loader2, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -96,6 +97,7 @@ export function ProspectsPanel({
 }
 
 export function ProspectRow({ p }: { p: Prospect }) {
+  const navigate = useNavigate()
   const maj = useMajProspect()
   const pasRep = usePasDeReponse()
   const convertir = useConvertirEnArtisan()
@@ -324,8 +326,10 @@ export function ProspectRow({ p }: { p: Prospect }) {
                         rayonKm: null,
                       },
                   {
-                    onSuccess: () =>
-                      toast.success(`${p.company_name || 'Société'} recruté comme apporteur`),
+                    onSuccess: (artisanId) => {
+                      toast.success(`${p.company_name || 'Société'} recruté — complète sa fiche`)
+                      navigate(`/artisans/${artisanId}`)
+                    },
                     onError: (e) =>
                       toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
                   },
