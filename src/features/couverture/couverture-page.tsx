@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Search, MapPin, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page-header'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
@@ -12,13 +16,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { METIERS, SOUS_METIERS } from '@/lib/constants'
+import { geocoder } from '@/lib/geocoding'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { ProspectsPanel } from '@/features/prospects/prospects-panel'
 import { CouvertureTableau } from './couverture-tableau'
 import { CouvertureCarte } from './couverture-carte'
 import { useCouvertureGrille, CIBLE_COUVERTURE } from './use-couverture'
 
-type Drill = { lat: number; lon: number; nom: string }
+// Quand on ouvre la liste d'appel : metier = null → toutes les sociétés (recherche
+// par ville) ; metier renseigné → pré-filtré sur le métier (clic carte/tableau).
+type Drill = { lat: number; lon: number; nom: string; metier: string | null }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -34,7 +41,7 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 export function CouverturePage() {
   const [params, setParams] = useSearchParams()
   const metier = params.get('metier') ?? METIERS[0]
-  const onglet = params.get('vue') ?? 'tableau'
+  const onglet = params.get('vue') ?? 'carte'
   const sousParam = params.get('sous') ?? 'tous'
   const sousMetier = (SOUS_METIERS[metier] ?? []).includes(sousParam) ? sousParam : 'tous'
 
@@ -50,6 +57,8 @@ export function CouverturePage() {
     )
 
   const [drill, setDrill] = useState<Drill | null>(null)
+  const [ville, setVille] = useState('')
+  const [geocodage, setGeocodage] = useState(false)
   const { data: cells } = useCouvertureGrille(metier)
   const { data: artisans } = useArtisans()
 
@@ -63,6 +72,26 @@ export function CouverturePage() {
 
   const sansCoord = (artisans ?? []).filter((a) => a.ecarte_at == null && a.latitude == null).length
 
+  // Recherche par ville : géocode et ouvre la liste de TOUTES les sociétés autour.
+  async function chercherVille() {
+    if (!ville.trim()) return toast.error('Indique une ville')
+    setGeocodage(true)
+    try {
+      const c = await geocoder(`${ville.trim()}, France`)
+      if (!c) {
+        toast.error('Ville introuvable')
+        return
+      }
+      setDrill({ lat: c.lat, lon: c.lon, nom: ville.trim(), metier: null })
+    } finally {
+      setGeocodage(false)
+    }
+  }
+
+  // Clic sur une ville (carte) ou une cellule (tableau) : pré-filtré sur le métier courant.
+  const drillMetier = (z: { lat: number; lon: number; nom: string }) =>
+    setDrill({ ...z, metier })
+
   return (
     <div>
       <PageHeader
@@ -70,7 +99,7 @@ export function CouverturePage() {
         sousTitre={`Objectif : ${CIBLE_COUVERTURE} apporteurs par zone × sous-niche`}
       />
 
-      <div className="mb-3">
+      <div className="mb-3 space-y-2">
         <Select value={metier} onValueChange={(v) => setParam('metier', v, '')}>
           <SelectTrigger className="h-11 w-full sm:w-64">
             <SelectValue placeholder="Métier" />
@@ -83,6 +112,24 @@ export function CouverturePage() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* Recherche par ville → toutes les sociétés autour, à appeler */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <MapPin className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-11 pl-9"
+              placeholder="Une ville → toutes les sociétés autour à appeler (ex. Rennes)"
+              value={ville}
+              onChange={(e) => setVille(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && chercherVille()}
+            />
+          </div>
+          <Button className="h-11" onClick={chercherVille} disabled={geocodage}>
+            {geocodage ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+            Voir autour
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -92,15 +139,11 @@ export function CouverturePage() {
         <Stat label="Artisans sans GPS" value={`${sansCoord}`} />
       </div>
 
-      <Tabs value={onglet} onValueChange={(v) => setParam('vue', v, 'tableau')}>
+      <Tabs value={onglet} onValueChange={(v) => setParam('vue', v, 'carte')}>
         <TabsList className="mb-3">
-          <TabsTrigger value="tableau">Tableau</TabsTrigger>
           <TabsTrigger value="carte">Carte</TabsTrigger>
+          <TabsTrigger value="tableau">Tableau</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="tableau">
-          <CouvertureTableau metier={metier} onDrill={setDrill} />
-        </TabsContent>
 
         <TabsContent value="carte">
           <div className="mb-2">
@@ -121,8 +164,12 @@ export function CouverturePage() {
           <CouvertureCarte
             metier={metier}
             sousMetier={sousMetier === 'tous' ? null : sousMetier}
-            onDrill={setDrill}
+            onDrill={drillMetier}
           />
+        </TabsContent>
+
+        <TabsContent value="tableau">
+          <CouvertureTableau metier={metier} onDrill={drillMetier} />
         </TabsContent>
       </Tabs>
 
@@ -130,7 +177,7 @@ export function CouverturePage() {
         <ProspectsPanel
           lat={drill.lat}
           lon={drill.lon}
-          metierDefault={metier}
+          metierDefault={drill.metier}
           contexte={drill.nom}
           onClose={() => setDrill(null)}
         />

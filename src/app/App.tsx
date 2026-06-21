@@ -12,7 +12,6 @@ import { DashboardPage } from '@/features/dashboard/dashboard-page'
 import { CartePage } from '@/features/carte/carte-page'
 import { CommissionsPage } from '@/features/commissions/commissions-page'
 import { TachesPage } from '@/features/taches/taches-page'
-import { DemarchagePage } from '@/features/prospects/demarchage-page'
 import { CouverturePage } from '@/features/couverture/couverture-page'
 import { NotesPage } from '@/features/notes/notes-page'
 import { ProjetsListPage } from '@/features/projets/pages/projets-list-page'
@@ -60,7 +59,6 @@ export default function App() {
                 <Route path="/projets/:id" element={<ProjetDetailPage />} />
                 <Route path="/projets/:id/edit" element={<ProjetEditPage />} />
 
-                <Route path="/demarchage" element={<DemarchagePage />} />
                 <Route path="/couverture" element={<CouverturePage />} />
                 <Route path="/artisans" element={<ArtisansListPage />} />
                 <Route path="/artisans/stats" element={<ArtisansStatsPage />} />
