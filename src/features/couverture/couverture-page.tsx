@@ -18,13 +18,13 @@ import {
 import { METIERS, SOUS_METIERS } from '@/lib/constants'
 import { geocoder } from '@/lib/geocoding'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
-import { ProspectsPanel } from '@/features/prospects/prospects-panel'
 import { CouvertureTableau } from './couverture-tableau'
 import { CouvertureCarte } from './couverture-carte'
+import { ListeAutour } from './liste-autour'
 import { useCouvertureGrille, CIBLE_COUVERTURE } from './use-couverture'
 
-// Quand on ouvre la liste d'appel : metier = null → toutes les sociétés (recherche
-// par ville) ; metier renseigné → pré-filtré sur le métier (clic carte/tableau).
+// Cible de la liste d'appel : metier = null → toutes les sociétés (recherche par
+// ville) ; metier renseigné → pré-filtré sur le métier (clic carte/tableau).
 type Drill = { lat: number; lon: number; nom: string; metier: string | null }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -132,6 +132,18 @@ export function CouverturePage() {
         </div>
       </div>
 
+      {/* Résultats INLINE : la liste des sociétés autour, juste sous la recherche */}
+      {drill && (
+        <ListeAutour
+          key={`${drill.lat},${drill.lon}`}
+          lat={drill.lat}
+          lon={drill.lon}
+          nom={drill.nom}
+          metierInit={drill.metier}
+          onClose={() => setDrill(null)}
+        />
+      )}
+
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat label="Couverture" value={`${stats.pct}%`} color="#22C55E" />
         <Stat label="Cellules couvertes" value={`${stats.couvert}/${stats.total}`} />
@@ -172,16 +184,6 @@ export function CouverturePage() {
           <CouvertureTableau metier={metier} onDrill={drillMetier} />
         </TabsContent>
       </Tabs>
-
-      {drill && (
-        <ProspectsPanel
-          lat={drill.lat}
-          lon={drill.lon}
-          metierDefault={drill.metier}
-          contexte={drill.nom}
-          onClose={() => setDrill(null)}
-        />
-      )}
     </div>
   )
 }
