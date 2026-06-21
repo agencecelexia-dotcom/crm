@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { METIERS } from '@/lib/constants'
+import { METIERS, SOUS_METIERS } from '@/lib/constants'
 import { formatTel } from '@/lib/format'
 import type { Prospect } from '@/types/database'
 import {
@@ -100,11 +100,16 @@ export function ProspectRow({ p }: { p: Prospect }) {
   const convertir = useConvertirEnArtisan()
   const [tagging, setTagging] = useState(false)
   const [tags, setTags] = useState<string[]>(p.metiers ?? [])
+  const [recruiting, setRecruiting] = useState(false)
+  const [sousNiches, setSousNiches] = useState<string[]>([])
+  const [rayon, setRayon] = useState(30)
   const busy = maj.isPending || pasRep.isPending || convertir.isPending
 
   const tel = p.tel || p.tel2
   const toggleTag = (m: string) =>
     setTags((t) => (t.includes(m) ? t.filter((x) => x !== m) : [...t, m]))
+  const toggleSousNiche = (s: string) =>
+    setSousNiches((t) => (t.includes(s) ? t.filter((x) => x !== s) : [...t, s]))
 
   return (
     <Card className="space-y-2 p-3.5">
@@ -181,6 +186,75 @@ export function ProspectRow({ p }: { p: Prospect }) {
             </Button>
           </div>
         </div>
+      ) : recruiting ? (
+        <div className="space-y-2 rounded-lg border border-border p-2">
+          <p className="text-xs font-medium">Recruter comme apporteur — que fait-il exactement ?</p>
+          <div className="space-y-2">
+            {(p.metiers?.length ? p.metiers : METIERS).map((m) =>
+              SOUS_METIERS[m] ? (
+                <div key={m} className="space-y-1">
+                  <p className="text-[11px] font-semibold text-muted-foreground">{m}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {SOUS_METIERS[m].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => toggleSousNiche(s)}
+                        className={cn(
+                          'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                          sousNiches.includes(s)
+                            ? 'border-transparent bg-primary text-primary-foreground'
+                            : 'border-border bg-card text-muted-foreground hover:bg-accent',
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null,
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Rayon d'intervention</span>
+            <Select value={String(rayon)} onValueChange={(v) => setRayon(Number(v))}>
+              <SelectTrigger className="h-9 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[15, 30, 50, 80].map((r) => (
+                  <SelectItem key={r} value={String(r)}>
+                    {r} km
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" onClick={() => setRecruiting(false)}>
+              Annuler
+            </Button>
+            <Button
+              size="sm"
+              className="flex-1"
+              disabled={busy || sousNiches.length === 0}
+              onClick={() =>
+                convertir.mutate(
+                  { prospectId: p.id, sousMetiers: sousNiches, rayonKm: rayon },
+                  {
+                    onSuccess: () =>
+                      toast.success(`${p.company_name || 'Société'} recruté comme apporteur`),
+                    onError: (e) =>
+                      toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
+                  },
+                )
+              }
+            >
+              {convertir.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+              Recruter
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           <Button
@@ -216,15 +290,13 @@ export function ProspectRow({ p }: { p: Prospect }) {
             size="sm"
             className="h-8 rounded-full"
             disabled={busy}
-            onClick={() =>
-              convertir.mutate(p.id, {
-                onSuccess: () => toast.success(`${p.company_name || 'Société'} ajouté aux artisans`),
-                onError: (e) => toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
-              })
-            }
+            onClick={() => {
+              setSousNiches([])
+              setRecruiting(true)
+            }}
           >
-            {convertir.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
-            Intéressé → Artisan
+            <UserPlus className="size-3.5" />
+            Intéressé → Recruter
           </Button>
           {p.google_maps_url && (
             <Button asChild variant="ghost" size="sm" className="h-8 rounded-full text-muted-foreground">

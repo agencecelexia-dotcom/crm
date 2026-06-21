@@ -69,6 +69,7 @@ export interface Prospect {
   company_name: string | null
   profession: string | null
   metiers: string[]
+  sous_metiers: string[]
   tel: string | null
   tel2: string | null
   email: string | null
@@ -81,6 +82,42 @@ export interface Prospect {
   nb_appels: number
   notes: string | null
   distance_km?: number // renvoyé par prospects_autour
+}
+
+/** Une zone de couverture (ville de référence, table zones). */
+export interface Zone {
+  id: string
+  nom: string
+  lat: number
+  lon: number
+  departement: string | null
+  region: string | null
+  population: number | null
+}
+
+export type StatutCouverture = 'couvert' | 'partiel' | 'vide'
+
+/** Une cellule du tableau de couverture (zone × sous-niche) — RPC couverture_grille. */
+export interface CouvertureCell {
+  zone_id: string
+  zone: string
+  lat: number
+  lon: number
+  departement: string | null
+  sous_metier: string
+  n: number
+  statut: StatutCouverture
+}
+
+/** Une zone agrégée pour la carte de couverture — RPC couverture_carte. */
+export interface CouvertureZone {
+  id: string
+  nom: string
+  lat: number
+  lon: number
+  departement: string | null
+  n: number
+  statut: StatutCouverture
 }
 
 /** Un projet = un appel client. */

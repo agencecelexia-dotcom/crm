@@ -63,11 +63,20 @@ export function usePasDeReponse() {
   })
 }
 
-/** Convertit un prospect en artisan (fiche pré-remplie) + marque « converti ». */
+/** Recrute un prospect en artisan (apporteur) : copie la fiche + capture les
+ *  sous-niches qu'il fait et son rayon d'intervention (pour la couverture). */
 export function useConvertirEnArtisan() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (prospectId: string): Promise<string> => {
+    mutationFn: async ({
+      prospectId,
+      sousMetiers = [],
+      rayonKm = 30,
+    }: {
+      prospectId: string
+      sousMetiers?: string[]
+      rayonKm?: number
+    }): Promise<string> => {
       const { data: p, error: e1 } = await supabase
         .from('prospects')
         .select('*')
@@ -83,6 +92,8 @@ export function useConvertirEnArtisan() {
           telephone: p.tel,
           email: p.email,
           metiers: p.metiers ?? [],
+          sous_metiers: sousMetiers,
+          rayon_km: rayonKm,
           adresse: p.address && p.address !== '·' ? p.address : null,
           ville: p.city,
           code_postal: p.code_postal,
@@ -95,7 +106,7 @@ export function useConvertirEnArtisan() {
 
       const { error: e3 } = await supabase
         .from('prospects')
-        .update({ statut: 'converti', artisan_id: a.id })
+        .update({ statut: 'converti', artisan_id: a.id, sous_metiers: sousMetiers })
         .eq('id', prospectId)
       if (e3) throw e3
       return a.id as string
@@ -103,6 +114,7 @@ export function useConvertirEnArtisan() {
     onSuccess: () => {
       invalider(qc)
       qc.invalidateQueries({ queryKey: ['artisans'] })
+      qc.invalidateQueries({ queryKey: ['couverture'] })
     },
   })
 }
