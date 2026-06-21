@@ -104,6 +104,7 @@ export function ProspectRow({ p }: { p: Prospect }) {
   const [tagging, setTagging] = useState(false)
   const [tags, setTags] = useState<string[]>(p.metiers ?? [])
   const [recruiting, setRecruiting] = useState(false)
+  const [metiersSel, setMetiersSel] = useState<string[]>(p.metiers ?? [])
   const [sousNiches, setSousNiches] = useState<string[]>([])
   const [rayon, setRayon] = useState(30)
   const [coverageMode, setCoverageMode] = useState<'rayon' | 'departements'>('rayon')
@@ -115,6 +116,16 @@ export function ProspectRow({ p }: { p: Prospect }) {
     setTags((t) => (t.includes(m) ? t.filter((x) => x !== m) : [...t, m]))
   const toggleSousNiche = (s: string) =>
     setSousNiches((t) => (t.includes(s) ? t.filter((x) => x !== s) : [...t, s]))
+  // Ajoute/retire un métier ; en retirant, on enlève aussi ses sous-niches.
+  const toggleMetier = (m: string) => {
+    const sous = SOUS_METIERS[m] ?? []
+    if (metiersSel.includes(m)) {
+      setMetiersSel(metiersSel.filter((x) => x !== m))
+      setSousNiches((sn) => sn.filter((s) => !sous.includes(s)))
+    } else {
+      setMetiersSel([...metiersSel, m])
+    }
+  }
   // Coche / décoche TOUTES les sous-niches d'un métier ("clôture générale").
   const toggleToutMetier = (m: string) => {
     const all = SOUS_METIERS[m] ?? []
@@ -212,9 +223,31 @@ export function ProspectRow({ p }: { p: Prospect }) {
         <div className="space-y-3 rounded-lg border border-border p-2">
           <p className="text-xs font-medium">Recruter comme apporteur</p>
 
-          {/* 1) Ce qu'il fait — coche les sous-niches (ou « tout le métier ») */}
+          {/* 1) Métiers / services — un paysagiste peut aussi faire clôture, piscine… */}
+          <div className="space-y-1">
+            <p className="text-[11px] font-semibold text-muted-foreground">Métiers / services</p>
+            <div className="flex flex-wrap gap-1.5">
+              {METIERS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => toggleMetier(m)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                    metiersSel.includes(m)
+                      ? 'border-transparent bg-primary text-primary-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:bg-accent',
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 2) Pour chaque métier choisi : ses sous-niches (ou « tout le métier ») */}
           <div className="space-y-2">
-            {(p.metiers?.length ? p.metiers : METIERS).map((m) =>
+            {metiersSel.map((m) =>
               SOUS_METIERS[m] ? (
                 <div key={m} className="space-y-1">
                   <div className="flex items-center justify-between">
@@ -251,7 +284,7 @@ export function ProspectRow({ p }: { p: Prospect }) {
             )}
           </div>
 
-          {/* 2) Zone desservie — rayon autour de son adresse OU liste de départements */}
+          {/* 3) Zone desservie — rayon autour de son adresse OU liste de départements */}
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs font-medium">Zone desservie :</span>
@@ -312,15 +345,21 @@ export function ProspectRow({ p }: { p: Prospect }) {
               className="flex-1"
               disabled={
                 busy ||
-                sousNiches.length === 0 ||
+                metiersSel.length === 0 ||
                 (coverageMode === 'departements' && parseDepts(deptsInput).length === 0)
               }
               onClick={() =>
                 convertir.mutate(
                   coverageMode === 'rayon'
-                    ? { prospectId: p.id, sousMetiers: sousNiches, rayonKm: rayon }
+                    ? {
+                        prospectId: p.id,
+                        metiers: metiersSel,
+                        sousMetiers: sousNiches,
+                        rayonKm: rayon,
+                      }
                     : {
                         prospectId: p.id,
+                        metiers: metiersSel,
                         sousMetiers: sousNiches,
                         departements: parseDepts(deptsInput),
                         rayonKm: null,

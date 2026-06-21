@@ -70,11 +70,13 @@ export function useConvertirEnArtisan() {
   return useMutation({
     mutationFn: async ({
       prospectId,
+      metiers,
       sousMetiers = [],
       rayonKm = null,
       departements = [],
     }: {
       prospectId: string
+      metiers?: string[] // métiers retenus (peut élargir ceux du prospect)
       sousMetiers?: string[]
       rayonKm?: number | null // mode rayon (km autour de l'adresse)
       departements?: string[] // mode départements desservis
@@ -93,7 +95,7 @@ export function useConvertirEnArtisan() {
           societe: p.company_name,
           telephone: p.tel,
           email: p.email,
-          metiers: p.metiers ?? [],
+          metiers: metiers ?? p.metiers ?? [],
           sous_metiers: sousMetiers,
           rayon_km: rayonKm,
           departements_couverts: departements,
