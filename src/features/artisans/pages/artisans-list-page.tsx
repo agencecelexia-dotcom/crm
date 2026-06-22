@@ -28,6 +28,15 @@ export function ArtisansListPage() {
   const { data: signes } = useArtisansSignes()
   const [recherche, setRecherche] = useState('')
   const [metier, setMetier] = useState<string>('tous')
+  const [source, setSource] = useState<string>('tous')
+
+  // Provenances présentes dans la base (null → 'agence').
+  const sources = useMemo(() => {
+    const set = new Set<string>()
+    for (const a of artisans ?? []) set.add(a.source || 'agence')
+    return [...set].sort()
+  }, [artisans])
+  const aDesAuto = sources.some((s) => s.startsWith('auto:'))
 
   const resultats = useMemo(() => {
     if (!artisans) return []
@@ -35,6 +44,10 @@ export function ArtisansListPage() {
     const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
     return artisans.filter((a) => {
       const matchMetier = metier === 'tous' || a.metiers.includes(metier)
+      const src = a.source || 'agence'
+      const matchSource =
+        source === 'tous' ||
+        (source === 'auto' ? src.startsWith('auto:') : src === source)
       const telDigits = (a.telephone ?? '').replace(/\D/g, '')
       const matchTel = qDigits.length >= 2 && telDigits.includes(qDigits)
       const matchTexte =
@@ -43,9 +56,16 @@ export function ArtisansListPage() {
         [a.nom, a.prenom, a.societe, a.ville]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
-      return matchMetier && matchTexte
+      return matchMetier && matchSource && matchTexte
     })
-  }, [artisans, recherche, metier])
+  }, [artisans, recherche, metier, source])
+
+  const labelSource = (s: string) =>
+    s === 'agence'
+      ? "Ajoutés par l'agence"
+      : s.startsWith('auto:')
+        ? 'Lien — ' + (s.slice(5).charAt(0).toUpperCase() + s.slice(6))
+        : s
 
   return (
     <div>
@@ -85,19 +105,36 @@ export function ArtisansListPage() {
             onChange={(e) => setRecherche(e.target.value)}
           />
         </div>
-        <Select value={metier} onValueChange={setMetier}>
-          <SelectTrigger className="h-11 w-full">
-            <SelectValue placeholder="Métier" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="tous">Tous les métiers</SelectItem>
-            {METIERS.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Select value={metier} onValueChange={setMetier}>
+            <SelectTrigger className="h-11 w-full">
+              <SelectValue placeholder="Métier" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tous">Tous les métiers</SelectItem>
+              {METIERS.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger className="h-11 w-full">
+              <SelectValue placeholder="Provenance" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tous">Toutes provenances</SelectItem>
+              {aDesAuto && <SelectItem value="auto">Tous auto-inscrits (lien)</SelectItem>}
+              {sources.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {labelSource(s)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Liste */}
