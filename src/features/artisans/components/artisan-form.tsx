@@ -3,6 +3,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,6 +51,18 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+// Validation stricte (lien public d'auto-inscription) : tous les champs clés requis.
+const strictSchema = schema.extend({
+  telephone: z.string().min(6, 'Téléphone requis'),
+  email: z.string().email('Email requis et valide'),
+  societe: z.string().min(1, 'Société requise'),
+  siren: z.string().min(1, 'SIREN / SIRET requis'),
+  adresse: z.string().min(1, 'Adresse requise'),
+  code_postal: z.string().min(1, 'Code postal requis'),
+  ville: z.string().min(1, 'Ville requise'),
+  metiers: z.array(z.string()).min(1, 'Choisis au moins un métier'),
+})
+
 // Convertit un artisan existant en valeurs de formulaire.
 function valeursParDefaut(artisan?: Artisan): FormValues {
   return {
@@ -84,15 +97,17 @@ export function ArtisanForm({
   submitting,
   submitLabel = 'Enregistrer',
   hideCommission = false,
+  strict = false,
 }: {
   artisan?: Artisan
   onSubmit: (input: ArtisanInput) => void
   submitting?: boolean
   submitLabel?: string
   hideCommission?: boolean // masque le taux de commission (lien public artisan)
+  strict?: boolean // tous les champs clés obligatoires (auto-inscription)
 }) {
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(strict ? strictSchema : schema),
     defaultValues: valeursParDefaut(artisan),
   })
   const [zoneMode, setZoneMode] = useState<'rayon' | 'departements'>(
@@ -112,6 +127,14 @@ export function ArtisanForm({
           .filter(Boolean),
       ),
     ]
+    // Zone obligatoire en mode strict (rayon en km OU au moins un département).
+    if (strict) {
+      const zoneOk = useDepts ? depts.length > 0 : Number.isFinite(rayon) && rayon > 0
+      if (!zoneOk) {
+        toast.error('Indique ta zone : un rayon en km ou des départements.')
+        return
+      }
+    }
     onSubmit({
       nom: values.nom.trim(),
       prenom: clean(values.prenom),
