@@ -20,6 +20,7 @@ import { METIERS } from '@/lib/constants'
 import { formatTel } from '@/lib/format'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { useArtisans } from '../hooks/use-artisans'
+import { LienInscriptionButton } from '../components/lien-inscription-button'
 
 // Liste des artisans : recherche texte + filtre métier.
 export function ArtisansListPage() {
@@ -52,6 +53,7 @@ export function ArtisansListPage() {
         titre="Artisans"
         action={
           <div className="flex items-center gap-2">
+            <LienInscriptionButton />
             <Button asChild variant="ghost" size="icon" aria-label="Performance" title="Performance">
               <Link to="/artisans/stats">
                 <BarChart3 className="size-5" />
