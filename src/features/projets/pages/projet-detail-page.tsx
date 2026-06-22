@@ -37,6 +37,7 @@ import { NotesInternesCard } from '../components/notes-internes-card'
 import { RappelProjetCard } from '../components/rappel-projet-card'
 import { RelancesProjetCard } from '@/features/automatisations/relances-projet-card'
 import { DocumentRow } from '../components/document-row'
+import { DevisProjetCard } from '@/features/devis/devis-projet-card'
 import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
 import type { ProjetInput, StatutProjet } from '@/types/database'
 
@@ -203,6 +204,9 @@ export function ProjetDetailPage() {
 
       {/* Relances automatiques (anti-inaction) */}
       <RelancesProjetCard projetId={projet.id} />
+
+      {/* Devis générés par l'artisan, rattachés à ce dossier */}
+      <DevisProjetCard projetId={projet.id} />
 
       {/* Argent / commission */}
       <MontantsCard projet={projet} />

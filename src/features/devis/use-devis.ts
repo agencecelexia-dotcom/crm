@@ -16,6 +16,25 @@ export function useListeDevis(token: string | undefined) {
   })
 }
 
+/** Devis rattachés à un projet (côté agence, accès authentifié). */
+export function useDevisProjet(projetId: string | undefined) {
+  return useQuery({
+    queryKey: ['devis-projet', projetId],
+    enabled: !!projetId,
+    queryFn: async (): Promise<Devis[]> => {
+      const { data, error } = await supabase
+        .from('devis')
+        .select(
+          'id, numero, client_nom, objet, total, statut, pdf_url, date_devis, sent_at, projet_id',
+        )
+        .eq('projet_id', projetId!)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data as Devis[]) ?? []
+    },
+  })
+}
+
 export interface DevisPayload {
   affectation_token?: string
   client_nom?: string
