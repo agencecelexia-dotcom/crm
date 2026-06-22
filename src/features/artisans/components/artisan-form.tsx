@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -32,6 +33,7 @@ const schema = z.object({
   metiers: z.array(z.string()),
   sous_metiers: z.array(z.string()),
   rayon_km: z.string().optional(), // parsé en nombre au submit
+  departements_couverts: z.string().optional(), // "35 44 56" → array au submit
   adresse: z.string().optional(),
   ville: z.string().optional(),
   code_postal: z.string().optional(),
@@ -59,6 +61,7 @@ function valeursParDefaut(artisan?: Artisan): FormValues {
     metiers: artisan?.metiers ?? [],
     sous_metiers: artisan?.sous_metiers ?? [],
     rayon_km: artisan?.rayon_km != null ? String(artisan.rayon_km) : '',
+    departements_couverts: artisan?.departements_couverts?.join(' ') ?? '',
     adresse: artisan?.adresse ?? '',
     ville: artisan?.ville ?? '',
     code_postal: artisan?.code_postal ?? '',
@@ -80,21 +83,35 @@ export function ArtisanForm({
   onSubmit,
   submitting,
   submitLabel = 'Enregistrer',
+  hideCommission = false,
 }: {
   artisan?: Artisan
   onSubmit: (input: ArtisanInput) => void
   submitting?: boolean
   submitLabel?: string
+  hideCommission?: boolean // masque le taux de commission (lien public artisan)
 }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: valeursParDefaut(artisan),
   })
+  const [zoneMode, setZoneMode] = useState<'rayon' | 'departements'>(
+    artisan?.departements_couverts?.length ? 'departements' : 'rayon',
+  )
 
   function handleSubmit(values: FormValues) {
     // Normalisation vers le type ArtisanInput (chaînes vides → null).
     const clean = (v?: string) => (v && v.trim() ? v.trim() : null)
     const rayon = parseInt(values.rayon_km ?? '', 10)
+    const useDepts = zoneMode === 'departements'
+    const depts = [
+      ...new Set(
+        (values.departements_couverts ?? '')
+          .split(/[\s,;]+/)
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ]
     onSubmit({
       nom: values.nom.trim(),
       prenom: clean(values.prenom),
@@ -103,8 +120,9 @@ export function ArtisanForm({
       email: clean(values.email),
       metiers: values.metiers ?? [],
       sous_metiers: values.sous_metiers ?? [],
-      zone_intervention: null, // champ retiré (ville + rayon suffisent)
-      rayon_km: Number.isFinite(rayon) && rayon > 0 ? rayon : null,
+      zone_intervention: null, // champ retiré (ville + rayon/départements suffisent)
+      rayon_km: useDepts ? null : Number.isFinite(rayon) && rayon > 0 ? rayon : null,
+      departements_couverts: useDepts ? depts : [],
       adresse: clean(values.adresse),
       ville: clean(values.ville),
       code_postal: clean(values.code_postal),
@@ -305,18 +323,62 @@ export function ArtisanForm({
           </div>
         )}
 
-        <FormField
-          control={form.control}
-          name="rayon_km"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Rayon d'intervention (km)</FormLabel>
-              <FormControl>
-                <Input type="number" inputMode="numeric" className="h-11" {...field} />
-              </FormControl>
-            </FormItem>
+        {/* Zone d'intervention : rayon autour de l'adresse OU départements desservis */}
+        <FormItem>
+          <FormLabel>Zone d'intervention</FormLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {(['rayon', 'departements'] as const).map((mode) => (
+              <button
+                type="button"
+                key={mode}
+                onClick={() => setZoneMode(mode)}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  zoneMode === mode
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card text-foreground hover:bg-accent',
+                )}
+              >
+                {mode === 'rayon' ? 'Rayon (km)' : 'Départements'}
+              </button>
+            ))}
+          </div>
+          {zoneMode === 'rayon' ? (
+            <FormField
+              control={form.control}
+              name="rayon_km"
+              render={({ field }) => (
+                <FormItem className="mt-2">
+                  <FormControl>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      className="h-11"
+                      placeholder="Ex. 30"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>Kilomètres autour de l'adresse ci-dessous.</FormDescription>
+                </FormItem>
+              )}
+            />
+          ) : (
+            <FormField
+              control={form.control}
+              name="departements_couverts"
+              render={({ field }) => (
+                <FormItem className="mt-2">
+                  <FormControl>
+                    <Input className="h-11" placeholder="Départements : 35 44 56" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Numéros de départements desservis (séparés par des espaces ou virgules).
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
           )}
-        />
+        </FormItem>
 
         <FormField
           control={form.control}
@@ -432,21 +494,23 @@ export function ArtisanForm({
             />
           </div>
 
-          <FormField
-            control={form.control}
-            name="taux_commission"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Taux de commission par défaut (% TTC)</FormLabel>
-                <FormControl>
-                  <Input type="number" inputMode="decimal" className="h-11" {...field} />
-                </FormControl>
-                <FormDescription>
-                  Repris dans le contrat et proposé par défaut sur ses projets (modifiable par projet).
-                </FormDescription>
-              </FormItem>
-            )}
-          />
+          {!hideCommission && (
+            <FormField
+              control={form.control}
+              name="taux_commission"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Taux de commission par défaut (% TTC)</FormLabel>
+                  <FormControl>
+                    <Input type="number" inputMode="decimal" className="h-11" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Repris dans le contrat et proposé par défaut sur ses projets (modifiable par projet).
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
+          )}
         </div>
 
         <FormField

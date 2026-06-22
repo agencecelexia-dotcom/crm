@@ -45,6 +45,7 @@ export interface Artisan {
   contrat_externe: boolean // contrat signé hors application (pas de signature dans l'espace)
   ecarte_at: string | null // "pas fiable" : écarté (hors liste active) mais conservé
   ecarte_motif: string | null // raison de la mise à l'écart
+  source: string | null // origine : agence | demarchage | auto:facebook | auto:whatsapp …
   created_at: string
   updated_at: string
 }
@@ -57,6 +58,7 @@ export type ArtisanInput = Omit<
   | 'contrat_externe'
   | 'ecarte_at'
   | 'ecarte_motif'
+  | 'source'
   | 'created_at'
   | 'updated_at'
   | 'departements_couverts'

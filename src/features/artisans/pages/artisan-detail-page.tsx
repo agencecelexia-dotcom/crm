@@ -74,6 +74,16 @@ export function ArtisanDetailPage() {
         }
       />
 
+      {artisan.source && (
+        <div className="mb-3 flex justify-center">
+          <Badge variant="secondary">
+            {artisan.source.startsWith('auto:')
+              ? `🌐 Auto-inscrit · ${artisan.source.slice(5)}`
+              : `Source : ${artisan.source}`}
+          </Badge>
+        </div>
+      )}
+
       {/* Total rapporté (KPI) */}
       <Card className="mb-4 bg-primary text-primary-foreground">
         <CardContent className="flex items-center justify-between py-4">
