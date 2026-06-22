@@ -14,6 +14,14 @@ export type StatutProjet =
   | 'termine'
   | 'perdu'
 
+/** Une zone d'intervention = une ville (géocodée) + un rayon (km). */
+export interface ZoneCouverte {
+  ville: string
+  lat: number | null
+  lon: number | null
+  rayon_km: number
+}
+
 /** Un artisan référencé dans la base. */
 export interface Artisan {
   id: string
@@ -25,8 +33,9 @@ export interface Artisan {
   metiers: string[]
   sous_metiers: string[]
   zone_intervention: string | null
-  rayon_km: number | null // rayon de service autour de l'adresse (mode rayon)
+  rayon_km: number | null // rayon de service autour de l'adresse (legacy / mode rayon simple)
   departements_couverts: string[] // départements desservis déclarés (mode départements)
+  zones_couvertes: ZoneCouverte[] // villes + rayon, secteurs non contigus (Nantes 50, Paris 30…)
   adresse: string | null
   ville: string | null
   code_postal: string | null
@@ -66,12 +75,14 @@ export type ArtisanInput = Omit<
   | 'created_at'
   | 'updated_at'
   | 'departements_couverts'
+  | 'zones_couvertes'
   | 'nb_salaries'
   | 'annees_experience'
   | 'assurance_rc_pro'
   | 'assurance_decennale'
 > & {
   departements_couverts?: string[]
+  zones_couvertes?: ZoneCouverte[]
   nb_salaries?: number | null
   annees_experience?: number | null
   assurance_rc_pro?: boolean | null

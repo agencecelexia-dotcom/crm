@@ -27,9 +27,10 @@ import {
 import { cn } from '@/lib/utils'
 import { METIERS, SOUS_METIERS } from '@/lib/constants'
 import { CpVilleFields } from '@/components/cp-ville-fields'
+import { geocoder } from '@/lib/geocoding'
 import { SocieteSearch } from './societe-search'
 import type { ResultatEntreprise } from '@/lib/entreprise'
-import type { Artisan, ArtisanInput } from '@/types/database'
+import type { Artisan, ArtisanInput, ZoneCouverte } from '@/types/database'
 
 // Validation : seul le nom est obligatoire (saisie au fil de l'eau).
 const schema = z.object({
@@ -129,6 +130,39 @@ export function ArtisanForm({
   const [zoneMode, setZoneMode] = useState<'rayon' | 'departements'>(
     artisan?.departements_couverts?.length ? 'departements' : 'rayon',
   )
+  // Zones d'intervention multiples (ville + rayon). Seed depuis l'existant ou le rayon historique.
+  const [zones, setZones] = useState<ZoneCouverte[]>(
+    artisan?.zones_couvertes?.length
+      ? artisan.zones_couvertes
+      : artisan?.rayon_km != null && artisan?.ville
+        ? [
+            {
+              ville: artisan.ville,
+              lat: artisan.latitude,
+              lon: artisan.longitude,
+              rayon_km: artisan.rayon_km,
+            },
+          ]
+        : [],
+  )
+  const [villeZone, setVilleZone] = useState('')
+  const [rayonZone, setRayonZone] = useState(30)
+  const [ajoutZone, setAjoutZone] = useState(false)
+
+  async function ajouterZone() {
+    const v = villeZone.trim()
+    if (!v) return toast.error('Indique une ville')
+    setAjoutZone(true)
+    try {
+      const c = await geocoder(`${v}, France`)
+      if (!c) return toast.error('Ville introuvable')
+      setZones((z) => [...z, { ville: v, lat: c.lat, lon: c.lon, rayon_km: rayonZone }])
+      setVilleZone('')
+    } finally {
+      setAjoutZone(false)
+    }
+  }
+  const retirerZone = (i: number) => setZones((z) => z.filter((_, idx) => idx !== i))
 
   function handleSubmit(values: FormValues) {
     // Normalisation vers le type ArtisanInput (chaînes vides → null).
@@ -136,7 +170,6 @@ export function ArtisanForm({
     const num = (v?: string) => (v && v.trim() ? parseInt(v, 10) : null)
     const ouiNon = (v?: string) => (v === 'oui' ? true : v === 'non' ? false : null)
     const nbSal = num(values.nb_salaries)
-    const rayon = parseInt(values.rayon_km ?? '', 10)
     const useDepts = zoneMode === 'departements'
     const depts = [
       ...new Set(
@@ -148,9 +181,9 @@ export function ArtisanForm({
     ]
     // Zone obligatoire en mode strict (rayon en km OU au moins un département).
     if (strict) {
-      const zoneOk = useDepts ? depts.length > 0 : Number.isFinite(rayon) && rayon > 0
+      const zoneOk = useDepts ? depts.length > 0 : zones.length > 0
       if (!zoneOk) {
-        toast.error('Indique ta zone : un rayon en km ou des départements.')
+        toast.error('Indique ta zone : au moins une ville (+ rayon) ou des départements.')
         return
       }
     }
@@ -162,9 +195,10 @@ export function ArtisanForm({
       email: clean(values.email),
       metiers: values.metiers ?? [],
       sous_metiers: values.sous_metiers ?? [],
-      zone_intervention: null, // champ retiré (ville + rayon/départements suffisent)
-      rayon_km: useDepts ? null : Number.isFinite(rayon) && rayon > 0 ? rayon : null,
+      zone_intervention: null, // champ retiré (zones/départements suffisent)
+      rayon_km: null, // remplacé par zones_couvertes (villes + rayon)
       departements_couverts: useDepts ? depts : [],
+      zones_couvertes: useDepts ? [] : zones,
       adresse: clean(values.adresse),
       ville: clean(values.ville),
       code_postal: clean(values.code_postal),
@@ -387,29 +421,66 @@ export function ArtisanForm({
                     : 'border-border bg-card text-foreground hover:bg-accent',
                 )}
               >
-                {mode === 'rayon' ? 'Rayon (km)' : 'Départements'}
+                {mode === 'rayon' ? 'Villes + rayon' : 'Départements'}
               </button>
             ))}
           </div>
           {zoneMode === 'rayon' ? (
-            <FormField
-              control={form.control}
-              name="rayon_km"
-              render={({ field }) => (
-                <FormItem className="mt-2">
-                  <FormControl>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      className="h-11"
-                      placeholder="Ex. 30"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>Kilomètres autour de l'adresse ci-dessous.</FormDescription>
-                </FormItem>
-              )}
-            />
+            <div className="mt-2 space-y-2">
+              {zones.map((z, i) => (
+                <div
+                  key={`${z.ville}-${i}`}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border p-2"
+                >
+                  <span className="text-sm">
+                    <b>{z.ville}</b> — {z.rayon_km} km
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground"
+                    onClick={() => retirerZone(i)}
+                    aria-label="Retirer"
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ))}
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  className="h-11 flex-1"
+                  placeholder="Ville (ex. Nantes)"
+                  value={villeZone}
+                  onChange={(e) => setVilleZone(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      ajouterZone()
+                    }
+                  }}
+                />
+                <Select value={String(rayonZone)} onValueChange={(v) => setRayonZone(Number(v))}>
+                  <SelectTrigger className="h-11 w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[15, 30, 50, 80, 120, 200, 300].map((r) => (
+                      <SelectItem key={r} value={String(r)}>
+                        {r} km
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" className="h-11" onClick={ajouterZone} disabled={ajoutZone}>
+                  {ajoutZone ? <Loader2 className="size-4 animate-spin" /> : '+'} Ajouter
+                </Button>
+              </div>
+              <FormDescription>
+                Ajoute une ou plusieurs villes avec leur rayon. Idéal pour des secteurs séparés
+                (ex. <b>Nantes 50 km</b> ET <b>Paris 30 km</b>, sans couvrir entre les deux).
+              </FormDescription>
+            </div>
           ) : (
             <FormField
               control={form.control}

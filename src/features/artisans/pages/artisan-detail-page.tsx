@@ -128,11 +128,20 @@ export function ArtisanDetailPage() {
               </span>
             </div>
           )}
-          {artisan.rayon_km != null && (
+          {artisan.zones_couvertes?.length ? (
+            <p className="text-muted-foreground">
+              Zones :{' '}
+              {artisan.zones_couvertes.map((z) => `${z.ville} (${z.rayon_km} km)`).join(' · ')}
+            </p>
+          ) : artisan.departements_couverts?.length ? (
+            <p className="text-muted-foreground">
+              Départements : {artisan.departements_couverts.join(', ')}
+            </p>
+          ) : artisan.rayon_km != null ? (
             <p className="text-muted-foreground">
               Rayon d'intervention : {artisan.rayon_km} km autour de son adresse
             </p>
-          )}
+          ) : null}
 
           {artisan.metiers.length > 0 && (
             <>
