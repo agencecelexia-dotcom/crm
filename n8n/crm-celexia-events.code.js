@@ -199,6 +199,17 @@ if (d.event === 'envoyer_lien_mission') {
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Pour l'instant il n'y a pas encore de chantier. Dès que nous vous en attribuons un, <b>il apparaîtra directement ici</b> — nous vous appellerons pour vous prévenir.</p>
     ${btn(esc(d.lien), 'Accéder à mon espace →')}
     <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Pensez à enregistrer notre numéro : <b>Antoine apporteur d'affaires</b>.</p>`);
+} else if (d.event === 'nouvel_artisan_inscrit') {
+  // ➜ interne (boîte agence par défaut)
+  const canal = capG(d.canal || 'le lien');
+  subject = '🆕 Nouvel artisan inscrit via ' + canal + ' — ' + (d.societe || d.nom || 'Artisan');
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:18px;color:#111827;">🆕 Nouvel artisan inscrit via ${esc(canal)}</h1>
+    <p style="margin:0 0 6px;color:#111827;font-size:15px;"><b>${esc(d.nom)}</b>${d.societe ? ' — ' + esc(d.societe) : ''}</p>
+    ${d.metiers ? `<p style="margin:0 0 4px;color:#374151;font-size:14px;"><b>Métiers :</b> ${esc(d.metiers)}</p>` : ''}
+    <p style="margin:0 0 4px;color:#374151;font-size:14px;">${d.ville ? '<b>Ville :</b> ' + esc(d.ville) : ''}${d.telephone ? ' &nbsp;·&nbsp; <b>Tél :</b> ' + esc(d.telephone) : ''}</p>
+    ${d.email ? `<p style="margin:0 0 4px;color:#374151;font-size:14px;"><b>Email :</b> ${esc(d.email)}</p>` : ''}
+    ${d.lien ? btn(esc(d.lien), 'Ouvrir la fiche artisan →') : ''}`);
 } else {
   return []; // événement inconnu → aucun envoi
 }
