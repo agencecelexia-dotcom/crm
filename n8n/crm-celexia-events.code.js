@@ -190,6 +190,15 @@ if (d.event === 'envoyer_lien_mission') {
     ${d.details ? `<p style="margin:0 0 10px;color:#374151;font-size:14px;line-height:1.6;">${esc(d.details)}</p>` : ''}
     ${d.echeance ? `<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">⏰ Pour le <b>${esc(d.echeance)}</b></p>` : ''}
     ${d.lien ? btn(esc(d.lien), 'Ouvrir dans le CRM →') : ''}`);
+} else if (d.event === 'bienvenue_espace') {
+  to = d.email; if (!to) return [];            // ➜ l'ARTISAN qui vient de signer
+  subject = '🎉 Bienvenue chez Celexia — votre espace partenaire';
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:20px;color:#111827;">${salutG(d)},</h1>
+    <p style="margin:0 0 8px;color:#374151;font-size:15px;line-height:1.5;">Merci, votre contrat d'engagement est <b>signé</b> ✅. Voici votre <b>espace partenaire</b> Celexia.</p>
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Pour l'instant il n'y a pas encore de chantier. Dès que nous vous en attribuons un, <b>il apparaîtra directement ici</b> — nous vous appellerons pour vous prévenir.</p>
+    ${btn(esc(d.lien), 'Accéder à mon espace →')}
+    <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Pensez à enregistrer notre numéro : <b>Antoine apporteur d'affaires</b>.</p>`);
 } else {
   return []; // événement inconnu → aucun envoi
 }

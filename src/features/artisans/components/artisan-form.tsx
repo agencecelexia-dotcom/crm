@@ -17,6 +17,13 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { METIERS, SOUS_METIERS } from '@/lib/constants'
 import { CpVilleFields } from '@/components/cp-ville-fields'
@@ -38,6 +45,10 @@ const schema = z.object({
   adresse: z.string().optional(),
   ville: z.string().optional(),
   code_postal: z.string().optional(),
+  nb_salaries: z.string().optional(),
+  annees_experience: z.string().optional(),
+  assurance_rc_pro: z.string().optional(), // 'oui' | 'non' | ''
+  assurance_decennale: z.string().optional(),
   specificites: z.string().optional(),
   // Société (pour le contrat)
   forme_juridique: z.string().optional(),
@@ -78,6 +89,11 @@ function valeursParDefaut(artisan?: Artisan): FormValues {
     adresse: artisan?.adresse ?? '',
     ville: artisan?.ville ?? '',
     code_postal: artisan?.code_postal ?? '',
+    nb_salaries: artisan?.nb_salaries != null ? String(artisan.nb_salaries) : '',
+    annees_experience: artisan?.annees_experience != null ? String(artisan.annees_experience) : '',
+    assurance_rc_pro: artisan?.assurance_rc_pro == null ? '' : artisan.assurance_rc_pro ? 'oui' : 'non',
+    assurance_decennale:
+      artisan?.assurance_decennale == null ? '' : artisan.assurance_decennale ? 'oui' : 'non',
     specificites: artisan?.specificites ?? '',
     forme_juridique: artisan?.forme_juridique ?? '',
     capital_social: artisan?.capital_social ?? '',
@@ -117,6 +133,9 @@ export function ArtisanForm({
   function handleSubmit(values: FormValues) {
     // Normalisation vers le type ArtisanInput (chaînes vides → null).
     const clean = (v?: string) => (v && v.trim() ? v.trim() : null)
+    const num = (v?: string) => (v && v.trim() ? parseInt(v, 10) : null)
+    const ouiNon = (v?: string) => (v === 'oui' ? true : v === 'non' ? false : null)
+    const nbSal = num(values.nb_salaries)
     const rayon = parseInt(values.rayon_km ?? '', 10)
     const useDepts = zoneMode === 'departements'
     const depts = [
@@ -150,7 +169,12 @@ export function ArtisanForm({
       ville: clean(values.ville),
       code_postal: clean(values.code_postal),
       specificites: clean(values.specificites),
-      forme_juridique: clean(values.forme_juridique),
+      nb_salaries: nbSal,
+      annees_experience: num(values.annees_experience),
+      assurance_rc_pro: ouiNon(values.assurance_rc_pro),
+      assurance_decennale: ouiNon(values.assurance_decennale),
+      // 0 salarié → Entreprise Individuelle (si la forme n'est pas déjà renseignée)
+      forme_juridique: clean(values.forme_juridique) ?? (nbSal === 0 ? 'EI' : null),
       capital_social: clean(values.capital_social),
       siren: clean(values.siren),
       ville_immatriculation: clean(values.ville_immatriculation),
@@ -171,6 +195,7 @@ export function ArtisanForm({
   // CP/Ville observés pour l'autocomplétion croisée.
   const cpVal = useWatch({ control: form.control, name: 'code_postal' }) ?? ''
   const villeVal = useWatch({ control: form.control, name: 'ville' }) ?? ''
+  const nbSalVal = useWatch({ control: form.control, name: 'nb_salaries' }) ?? ''
 
   function toggleMetier(m: string) {
     const set = new Set(metiersSeles)
@@ -429,6 +454,114 @@ export function ArtisanForm({
             form.setValue('ville', v, { shouldDirty: true })
           }}
         />
+
+        {/* ----- Profil de l'entreprise ----- */}
+        <div className="space-y-4 rounded-xl border border-border p-3">
+          <p className="text-sm font-semibold">Profil de l'entreprise</p>
+
+          <FormItem>
+            <FormLabel>Nombre de salariés</FormLabel>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-11 shrink-0 text-lg"
+                onClick={() =>
+                  form.setValue(
+                    'nb_salaries',
+                    String(Math.max(0, (parseInt(nbSalVal || '0', 10) || 0) - 1)),
+                    { shouldDirty: true },
+                  )
+                }
+              >
+                −
+              </Button>
+              <Input
+                className="h-11 w-20 text-center"
+                inputMode="numeric"
+                value={nbSalVal}
+                onChange={(e) =>
+                  form.setValue('nb_salaries', e.target.value.replace(/\D/g, ''), {
+                    shouldDirty: true,
+                  })
+                }
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-11 shrink-0 text-lg"
+                onClick={() =>
+                  form.setValue('nb_salaries', String((parseInt(nbSalVal || '0', 10) || 0) + 1), {
+                    shouldDirty: true,
+                  })
+                }
+              >
+                +
+              </Button>
+              {nbSalVal === '0' && (
+                <span className="text-xs text-muted-foreground">→ Entreprise individuelle (EI)</span>
+              )}
+            </div>
+          </FormItem>
+
+          <FormField
+            control={form.control}
+            name="annees_experience"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Années d'expérience</FormLabel>
+                <FormControl>
+                  <Input type="number" inputMode="numeric" className="h-11" placeholder="Ex. 8" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="assurance_rc_pro"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Assurance RC Pro</FormLabel>
+                  <Select value={field.value || ''} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="oui">Oui</SelectItem>
+                      <SelectItem value="non">Non</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="assurance_decennale"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Garantie décennale</FormLabel>
+                  <Select value={field.value || ''} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="oui">Oui</SelectItem>
+                      <SelectItem value="non">Non</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
 
         {/* ----- Société (pour le contrat) ----- */}
         <div className="space-y-4 rounded-xl border border-border p-3">

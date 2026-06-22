@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { CheckCircle2, Loader2, ArrowRight, ShieldCheck, Phone } from 'lucide-react'
+import { CheckCircle2, Loader2, ArrowRight, ShieldCheck, Phone, LayoutDashboard } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
+import { N8N_WEBHOOK_URL } from '@/lib/constants'
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +36,32 @@ async function geocodeArtisan(input: ArtisanInput) {
   return null
 }
 
+// Email de bienvenue avec le lien d'espace (via n8n, no-cors).
+async function envoyerEmailEspace(p: {
+  email: string
+  lien: string
+  prenom?: string | null
+  nom?: string | null
+}) {
+  try {
+    await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'bienvenue_espace',
+        email: p.email,
+        lien: p.lien,
+        artisan_prenom: p.prenom ?? '',
+        artisan_nom: p.nom ?? '',
+      }),
+    })
+  } catch {
+    /* no-cors : pas de réponse attendue */
+  }
+}
+
+type Espace = { token: string; email: string; prenom: string | null; nom: string }
 type Step = 'form' | 'explication' | 'contrat' | 'fini'
 
 // Lien PUBLIC d'auto-inscription artisan (WhatsApp/Facebook…), en 3 étapes :
@@ -44,6 +71,7 @@ export function InscriptionArtisanPage() {
   const [step, setStep] = useState<Step>('form')
   const [submitting, setSubmitting] = useState(false)
   const [contratToken, setContratToken] = useState<string | null>(null)
+  const [espace, setEspace] = useState<Espace | null>(null)
 
   function haut() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -61,9 +89,19 @@ export function InscriptionArtisanPage() {
           source: `auto:${canal || 'lien'}`,
         },
       })
-      const r = data as { ok?: boolean; error?: string; contrat_token?: string } | null
+      const r = data as
+        | { ok?: boolean; error?: string; contrat_token?: string; espace_token?: string; email?: string | null }
+        | null
       if (error || !r?.ok) throw new Error(r?.error || error?.message || 'Inscription impossible')
       setContratToken(r.contrat_token ?? null)
+      if (r.espace_token) {
+        setEspace({
+          token: r.espace_token,
+          email: r.email || input.email || '',
+          prenom: input.prenom ?? null,
+          nom: input.nom,
+        })
+      }
       setStep('explication')
       haut()
     } catch (e) {
@@ -155,7 +193,21 @@ export function InscriptionArtisanPage() {
         )}
 
         {step === 'contrat' && contratToken && (
-          <EtapeContrat token={contratToken} onSigned={() => { setStep('fini'); haut() }} />
+          <EtapeContrat
+            token={contratToken}
+            onSigned={() => {
+              if (espace?.token && espace.email) {
+                envoyerEmailEspace({
+                  email: espace.email,
+                  lien: `${window.location.origin}/artisan/${espace.token}`,
+                  prenom: espace.prenom,
+                  nom: espace.nom,
+                })
+              }
+              setStep('fini')
+              haut()
+            }}
+          />
         )}
 
         {step === 'fini' && (
@@ -188,6 +240,27 @@ export function InscriptionArtisanPage() {
                   {formatTel(TEL_APPORTEUR)}
                 </a>
               </div>
+
+              {espace?.token && (
+                <div className="rounded-xl border border-border p-4 text-left">
+                  <p className="flex items-center gap-2 text-sm font-semibold">
+                    <LayoutDashboard className="size-4 text-primary" />
+                    Votre espace partenaire
+                  </p>
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    Vous avez signé le contrat, vous avez donc déjà accès à votre espace. Pour
+                    l'instant il n'y a pas de chantier — dès que nous vous appellerons pour vous en
+                    attribuer un, il s'affichera directement ici.
+                  </p>
+                  <a
+                    href={`${window.location.origin}/artisan/${espace.token}`}
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-primary px-4 py-2.5 text-sm font-semibold text-primary"
+                  >
+                    <LayoutDashboard className="size-4" />
+                    Voici votre espace →
+                  </a>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

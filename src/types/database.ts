@@ -46,6 +46,10 @@ export interface Artisan {
   ecarte_at: string | null // "pas fiable" : écarté (hors liste active) mais conservé
   ecarte_motif: string | null // raison de la mise à l'écart
   source: string | null // origine : agence | demarchage | auto:facebook | auto:whatsapp …
+  nb_salaries: number | null
+  annees_experience: number | null
+  assurance_rc_pro: boolean | null
+  assurance_decennale: boolean | null
   created_at: string
   updated_at: string
 }
@@ -62,7 +66,17 @@ export type ArtisanInput = Omit<
   | 'created_at'
   | 'updated_at'
   | 'departements_couverts'
-> & { departements_couverts?: string[] }
+  | 'nb_salaries'
+  | 'annees_experience'
+  | 'assurance_rc_pro'
+  | 'assurance_decennale'
+> & {
+  departements_couverts?: string[]
+  nb_salaries?: number | null
+  annees_experience?: number | null
+  assurance_rc_pro?: boolean | null
+  assurance_decennale?: boolean | null
+}
 
 /** Statut de démarchage d'une société (prospect). */
 export type StatutProspect =
