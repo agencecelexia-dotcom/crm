@@ -64,10 +64,39 @@ export const SOUS_METIERS: Record<string, string[]> = {
   'Isolation': [
     'Combles perdus', 'Combles aménagés', 'Murs intérieurs',
     'Isolation extérieure (ITE)', 'Sol', 'Sous-toiture',
+    'Isolation phonique', 'Calorifugeage',
   ],
   'Rénovation': [
     'Rénovation complète', 'Cuisine', 'Salle de bain', 'Peinture',
     'Carrelage', 'Plâtrerie / cloisons', 'Sols / revêtements',
+  ],
+  'Peinture': [
+    'Peinture intérieure', 'Peinture extérieure', 'Papier peint / toile',
+    'Enduits décoratifs', 'Boiseries / laque', 'Préparation / ratissage',
+  ],
+  'Plâtrerie / Placo': [
+    'Cloisons / doublage', 'Faux plafond', 'Plafond tendu',
+    'Staff / corniches', 'Enduit / bandes', 'Isolation intérieure',
+  ],
+  'Carrelage': [
+    'Carrelage sol', 'Faïence murale', 'Mosaïque', 'Pierre naturelle',
+    'Grand format', 'Rénovation des joints',
+  ],
+  'Façade / Ravalement': [
+    'Ravalement de façade', 'Isolation extérieure (ITE)', 'Enduit de façade',
+    'Bardage de façade', 'Nettoyage / hydrofuge', 'Peinture de façade',
+  ],
+  'Solaire / Photovoltaïque': [
+    'Panneaux photovoltaïques', 'Solaire thermique', 'Ballon solaire',
+    'Batterie / stockage', 'Borne de recharge VE', 'Carport solaire',
+  ],
+  'Petits travaux / Multiservices': [
+    'Dépannage / bricolage', 'Montage de meubles', 'Pose (tringles, étagères…)',
+    'Petites réparations', 'Manutention / débarras', 'Petits travaux extérieurs',
+  ],
+  'Serrurerie / Métallerie': [
+    'Serrurerie / dépannage', 'Garde-corps / rambarde', 'Grille / barreaudage',
+    'Escalier métallique', 'Ferronnerie', 'Blindage de porte',
   ],
 }
 
