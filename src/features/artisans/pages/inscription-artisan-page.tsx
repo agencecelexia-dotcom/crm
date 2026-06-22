@@ -64,7 +64,8 @@ export function InscriptionArtisanPage() {
           <h1 className="text-xl font-semibold">Devenez partenaire Celexia</h1>
           <p className="max-w-md text-sm text-muted-foreground">
             Recevez des chantiers près de chez vous, sans abonnement ni engagement. Renseignez votre
-            activité ci-dessous — notre équipe vous recontacte pour finaliser.
+            activité ci-dessous — dès que nous aurons un chantier dans votre secteur, nous vous
+            recontacterons.
           </p>
         </header>
 
@@ -73,7 +74,8 @@ export function InscriptionArtisanPage() {
             <CheckCircle2 className="mx-auto mb-3 size-12 text-[#22C55E]" />
             <h2 className="text-lg font-semibold">Merci, c'est enregistré ✅</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Votre profil a bien été reçu. On vous appelle très vite pour démarrer.
+              Votre profil est bien enregistré. Dès que nous aurons un chantier dans votre secteur,
+              nous vous recontacterons au plus vite.
             </p>
           </div>
         ) : (
