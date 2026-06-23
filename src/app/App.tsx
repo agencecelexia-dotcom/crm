@@ -23,6 +23,7 @@ import { ProjetDetailPage } from '@/features/projets/pages/projet-detail-page'
 import { ArtisansListPage } from '@/features/artisans/pages/artisans-list-page'
 import { ArtisansStatsPage } from '@/features/artisans/pages/artisans-stats-page'
 import { ArtisansEcartesPage } from '@/features/artisans/pages/artisans-ecartes-page'
+import { ArtisansZonesPage } from '@/features/artisans/pages/artisans-zones-page'
 import { ArtisanNewPage } from '@/features/artisans/pages/artisan-new-page'
 import { ArtisanDetailPage } from '@/features/artisans/pages/artisan-detail-page'
 import { ArtisanEditPage } from '@/features/artisans/pages/artisan-edit-page'
@@ -67,6 +68,7 @@ export default function App() {
                 <Route path="/artisans" element={<ArtisansListPage />} />
                 <Route path="/artisans/stats" element={<ArtisansStatsPage />} />
                 <Route path="/artisans/ecartes" element={<ArtisansEcartesPage />} />
+                <Route path="/artisans/zones" element={<ArtisansZonesPage />} />
                 <Route path="/artisans/new" element={<ArtisanNewPage />} />
                 <Route path="/artisans/:id" element={<ArtisanDetailPage />} />
                 <Route path="/artisans/:id/edit" element={<ArtisanEditPage />} />

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Users, ChevronRight, Phone, BadgeCheck, BarChart3, ShieldOff } from 'lucide-react'
+import { Plus, Search, Users, ChevronRight, Phone, BadgeCheck, BarChart3, ShieldOff, MapPinned } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -74,6 +74,11 @@ export function ArtisansListPage() {
         action={
           <div className="flex items-center gap-2">
             <LienInscriptionButton />
+            <Button asChild variant="ghost" size="icon" aria-label="Zones à vérifier" title="Zones à vérifier">
+              <Link to="/artisans/zones">
+                <MapPinned className="size-5" />
+              </Link>
+            </Button>
             <Button asChild variant="ghost" size="icon" aria-label="Performance" title="Performance">
               <Link to="/artisans/stats">
                 <BarChart3 className="size-5" />

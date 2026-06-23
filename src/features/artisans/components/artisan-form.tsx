@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { METIERS, SOUS_METIERS } from '@/lib/constants'
+import { METIERS, SOUS_METIERS, DEPARTEMENTS, DEPARTEMENT_NOM } from '@/lib/constants'
 import { CpVilleFields } from '@/components/cp-ville-fields'
 import { geocoder } from '@/lib/geocoding'
 import { SocieteSearch } from './societe-search'
@@ -148,6 +148,14 @@ export function ArtisanForm({
   const [villeZone, setVilleZone] = useState('')
   const [rayonZone, setRayonZone] = useState(30)
   const [ajoutZone, setAjoutZone] = useState(false)
+  // Départements : saisie normée (sélection + ajout en chips).
+  const [deptsList, setDeptsList] = useState<string[]>(artisan?.departements_couverts ?? [])
+  const [deptToAdd, setDeptToAdd] = useState('')
+  const ajouterDept = () => {
+    if (deptToAdd && !deptsList.includes(deptToAdd)) setDeptsList((d) => [...d, deptToAdd])
+    setDeptToAdd('')
+  }
+  const retirerDept = (c: string) => setDeptsList((d) => d.filter((x) => x !== c))
 
   async function ajouterZone() {
     const v = villeZone.trim()
@@ -171,17 +179,9 @@ export function ArtisanForm({
     const ouiNon = (v?: string) => (v === 'oui' ? true : v === 'non' ? false : null)
     const nbSal = num(values.nb_salaries)
     const useDepts = zoneMode === 'departements'
-    const depts = [
-      ...new Set(
-        (values.departements_couverts ?? '')
-          .split(/[\s,;]+/)
-          .map((s) => s.trim().toUpperCase())
-          .filter(Boolean),
-      ),
-    ]
-    // Zone obligatoire en mode strict (rayon en km OU au moins un département).
+    // Zone obligatoire en mode strict (villes OU au moins un département).
     if (strict) {
-      const zoneOk = useDepts ? depts.length > 0 : zones.length > 0
+      const zoneOk = useDepts ? deptsList.length > 0 : zones.length > 0
       if (!zoneOk) {
         toast.error('Indique ta zone : au moins une ville (+ rayon) ou des départements.')
         return
@@ -197,7 +197,7 @@ export function ArtisanForm({
       sous_metiers: values.sous_metiers ?? [],
       zone_intervention: null, // champ retiré (zones/départements suffisent)
       rayon_km: null, // remplacé par zones_couvertes (villes + rayon)
-      departements_couverts: useDepts ? depts : [],
+      departements_couverts: useDepts ? deptsList : [],
       zones_couvertes: useDepts ? [] : zones,
       adresse: clean(values.adresse),
       ville: clean(values.ville),
@@ -482,20 +482,54 @@ export function ArtisanForm({
               </FormDescription>
             </div>
           ) : (
-            <FormField
-              control={form.control}
-              name="departements_couverts"
-              render={({ field }) => (
-                <FormItem className="mt-2">
-                  <FormControl>
-                    <Input className="h-11" placeholder="Départements : 35 44 56" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Numéros de départements desservis (séparés par des espaces ou virgules).
-                  </FormDescription>
-                </FormItem>
+            <div className="mt-2 space-y-2">
+              {deptsList.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {deptsList.map((c) => (
+                    <span
+                      key={c}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs text-primary-foreground"
+                    >
+                      {c} — {DEPARTEMENT_NOM(c)}
+                      <button
+                        type="button"
+                        onClick={() => retirerDept(c)}
+                        className="ml-0.5 opacity-80 hover:opacity-100"
+                        aria-label="Retirer"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
               )}
-            />
+              <div className="flex gap-2">
+                <Select value={deptToAdd} onValueChange={setDeptToAdd}>
+                  <SelectTrigger className="h-11 flex-1">
+                    <SelectValue placeholder="Choisir un département…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTEMENTS.filter((d) => !deptsList.includes(d.code)).map((d) => (
+                      <SelectItem key={d.code} value={d.code}>
+                        {d.code} — {d.nom}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11"
+                  onClick={ajouterDept}
+                  disabled={!deptToAdd}
+                >
+                  + Ajouter
+                </Button>
+              </div>
+              <FormDescription>
+                Sélectionne un département puis « Ajouter ». Répète pour en couvrir plusieurs.
+              </FormDescription>
+            </div>
           )}
         </FormItem>
 
