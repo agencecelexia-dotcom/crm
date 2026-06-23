@@ -3,7 +3,6 @@ import { Link2, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -22,19 +21,22 @@ const CANAUX = [
   { id: 'leboncoin', label: 'Leboncoin' },
 ]
 
+// Taux de commission proposés (liens fixes distincts, pas de champ à régler).
+const TAUX = [10, 15]
+
 export function LienInscriptionButton() {
   const [copie, setCopie] = useState<string | null>(null)
-  const [pct, setPct] = useState(10) // taux de commission porté par le lien
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const lien = (id: string) =>
-    `${origin}/rejoindre${id ? '/' + id : ''}${pct !== 10 ? `?taux=${pct}` : ''}`
+  const lien = (id: string, taux: number) =>
+    `${origin}/rejoindre${id ? '/' + id : ''}${taux !== 10 ? `?taux=${taux}` : ''}`
 
-  async function copier(id: string) {
+  async function copier(id: string, taux: number) {
+    const cle = `${id}-${taux}`
     try {
-      await navigator.clipboard.writeText(lien(id))
-      setCopie(id)
-      toast.success('Lien copié')
-      window.setTimeout(() => setCopie((c) => (c === id ? null : c)), 1500)
+      await navigator.clipboard.writeText(lien(id, taux))
+      setCopie(cle)
+      toast.success(`Lien ${taux}% copié`)
+      window.setTimeout(() => setCopie((c) => (c === cle ? null : c)), 1500)
     } catch {
       toast.error('Copie impossible — copie le lien à la main')
     }
@@ -49,38 +51,34 @@ export function LienInscriptionButton() {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Lien d'inscription artisan</DialogTitle>
+          <DialogTitle>Liens d'inscription artisan</DialogTitle>
           <DialogDescription>
-            Partage ce lien (WhatsApp, Facebook…). L'artisan remplit lui-même sa fiche et apparaît
-            ici, tagué selon le canal choisi.
+            Deux liens distincts par canal : <b>10 %</b> (standard) et <b>15 %</b> (commission
+            majorée). Copie celui qu'il te faut — le contrat s'adapte automatiquement.
           </DialogDescription>
         </DialogHeader>
-        <div className="mb-3 flex items-center gap-2 rounded-lg border border-border p-2.5">
-          <span className="text-sm font-medium">Commission du contrat :</span>
-          <Input
-            type="number"
-            inputMode="numeric"
-            value={String(pct)}
-            onChange={(e) => setPct(Math.min(30, Math.max(5, Number(e.target.value) || 10)))}
-            className="h-9 w-16 text-center"
-          />
-          <span className="text-sm text-muted-foreground">%</span>
-          {pct !== 10 && (
-            <span className="text-xs text-muted-foreground">→ liens dédiés {pct} %</span>
-          )}
-        </div>
-
         <div className="space-y-2">
           {CANAUX.map((c) => (
-            <div key={c.id} className="flex items-center gap-2 rounded-lg border border-border p-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium">{c.label}</p>
-                <p className="truncate text-xs text-muted-foreground">{lien(c.id)}</p>
+            <div key={c.id} className="rounded-lg border border-border p-2.5">
+              <p className="mb-1.5 text-sm font-medium">{c.label}</p>
+              <div className="flex flex-wrap gap-2">
+                {TAUX.map((t) => (
+                  <Button
+                    key={t}
+                    size="sm"
+                    variant={t === 15 ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => copier(c.id, t)}
+                  >
+                    {copie === `${c.id}-${t}` ? (
+                      <Check className="size-4" />
+                    ) : (
+                      <Copy className="size-4" />
+                    )}
+                    Copier {t} %
+                  </Button>
+                ))}
               </div>
-              <Button size="sm" variant="outline" className="shrink-0" onClick={() => copier(c.id)}>
-                {copie === c.id ? <Check className="size-4" /> : <Copy className="size-4" />}
-                Copier
-              </Button>
             </div>
           ))}
         </div>
