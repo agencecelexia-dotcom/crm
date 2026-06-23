@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CheckCircle2, Loader2, ArrowRight, ShieldCheck, Phone, LayoutDashboard } from 'lucide-react'
 
@@ -68,6 +68,9 @@ type Step = 'form' | 'explication' | 'contrat' | 'fini'
 // 1) fiche complète → 2) explication du contrat → 3) signature → message final.
 export function InscriptionArtisanPage() {
   const { canal } = useParams()
+  const [params] = useSearchParams()
+  // Taux de commission porté par le lien (?taux=15), borné 5–30, défaut 10.
+  const tauxPct = Math.min(30, Math.max(5, Number(params.get('taux')) || 10))
   const [step, setStep] = useState<Step>('form')
   const [submitting, setSubmitting] = useState(false)
   const [contratToken, setContratToken] = useState<string | null>(null)
@@ -87,6 +90,7 @@ export function InscriptionArtisanPage() {
           latitude: coord?.lat ?? null,
           longitude: coord?.lon ?? null,
           source: `auto:${canal || 'lien'}`,
+          taux_commission: tauxPct / 100,
         },
       })
       const r = data as
@@ -162,7 +166,7 @@ export function InscriptionArtisanPage() {
                   <li className="flex gap-2">
                     <span>•</span>
                     <span>
-                      Il <b>fixe notre commission de 10 %</b> sur les chantiers qu'on vous apporte —
+                      Il <b>fixe notre commission de {tauxPct} %</b> sur les chantiers qu'on vous apporte —
                       noir sur blanc, pas de mauvaise surprise.
                     </span>
                   </li>

@@ -1,21 +1,50 @@
-import type { Artisan } from '@/types/database'
-import { formatDate } from '@/lib/format'
+-- 0055 — Taux de commission DYNAMIQUE dans le contrat (Article 5) : utilise
+-- a.taux_commission (ex. 15%) au lieu du 10% codé en dur. (def régénérée via pg_get_functiondef)
 
-// ------------------------------------------------------------
-//  Modèle du contrat d'apport d'affaires Celexia (texte fourni par le client,
-//  importé tel quel — ne pas modifier le texte). Les variables {{...}} sont
-//  remplies à la génération depuis la fiche artisan. {{DATE_SIGNATURE}} reste un
-//  jeton, rempli à l'affichage / au PDF avec la vraie date de signature.
-// ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.ensure_engagement_contrat(p_artisan_id uuid)
+ RETURNS contrats
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  a public.artisans;
+  c public.contrats;
+  v_contenu text;
+  v_sig text;
+begin
+  select * into a from public.artisans where id = p_artisan_id;
+  if a.id is null then return null; end if;
 
-export const CONTRAT_MODELE = `CONTRAT D’APPORT D’AFFAIRES
+  select * into c from public.contrats where artisan_id = p_artisan_id order by created_at asc limit 1;
+  if c.id is not null then return c; end if;
+
+  select valeur into v_sig from public.app_settings where cle = 'apporteur_signature';
+
+  v_contenu := $ctr$CONTRAT D’APPORT D’AFFAIRES
 Mise en relation et apport d’affaires
 La clientèle apportée demeure la clientèle propre de CELEXIA — simple mise en relation, sans cession
 Entre les soussignés
 La société CELEXIA, société par actions simplifiée unipersonnelle (SASU) au capital social de 1 000 euros, immatriculée au Registre du Commerce et des Sociétés de Créteil sous le numéro 939 306 429, identifiée à la TVA sous le numéro FR41 939 306 429, dont le siège social est situé 27 bis rue François Rolland, 94130 Nogent-sur-Marne, représentée par M. Thomas Aubigeon, en sa qualité de Président,
 Ci-après dénommée « l’Apporteur » ou « CELEXIA », d’une part,
 Et
-La société {{SOCIETE_ARTISAN}}, {{FORME_JURIDIQUE}}, au capital de {{CAPITAL_ARTISAN}} euros, immatriculée au RCS / Répertoire des Métiers de {{VILLE_IMMATRICULATION}} sous le numéro SIREN {{SIREN_ARTISAN}}, dont le siège social est situé {{ADRESSE_ARTISAN}}, représentée par {{REPRESENTANT_ARTISAN}}, en sa qualité de {{QUALITE_REPRESENTANT}}, dûment habilité(e),
+La société $ctr$
+    || coalesce(a.societe,'')
+    || $ctr$, $ctr$
+    || coalesce(a.forme_juridique,'')
+    || $ctr$, au capital de $ctr$
+    || coalesce(a.capital_social,'')
+    || $ctr$ euros, immatriculée au RCS / Répertoire des Métiers de $ctr$
+    || coalesce(a.ville_immatriculation,'')
+    || $ctr$ sous le numéro SIREN $ctr$
+    || coalesce(a.siren,'')
+    || $ctr$, dont le siège social est situé $ctr$
+    || concat_ws(', ', a.adresse, a.code_postal, a.ville)
+    || $ctr$, représentée par $ctr$
+    || coalesce(a.representant,'')
+    || $ctr$, en sa qualité de $ctr$
+    || coalesce(a.qualite_representant,'')
+    || $ctr$, dûment habilité(e),
 Ci-après dénommée « le Partenaire » ou « l’Artisan », d’autre part,
 Ci-après désignées ensemble « les Parties » et individuellement « une Partie ».
 Préambule
@@ -48,7 +77,7 @@ Informer CELEXIA, sans délai, de la suite donnée à chaque Affaire (sans suite
 Exécuter les travaux dans les règles de l’art, conformément à la réglementation applicable et aux engagements pris envers le Client.
 Disposer, pendant toute la durée du contrat, des qualifications, autorisations et assurances nécessaires (cf. Article 10).
 Article 5 – Rémunération de l’Apporteur
-En contrepartie de l’apport d’Affaires, le Partenaire verse à CELEXIA une commission égale à {{TAUX}} % du Montant TTC (toutes taxes comprises) de chaque Devis signé issu d’une Affaire transmise par CELEXIA.
+En contrepartie de l’apport d’Affaires, le Partenaire verse à CELEXIA une commission égale à $ctr$ || round(coalesce(a.taux_commission, 0.10) * 100)::text || $ctr$ % du Montant TTC (toutes taxes comprises) de chaque Devis signé issu d’une Affaire transmise par CELEXIA.
 La commission est due dès la signature du devis par le Client. En cas d’avenant ou de travaux complémentaires sur la même Affaire, la commission s’applique également au montant additionnel.
 Article 6 – Paiement de la commission sur l’acompte
 La commission est payable par le Partenaire dès l’encaissement de l’acompte versé par le Client à la signature du devis, et au plus tard dans un délai de 15 jours suivant cet encaissement.
@@ -79,110 +108,24 @@ Article 13 – Confidentialité
 Les Parties s’engagent à conserver confidentielles les informations échangées dans le cadre du contrat (Affaires, Clients, conditions commerciales), pendant toute sa durée et deux (2) ans après son terme.
 Article 14 – Droit applicable et règlement des litiges
 Le présent contrat est régi par le droit français. En cas de différend, les Parties s’efforceront de trouver une solution amiable. À défaut, le litige sera porté devant le Tribunal de commerce de Créteil, dans le ressort du siège social de CELEXIA.
-Fait à {{VILLE_SIGNATURE}}, le {{DATE_SIGNATURE}}, en deux exemplaires originaux.
+Fait à $ctr$
+    || coalesce(a.ville,'')
+    || $ctr$, le {{DATE_SIGNATURE}}, en deux exemplaires originaux.
 Les signatures ci-dessous, précédées de la mention « Lu et approuvé », valent consentement plein et entier des Parties, conformément à l’article 1367 du Code civil.
-Pour l’Apporteur (CELEXIA)	Pour le Partenaire ({{SOCIETE_ARTISAN}})
-M. Thomas Aubigeon, Président	{{REPRESENTANT_ARTISAN}}, {{QUALITE_REPRESENTANT}}
-Signature :	Signature (« Lu et approuvé ») :`
+Pour l’Apporteur (CELEXIA)	Pour le Partenaire ($ctr$
+    || coalesce(a.societe,'')
+    || $ctr$)
+M. Thomas Aubigeon, Président	$ctr$
+    || coalesce(a.representant,'')
+    || $ctr$, $ctr$
+    || coalesce(a.qualite_representant,'')
+    || $ctr$
+Signature :	Signature (« Lu et approuvé ») :$ctr$;
 
-// Variables éditables = uniquement les champs propres à l'artisan (le reste du
-// texte, montants et délais inclus, est figé dans le contrat).
-export const VARIABLES_CONTRAT: { cle: string; label: string }[] = [
-  { cle: 'SOCIETE_ARTISAN', label: 'Société' },
-  { cle: 'FORME_JURIDIQUE', label: 'Forme juridique' },
-  { cle: 'CAPITAL_ARTISAN', label: 'Capital (€)' },
-  { cle: 'SIREN_ARTISAN', label: 'SIREN' },
-  { cle: 'VILLE_IMMATRICULATION', label: "Ville d'immatriculation" },
-  { cle: 'ADRESSE_ARTISAN', label: 'Adresse du siège' },
-  { cle: 'REPRESENTANT_ARTISAN', label: 'Représentant' },
-  { cle: 'QUALITE_REPRESENTANT', label: 'Qualité du représentant' },
-  { cle: 'VILLE_SIGNATURE', label: 'Ville de signature (lieu de l’artisan)' },
-]
-
-/** Valeurs par défaut des variables, pré-remplies depuis la fiche artisan. */
-export function variablesParDefaut(artisan: Artisan): Record<string, string> {
-  const adresse = [artisan.adresse, artisan.code_postal, artisan.ville]
-    .filter(Boolean)
-    .join(', ')
-  return {
-    SOCIETE_ARTISAN: artisan.societe ?? '',
-    FORME_JURIDIQUE: artisan.forme_juridique ?? '',
-    CAPITAL_ARTISAN: artisan.capital_social ?? '',
-    SIREN_ARTISAN: artisan.siren ?? '',
-    VILLE_IMMATRICULATION: artisan.ville_immatriculation ?? '',
-    ADRESSE_ARTISAN: adresse,
-    REPRESENTANT_ARTISAN: artisan.representant ?? '',
-    QUALITE_REPRESENTANT: artisan.qualite_representant ?? '',
-    // « Fait à … » = ville de l'artisan (le signataire), pas le siège de Celexia.
-    VILLE_SIGNATURE: artisan.ville ?? '',
-    // Taux de commission de l'artisan (10 par défaut, 15 si lien dédié…).
-    TAUX: String(Math.round((artisan.taux_commission ?? 0.1) * 100)),
-  }
-}
-
-/** Remplace les {{CLE}} présentes dans `vars` ; laisse les autres jetons tels quels. */
-export function remplirContrat(modele: string, vars: Record<string, string>): string {
-  return modele.replace(/\{\{(\w+)\}\}/g, (m, cle) => (cle in vars ? vars[cle] : m))
-}
-
-/** Remplit {{DATE_SIGNATURE}} au moment de l'affichage / du PDF. */
-export function finaliserContenu(contenu: string, signedAt: string | null): string {
-  return contenu.replace('{{DATE_SIGNATURE}}', signedAt ? formatDate(signedAt) : '____________')
-}
-
-// ------------------------------------------------------------
-//  Analyse de structure du contrat → blocs typés, pour un rendu mis en forme
-//  (titre, sous-titres, articles en gras, paragraphes, définitions, signatures).
-//  Partagé par l'affichage écran et la génération PDF.
-// ------------------------------------------------------------
-export type BlocContrat =
-  | { type: 'titre'; texte: string }
-  | { type: 'soustitre'; texte: string }
-  | { type: 'section'; texte: string }
-  | { type: 'paragraphe'; texte: string }
-  | { type: 'definition'; terme: string; texte: string }
-  | { type: 'signature'; gauche: string[]; droite: string[] }
-
-export function parseContrat(contenu: string): BlocContrat[] {
-  const lignes = contenu.split('\n')
-  const blocs: BlocContrat[] = []
-  const sigG: string[] = []
-  const sigD: string[] = []
-  let dansDefinitions = false
-  let rang = 0 // rang des lignes non vides (pour repérer titre/sous-titres)
-
-  for (const brut of lignes) {
-    const l = brut.trim()
-    if (!l) continue
-
-    // Bloc signature : lignes à 2 colonnes séparées par une tabulation
-    if (l.includes('\t')) {
-      const [g, d] = l.split('\t')
-      sigG.push((g ?? '').trim())
-      sigD.push((d ?? '').trim())
-      rang++
-      continue
-    }
-
-    if (rang === 0) blocs.push({ type: 'titre', texte: l })
-    else if (rang === 1 || rang === 2) blocs.push({ type: 'soustitre', texte: l })
-    else if (
-      /^Article\s+\d+(?:\s+\w+)?\s*[–-]/.test(l) ||
-      l === 'Préambule' ||
-      l === 'Entre les soussignés'
-    ) {
-      blocs.push({ type: 'section', texte: l })
-      dansDefinitions = /Définitions/i.test(l)
-    } else if (dansDefinitions) {
-      const m = l.match(/^(.{2,60}?)\s*:\s*(.+)$/)
-      if (m) blocs.push({ type: 'definition', terme: m[1].trim(), texte: m[2].trim() })
-      else blocs.push({ type: 'paragraphe', texte: l })
-    } else {
-      blocs.push({ type: 'paragraphe', texte: l })
-    }
-    rang++
-  }
-
-  if (sigG.length) blocs.push({ type: 'signature', gauche: sigG, droite: sigD })
-  return blocs
-}
+  insert into public.contrats (artisan_id, contenu, apporteur_signature)
+  values (p_artisan_id, v_contenu, v_sig)
+  returning * into c;
+  return c;
+end;
+$function$
+;

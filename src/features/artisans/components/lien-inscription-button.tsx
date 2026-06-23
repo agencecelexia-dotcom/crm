@@ -3,6 +3,7 @@ import { Link2, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -23,8 +24,10 @@ const CANAUX = [
 
 export function LienInscriptionButton() {
   const [copie, setCopie] = useState<string | null>(null)
+  const [pct, setPct] = useState(10) // taux de commission porté par le lien
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const lien = (id: string) => `${origin}/rejoindre${id ? '/' + id : ''}`
+  const lien = (id: string) =>
+    `${origin}/rejoindre${id ? '/' + id : ''}${pct !== 10 ? `?taux=${pct}` : ''}`
 
   async function copier(id: string) {
     try {
@@ -52,6 +55,21 @@ export function LienInscriptionButton() {
             ici, tagué selon le canal choisi.
           </DialogDescription>
         </DialogHeader>
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-border p-2.5">
+          <span className="text-sm font-medium">Commission du contrat :</span>
+          <Input
+            type="number"
+            inputMode="numeric"
+            value={String(pct)}
+            onChange={(e) => setPct(Math.min(30, Math.max(5, Number(e.target.value) || 10)))}
+            className="h-9 w-16 text-center"
+          />
+          <span className="text-sm text-muted-foreground">%</span>
+          {pct !== 10 && (
+            <span className="text-xs text-muted-foreground">→ liens dédiés {pct} %</span>
+          )}
+        </div>
+
         <div className="space-y-2">
           {CANAUX.map((c) => (
             <div key={c.id} className="flex items-center gap-2 rounded-lg border border-border p-2.5">
