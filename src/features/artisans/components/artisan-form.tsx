@@ -226,6 +226,17 @@ export function ArtisanForm({
 
   const metiersSeles = useWatch({ control: form.control, name: 'metiers' }) ?? []
   const sousMetiersSeles = useWatch({ control: form.control, name: 'sous_metiers' }) ?? []
+  const [autreMetier, setAutreMetier] = useState('')
+  // Métiers « custom » ajoutés à la main (hors liste officielle) — à revoir plus tard.
+  const metiersCustom = metiersSeles.filter((m) => !METIERS.includes(m))
+  function ajouterAutreMetier() {
+    const v = autreMetier.trim()
+    if (!v) return
+    if (!metiersSeles.some((m) => m.toLowerCase() === v.toLowerCase())) {
+      form.setValue('metiers', [...metiersSeles, v], { shouldDirty: true })
+    }
+    setAutreMetier('')
+  }
   // CP/Ville observés pour l'autocomplétion croisée.
   const cpVal = useWatch({ control: form.control, name: 'code_postal' }) ?? ''
   const villeVal = useWatch({ control: form.control, name: 'ville' }) ?? ''
@@ -364,18 +375,52 @@ export function ArtisanForm({
                 </button>
               )
             })}
+            {/* Métiers ajoutés à la main (hors liste) — affichés en plus, supprimables */}
+            {metiersCustom.map((m) => (
+              <button
+                type="button"
+                key={m}
+                onClick={() => toggleMetier(m)}
+                className="rounded-full border border-primary bg-primary px-3 py-1.5 text-sm text-primary-foreground"
+                title="Métier ajouté — cliquer pour retirer"
+              >
+                {m} ✕
+              </button>
+            ))}
           </div>
-          <FormDescription>Sélectionne un ou plusieurs métiers.</FormDescription>
+          {/* Ajout libre : si le métier n'est pas dans la liste (ex. ferronnerie) */}
+          <div className="mt-2 flex gap-2">
+            <Input
+              className="h-10 flex-1"
+              placeholder="Autre métier / service (ex. Ferronnerie)"
+              value={autreMetier}
+              onChange={(e) => setAutreMetier(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  ajouterAutreMetier()
+                }
+              }}
+            />
+            <Button type="button" variant="outline" className="h-10" onClick={ajouterAutreMetier} disabled={!autreMetier.trim()}>
+              + Ajouter
+            </Button>
+          </div>
+          <FormDescription>
+            Sélectionne un ou plusieurs métiers — ou ajoute le tien s'il n'est pas dans la liste.
+          </FormDescription>
         </FormItem>
 
         {/* Sous-métiers : se déroulent pour chaque métier sélectionné.
             On coche précisément ce que l'artisan sait faire. */}
-        {metiersSeles.length > 0 && (
+        {metiersSeles.some((m) => (SOUS_METIERS[m]?.length ?? 0) > 0) && (
           <div className="space-y-4 rounded-xl border border-border bg-secondary/40 p-3">
             <p className="text-sm font-medium">
               Précise ce qu'il fait exactement
             </p>
-            {metiersSeles.map((m) => (
+            {metiersSeles
+              .filter((m) => (SOUS_METIERS[m]?.length ?? 0) > 0)
+              .map((m) => (
               <div key={m} className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {m}
