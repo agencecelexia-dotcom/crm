@@ -132,7 +132,7 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
               Aucun artisan ne correspond à « {recherche} ».
             </p>
           ) : (
-            liste.map(({ artisan, distance, dansRayon, metierMatch }) => {
+            liste.map(({ artisan, distance, couvre, metierMatch }) => {
               const checked = selection.has(artisan.id)
               return (
                 <button
@@ -173,19 +173,20 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
                       )}
                     </p>
                   </div>
-                  {dansRayon === false ? (
+                  {couvre ? (
+                    <Badge
+                      className="shrink-0 border-transparent text-xs"
+                      style={{ backgroundColor: '#22C55E', color: '#fff' }}
+                    >
+                      Couvre la zone
+                    </Badge>
+                  ) : (
                     <Badge
                       className="shrink-0 border-transparent text-xs"
                       style={{ backgroundColor: '#F59E0B', color: '#fff' }}
                     >
-                      hors rayon
+                      Hors zone
                     </Badge>
-                  ) : (
-                    artisan.rayon_km && (
-                      <Badge variant="secondary" className="shrink-0 text-xs">
-                        {artisan.rayon_km} km
-                      </Badge>
-                    )
                   )}
                 </button>
               )
