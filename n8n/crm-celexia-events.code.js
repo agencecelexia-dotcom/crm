@@ -20,6 +20,9 @@ if (d.event === 'envoyer_devis_pdf') {
   }];
 }
 
+// Relances INTERNES coupées (escalade « à appeler » + digest leads orphelins) — trop fréquentes.
+if (d.event === 'escalade' || d.event === 'lead_orphelin') return [];
+
 const AGENCE = 'agence.celexia@gmail.com';
 const LOGO = 'https://crm-ci7k.vercel.app/logo.png';
 const esc = (s) => String(s == null ? '' : s)
