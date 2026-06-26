@@ -4,8 +4,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { formatEuros } from '@/lib/format'
 import type { ScoringArtisan } from '@/types/database'
-import { useScoringArtisan, useNoterArtisan } from '../hooks/use-artisans'
+import { useScoringArtisan, useNoterArtisan, useSolidite } from '../hooks/use-artisans'
 
 // ----- Étoiles 1-5 (lecture seule ou éditable ; re-clic sur la note = efface) -----
 function Etoiles({
@@ -97,8 +98,9 @@ function Ligne({
 }
 
 // Carte « Scoring interne » d'un artisan (jamais visible côté artisan).
-export function ScoringArtisanCard({ artisanId }: { artisanId: string }) {
+export function ScoringArtisanCard({ artisanId, siren }: { artisanId: string; siren?: string | null }) {
   const { data: s, isLoading } = useScoringArtisan(artisanId)
+  const { data: solidite, isLoading: chargeSolidite } = useSolidite(siren)
   const noter = useNoterArtisan()
   const qc = useQueryClient()
 
@@ -176,6 +178,30 @@ export function ScoringArtisanCard({ artisanId }: { artisanId: string }) {
               insuffisant={s.face_a_face.n_duels === 0}
             >
               <Etoiles note={scoreFaceAFace(s.face_a_face)} />
+            </Ligne>
+            <Ligne
+              emoji="💪"
+              titre="Solidité (indicatif)"
+              sousTitre={
+                !siren
+                  ? 'SIREN manquant'
+                  : chargeSolidite
+                    ? 'Analyse en cours…'
+                    : solidite?.trouve
+                      ? solidite.resume +
+                        (solidite.resultat_net != null
+                          ? ` · résultat net ${formatEuros(solidite.resultat_net)} (${solidite.annee_finances})`
+                          : ' · comptes non publiés')
+                      : 'Entreprise introuvable'
+              }
+            >
+              {!siren ? (
+                <span className="shrink-0 text-xs text-muted-foreground/70">—</span>
+              ) : chargeSolidite ? (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              ) : (
+                <Etoiles note={solidite?.score ?? null} />
+              )}
             </Ligne>
 
             <p className="pt-2 text-[11px] text-muted-foreground">

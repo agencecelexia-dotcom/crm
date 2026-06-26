@@ -99,7 +99,7 @@ export function ArtisanDetailPage() {
       </Card>
 
       {/* Scoring interne (jamais visible côté artisan) */}
-      <ScoringArtisanCard artisanId={artisan.id} />
+      <ScoringArtisanCard artisanId={artisan.id} siren={artisan.siren} />
 
       {/* Coordonnées */}
       <Card className="mb-4">

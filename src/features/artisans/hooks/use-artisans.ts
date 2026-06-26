@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import { composerAdresse, geocoder } from '@/lib/geocoding'
+import { soliditeEntreprise } from '@/lib/entreprise'
 import type { Artisan, ArtisanInput, ScoringArtisan } from '@/types/database'
 
 const TABLE = 'artisans'
@@ -229,6 +230,16 @@ export function useScoringArtisan(id: string | undefined) {
       if (error) throw error
       return data as ScoringArtisan
     },
+  })
+}
+
+/** Solidité / solvabilité (indicatif) calculée depuis l'API entreprise (via SIREN). */
+export function useSolidite(siren: string | null | undefined) {
+  return useQuery({
+    queryKey: ['solidite', siren],
+    enabled: !!siren && siren.replace(/\D/g, '').length >= 9,
+    staleTime: 1000 * 60 * 60 * 24, // données entreprise quasi stables → cache 24 h
+    queryFn: () => soliditeEntreprise(siren!),
   })
 }
 
