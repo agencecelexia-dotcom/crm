@@ -59,6 +59,21 @@ function scoreFaceAFace(f: ScoringArtisan['face_a_face']): number | null {
   return Math.round((f.n_gagnes / f.n_duels) * 5)
 }
 
+// Moyenne générale = moyenne simple de tous les sous-scores DISPONIBLES
+// (notes manuelles + métriques auto + solidité). Ignore ceux sans données.
+function moyenneGenerale(s: ScoringArtisan, soliditeScore: number | null): number | null {
+  const vals = [
+    s.note_elocution,
+    s.note_communication_agence,
+    scoreVitesse(s.vitesse),
+    scoreTransfo(s.transfo),
+    scoreFaceAFace(s.face_a_face),
+    soliditeScore,
+  ].filter((n): n is number => n != null)
+  if (!vals.length) return null
+  return vals.reduce((a, b) => a + b, 0) / vals.length
+}
+
 function delai(h: number | null): string {
   if (h == null) return '—'
   if (h < 1) return '< 1 h'
@@ -204,8 +219,27 @@ export function ScoringArtisanCard({ artisanId, siren }: { artisanId: string; si
               )}
             </Ligne>
 
+            {/* Moyenne générale (tous les sous-scores disponibles) */}
+            {(() => {
+              const moy = moyenneGenerale(s, solidite?.score ?? null)
+              return (
+                <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/10 px-3 py-2.5">
+                  <span className="text-sm font-semibold">⭐ Moyenne générale</span>
+                  {moy == null ? (
+                    <span className="text-sm text-muted-foreground">Pas encore de données</span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Etoiles note={Math.round(moy)} />
+                      <span className="text-lg font-bold text-primary">{moy.toFixed(1)}/5</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             <p className="pt-2 text-[11px] text-muted-foreground">
               Basé sur {s.nb_projets} chantier{s.nb_projets > 1 ? 's' : ''} attribué{s.nb_projets > 1 ? 's' : ''}.
+              {' '}Moyenne des scores renseignés.
             </p>
           </div>
         )}
