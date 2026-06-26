@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useArtisan, useDeleteArtisan, useEcarterArtisan } from '../hooks/use-artisans'
+import { ScoringArtisanCard } from '../components/scoring-artisan-card'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
 import { ContratCard } from '@/features/contrats/contrat-card'
 
@@ -96,6 +97,9 @@ export function ArtisanDetailPage() {
           </span>
         </CardContent>
       </Card>
+
+      {/* Scoring interne (jamais visible côté artisan) */}
+      <ScoringArtisanCard artisanId={artisan.id} />
 
       {/* Coordonnées */}
       <Card className="mb-4">

@@ -59,8 +59,21 @@ export interface Artisan {
   annees_experience: number | null
   assurance_rc_pro: boolean | null
   assurance_decennale: boolean | null
+  // Scoring interne (jamais exposé à l'artisan) — notes qualitatives manuelles /5
+  note_elocution: number | null // « comment il parle » (expression, contact client)
+  note_communication_agence: number | null // réactivité / échange avec l'agence
   created_at: string
   updated_at: string
+}
+
+/** Scoring artisan calculé côté serveur (RPC scoring_artisan). Interne uniquement. */
+export interface ScoringArtisan {
+  note_elocution: number | null
+  note_communication_agence: number | null
+  nb_projets: number
+  vitesse: { h_contact: number | null; n_contact: number; h_devis: number | null; n_devis: number }
+  transfo: { n_devis_envoyes: number; n_signes: number }
+  face_a_face: { n_duels: number; n_gagnes: number }
 }
 
 /** Données d'insertion / mise à jour d'un artisan (champs gérés par la base exclus). */
@@ -80,6 +93,8 @@ export type ArtisanInput = Omit<
   | 'annees_experience'
   | 'assurance_rc_pro'
   | 'assurance_decennale'
+  | 'note_elocution'
+  | 'note_communication_agence'
 > & {
   departements_couverts?: string[]
   zones_couvertes?: ZoneCouverte[]

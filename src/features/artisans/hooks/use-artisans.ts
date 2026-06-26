@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import { composerAdresse, geocoder } from '@/lib/geocoding'
-import type { Artisan, ArtisanInput } from '@/types/database'
+import type { Artisan, ArtisanInput, ScoringArtisan } from '@/types/database'
 
 const TABLE = 'artisans'
 
@@ -216,5 +216,37 @@ export function useDeleteArtisan() {
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['artisans'] }),
+  })
+}
+
+/** Scoring interne d'un artisan (métriques auto + notes manuelles). */
+export function useScoringArtisan(id: string | undefined) {
+  return useQuery({
+    queryKey: ['scoring-artisan', id],
+    enabled: !!id,
+    queryFn: async (): Promise<ScoringArtisan> => {
+      const { data, error } = await supabase.rpc('scoring_artisan', { p_artisan_id: id! })
+      if (error) throw error
+      return data as ScoringArtisan
+    },
+  })
+}
+
+/** Enregistre une note qualitative manuelle (1-5, ou null pour effacer). */
+export function useNoterArtisan() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: {
+      id: string
+      champ: 'note_elocution' | 'note_communication_agence'
+      valeur: number | null
+    }): Promise<void> => {
+      const { error } = await supabase.from(TABLE).update({ [v.champ]: v.valeur }).eq('id', v.id)
+      if (error) throw error
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['artisans', v.id] })
+      qc.invalidateQueries({ queryKey: ['scoring-artisan', v.id] })
+    },
   })
 }
