@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Send, Check, CalendarIcon, Loader2 } from 'lucide-react'
+import { Send, Check, CalendarIcon, Loader2, Phone, PhoneCall, PhoneMissed } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -40,6 +40,8 @@ export function SuiviArtisan({
   const [rdvMode, setRdvMode] = useState(false)
   const [rdvDate, setRdvDate] = useState<Date | undefined>(undefined)
   const [rdvHeure, setRdvHeure] = useState('')
+  const [perduMode, setPerduMode] = useState(false)
+  const [perduRaison, setPerduRaison] = useState('')
 
   // Étapes déjà franchies (d'après l'historique) + date du RDV éventuelle.
   const franchies = new Set(suivis.filter((s) => s.statut).map((s) => s.statut as string))
@@ -85,6 +87,25 @@ export function SuiviArtisan({
     if (await poster('rdv_pris', txt, dt.toISOString())) {
       setRdvMode(false)
       setRdvHeure('')
+    }
+  }
+
+  // Logue une tentative d'appel (surtout « pas de réponse » : on saura qu'il a essayé).
+  async function loggerAppel(resultat: string) {
+    setEnvoi(true)
+    try {
+      const { data, error } = await supabase.rpc('log_appel_by_token', {
+        p_token: token,
+        p_resultat: resultat,
+      })
+      const ok = (data as { ok?: boolean } | null)?.ok
+      if (error || !ok) throw new Error('Échec')
+      toast.success('Appel enregistré. Merci !')
+      onChange()
+    } catch {
+      toast.error("Impossible d'enregistrer l'appel")
+    } finally {
+      setEnvoi(false)
     }
   }
 
@@ -212,6 +233,25 @@ export function SuiviArtisan({
           })}
         </div>
 
+        {/* Appel client — logguer une tentative (surtout « pas de réponse ») */}
+        <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+          <p className="text-sm font-medium">📞 Vous avez essayé d'appeler le client ?</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={envoi} onClick={() => void loggerAppel('pas_de_reponse')}>
+              <PhoneMissed className="size-4" /> Pas de réponse
+            </Button>
+            <Button variant="outline" size="sm" disabled={envoi} onClick={() => void loggerAppel('repondu')}>
+              <PhoneCall className="size-4" /> Je l'ai eu
+            </Button>
+            <Button variant="outline" size="sm" disabled={envoi} onClick={() => void loggerAppel('rappeler')}>
+              <Phone className="size-4" /> À rappeler
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Notez chaque tentative — surtout si le client ne décroche pas, pour qu'on sache que vous avez essayé.
+          </p>
+        </div>
+
         {/* Statuts secondaires */}
         <div className="flex flex-wrap gap-2">
           {SECONDAIRES.map((cle) => {
@@ -222,7 +262,11 @@ export function SuiviArtisan({
                 key={cle}
                 type="button"
                 disabled={envoi}
-                onClick={() => !active && void poster(cle)}
+                onClick={() => {
+                  if (active) return
+                  if (cle === 'perdu') setPerduMode(true)
+                  else void poster(cle)
+                }}
                 aria-pressed={active}
                 className={cn(
                   'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
@@ -237,6 +281,51 @@ export function SuiviArtisan({
             )
           })}
         </div>
+
+        {/* Justification OBLIGATOIRE quand on déclare « perdu » */}
+        {perduMode && (
+          <div className="space-y-3 rounded-xl border border-rose-300 bg-rose-50 p-3">
+            <p className="text-sm font-medium text-rose-800">Pourquoi ce chantier est-il perdu ?</p>
+            <p className="text-xs text-rose-700">
+              Une explication est obligatoire (le client a refusé, budget trop élevé, ne répond
+              plus, a déjà fait faire ailleurs…). Ça nous aide à comprendre et à mieux vous
+              envoyer les bons chantiers.
+            </p>
+            <Textarea
+              value={perduRaison}
+              onChange={(e) => setPerduRaison(e.target.value)}
+              rows={2}
+              placeholder="Expliquez en quelques mots…"
+              aria-label="Raison de la perte du chantier"
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 bg-card"
+                disabled={envoi}
+                onClick={() => {
+                  setPerduMode(false)
+                  setPerduRaison('')
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={envoi || !perduRaison.trim()}
+                onClick={async () => {
+                  if (await poster('perdu', perduRaison.trim())) {
+                    setPerduMode(false)
+                    setPerduRaison('')
+                  }
+                }}
+              >
+                {envoi ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                Confirmer « perdu »
+              </Button>
+            </div>
+          </div>
+        )}
 
         <Separator />
 

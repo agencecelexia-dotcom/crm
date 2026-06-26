@@ -50,10 +50,24 @@ const frame = (inner) => `
 
 const btn = (href, label) => `
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 18px;">
-  <tr><td style="border-radius:10px;background:#7C3AED;">
+  <tr><td style="border-radius:10px;background:#7C3AED;box-shadow:0 4px 12px rgba(124,58,237,.30);">
     <a href="${href}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px;">${label}</a>
   </td></tr>
 </table>`;
+
+// Encadré « projet » (ville / métier / besoin), sans identité client.
+const projetBox = (d) => {
+  const lignes = [];
+  if (d.client_ville) lignes.push('<b>Ville :</b> ' + esc(d.client_ville));
+  if (d.metiers) lignes.push('<b>Métier :</b> ' + esc(d.metiers));
+  else if (d.metier) lignes.push('<b>Métier :</b> ' + esc(d.metier));
+  if (d.description) lignes.push('<b>Le besoin :</b> ' + esc(d.description));
+  if (!lignes.length) return '';
+  return `<div style="background:#f5f3ff;border:1px solid #ede9fe;border-radius:12px;padding:14px 16px;margin:0 0 16px;">
+    <p style="margin:0 0 8px;font-weight:bold;color:#5b21b6;font-size:13px;text-transform:uppercase;letter-spacing:.4px;">Le chantier</p>
+    ${lignes.map((l) => `<p style="margin:0 0 5px;color:#374151;font-size:14px;line-height:1.5;">${l}</p>`).join('')}
+  </div>`;
+};
 
 let to = AGENCE, subject, html;
 
@@ -122,22 +136,36 @@ if (d.event === 'envoyer_lien_mission') {
     <h1 style="margin:0 0 10px;font-size:18px;color:#111827;">Nouveau statut : ${esc(st)} 🔔</h1>
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;"><b>${esc(d.artisan || 'Un artisan')}</b> a mis à jour le projet <b>${esc(d.client_nom || '')}</b>${d.metier ? ' (' + esc(d.metier) + (d.client_ville ? ', ' + esc(d.client_ville) : '') + ')' : ''} en <b>${esc(st)}</b>.</p>
     ${d.lien ? btn(esc(d.lien), 'Ouvrir le projet →') : ''}`);
+} else if (d.event === 'projet_assigne') {
+  to = d.email; if (!to) return [];           // ➜ artisan, à l'attribution du chantier
+  subject = '🎉 Nouveau chantier' + (d.client_ville ? ' à ' + esc(d.client_ville) : '') + ' pour vous';
+  html = frame(`
+    <div style="text-align:center;font-size:42px;line-height:1;margin:0 0 6px;">🎉</div>
+    <h1 style="margin:0 0 10px;font-size:20px;color:#111827;text-align:center;">${salutG(d)}, un chantier vous est attribué !</h1>
+    <p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.5;">Bonne nouvelle : Celexia vient de vous confier un nouveau chantier. Voici l'essentiel — connectez-vous pour le découvrir en détail.</p>
+    ${projetBox(d)}
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Signez votre contrat d'engagement (1 min, au doigt) et <b>les coordonnées du client se débloquent aussitôt</b>.</p>
+    ${btn(esc(d.lien), 'Voir le chantier et signer →')}
+    <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Plus vous êtes réactif, plus vous avez de chances de décrocher le devis. 💪</p>`);
 } else if (d.event === 'relance_contrat') {
   to = d.email; if (!to) return [];           // ➜ artisan
-  subject = '⏰ Un chantier vous attend — signez en 2 min';
+  subject = '⏰ Un chantier vous attend — signez votre contrat';
   html = frame(`
     <h1 style="margin:0 0 10px;font-size:19px;color:#111827;">${salutG(d)},</h1>
-    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Un chantier${d.metier ? ' <b>' + esc(d.metier) + '</b>' : ''}${d.client_ville ? ' à <b>' + esc(d.client_ville) + '</b>' : ''} vous a été attribué et <b>attend votre signature</b>.</p>
-    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Signez votre contrat en 2 min : <b>les coordonnées du client se débloquent immédiatement</b>.</p>
+    <p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.5;">Un chantier vous a été attribué et <b>attend votre signature</b>. Tant que le contrat n'est pas signé, il reste en pause de votre côté.</p>
+    ${projetBox(d)}
+    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Signez en 1 min : <b>les coordonnées du client se débloquent immédiatement</b>.</p>
     ${btn(esc(d.lien), 'Signer et accéder au client →')}
     <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Plus vous êtes rapide, plus vous avez de chances de signer le devis.</p>`);
 } else if (d.event === 'relance_inaction') {
   to = d.email; if (!to) return [];           // ➜ artisan
-  subject = '🔔 ' + (d.client_nom ? esc(d.client_nom) + ' attend votre action' : 'Un chantier attend votre action');
+  subject = '🔔 ' + (d.client_nom ? esc(d.client_nom) + ' attend votre prochaine action' : 'Un chantier attend votre action');
   html = frame(`
     <h1 style="margin:0 0 10px;font-size:19px;color:#111827;">${salutG(d)},</h1>
-    <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Le chantier <b>${esc(d.client_nom || '')}</b> attend votre prochaine action${d.statut ? ' (statut : ' + esc(d.statut) + ')' : ''}. <b>Le client est chaud</b> — recontactez-le et mettez à jour votre avancement.</p>
-    ${btn(esc(d.lien), 'Ouvrir mon espace →')}`);
+    <p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.5;">Votre chantier <b>${esc(d.client_nom || '')}</b> attend votre <b>prochaine action</b>${d.statut ? ' (statut actuel : ' + esc(d.statut) + ')' : ''}. Un coup de fil au client et une petite mise à jour, et c'est reparti.</p>
+    ${projetBox(d)}
+    ${btn(esc(d.lien), 'Ouvrir mon espace →')}
+    <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Pensez à mettre à jour le statut (RDV pris, devis envoyé…) — on arrête alors de vous relancer. 🙌</p>`);
 } else if (d.event === 'relance_post_rdv') {
   to = d.email; if (!to) return [];           // ➜ artisan
   const chantier = d.client_nom || ((d.metier || '') + (d.client_ville ? ' à ' + d.client_ville : '')) || 'votre rendez-vous';

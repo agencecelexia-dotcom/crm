@@ -16,6 +16,8 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.secrets
+.env.secrets.local
 
 # Éditeurs
 .vscode/*
