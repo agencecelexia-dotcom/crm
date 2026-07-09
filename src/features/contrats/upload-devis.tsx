@@ -96,12 +96,22 @@ export function UploadDevis({
   const { dragActive, handlers } = useDropzone(traiter)
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-3.5">
+    <div className="space-y-3 rounded-2xl border border-border/70 bg-card p-4 shadow-card">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium">{label}</p>
+        <p className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+          <span
+            className={cn(
+              'flex size-8 shrink-0 items-center justify-center rounded-lg',
+              depose ? 'bg-[#22C55E]/15 text-[#16A34A]' : 'bg-primary/10 text-primary',
+            )}
+          >
+            <FileText className="size-4" />
+          </span>
+          <span className="truncate">{label}</span>
+        </p>
         {depose && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#22C55E]/10 px-2 py-0.5 text-xs font-medium text-[#16A34A]">
-            <CheckCircle2 className="size-3" /> Reçu
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#22C55E]/10 px-2.5 py-1 text-xs font-medium text-[#16A34A]">
+            <CheckCircle2 className="size-3.5" /> Reçu
           </span>
         )}
       </div>
@@ -131,7 +141,7 @@ export function UploadDevis({
           {majMontant ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
         </Button>
       </div>
-      <p className="-mt-1.5 text-xs text-muted-foreground">
+      <p className="-mt-1.5 text-[11px] leading-snug text-muted-foreground">
         Détecté automatiquement à partir du PDF si possible — modifiable à tout moment. Le PDF n'est
         pas obligatoire si vous connaissez déjà le montant.
       </p>
@@ -140,12 +150,12 @@ export function UploadDevis({
       <div
         {...handlers}
         className={cn(
-          'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-colors',
+          'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-all duration-200',
           dragActive
-            ? 'border-primary bg-primary/5'
+            ? 'scale-[1.01] border-primary bg-primary/5'
             : depose
               ? 'border-[#22C55E]/40 bg-[#22C55E]/5'
-              : 'border-input bg-muted/30 hover:border-primary/40 hover:bg-muted/50',
+              : 'border-input bg-muted/30 hover:border-primary/50 hover:bg-primary/[0.03]',
         )}
       >
         <span

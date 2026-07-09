@@ -112,10 +112,10 @@ export function SuiviArtisan({
   return (
     <Card className="shadow-card">
       <CardHeader>
-        <CardTitle className="text-base">Où en êtes-vous ?</CardTitle>
+        <CardTitle className="font-display text-base tracking-tight">Où en êtes-vous ?</CardTitle>
         <p className="text-sm text-muted-foreground">
           Cliquez sur l'étape où vous en êtes. Celexia est informé en direct — vous ne serez pas
-          relancé inutilement. 🙂
+          relancé inutilement.
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -148,38 +148,50 @@ export function SuiviArtisan({
                   <div className="flex flex-col items-center">
                     <span
                       className={cn(
-                        'flex size-9 shrink-0 items-center justify-center rounded-full border-2 text-base transition-all',
-                        active && 'shadow-md',
-                        !rempli && 'bg-card group-hover:border-primary/50',
+                        'flex size-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-200',
+                        !rempli && 'bg-card text-muted-foreground group-hover:border-primary/50 group-hover:text-primary',
                       )}
                       style={
                         rempli
-                          ? { backgroundColor: conf.color, borderColor: conf.color, color: '#fff' }
+                          ? {
+                              backgroundColor: conf.color,
+                              borderColor: conf.color,
+                              color: '#fff',
+                              ...(active ? { boxShadow: `0 0 0 4px ${conf.color}22` } : {}),
+                            }
                           : { borderColor: 'var(--border)' }
                       }
                     >
-                      {done ? (
-                        <Check className="size-4" />
-                      ) : (
-                        <span className={cn(!active && 'opacity-40')} aria-hidden>
-                          {conf.emoji}
-                        </span>
-                      )}
+                      {done ? <Check className="size-4.5" /> : idx + 1}
                     </span>
-                    {!dernier && <span className="my-1 w-0.5 flex-1 rounded bg-border" />}
+                    {!dernier && (
+                      <span
+                        className={cn(
+                          'my-1 w-0.5 flex-1 rounded transition-colors',
+                          rempli ? 'bg-primary/30' : 'bg-border',
+                        )}
+                      />
+                    )}
                   </div>
 
                   {/* Libellé */}
                   <div className={cn('flex-1', dernier ? 'pb-1' : 'pb-5')}>
                     <p
                       className={cn(
-                        'text-sm leading-9',
+                        'flex items-center gap-2 text-sm leading-10',
                         active ? 'font-semibold' : done ? 'font-medium' : 'text-muted-foreground',
                       )}
                       style={active ? { color: conf.color } : undefined}
                     >
                       {conf.label}
-                      {active && <span className="ml-2 text-xs font-normal text-muted-foreground">• en cours</span>}
+                      {active && (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-medium leading-normal"
+                          style={{ backgroundColor: `${conf.color}1a`, color: conf.color }}
+                        >
+                          en cours
+                        </span>
+                      )}
                     </p>
                     {estRdv && rdvInfo && (
                       <p className="-mt-2 text-xs text-muted-foreground">{rdvInfo}</p>
@@ -189,8 +201,11 @@ export function SuiviArtisan({
 
                 {/* Panneau date du RDV (obligatoire) */}
                 {estRdv && rdvMode && (
-                  <div className="mb-4 ml-12 space-y-3 rounded-xl border border-[#8B5CF6]/40 bg-[#8B5CF6]/5 p-3">
-                    <p className="text-sm font-medium">📅 Quelle est la date du rendez-vous ?</p>
+                  <div className="mb-4 ml-12 space-y-3 rounded-xl border border-violet-400/40 bg-violet-500/5 p-3.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <p className="flex items-center gap-1.5 text-sm font-medium">
+                      <CalendarIcon className="size-4 text-violet-600" />
+                      Quelle est la date du rendez-vous ?
+                    </p>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Popover>
                         <PopoverTrigger asChild>
@@ -234,16 +249,20 @@ export function SuiviArtisan({
         </div>
 
         {/* Appel client — logguer une tentative (surtout « pas de réponse ») */}
-        <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
-          <p className="text-sm font-medium">📞 Vous avez essayé d'appeler le client ?</p>
+        <div className="space-y-2.5 rounded-xl border border-border/70 bg-muted/30 p-3.5">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Phone className="size-3.5" />
+            Appels
+          </p>
+          <p className="text-sm font-medium">Vous avez essayé d'appeler le client ?</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" disabled={envoi} onClick={() => void loggerAppel('pas_de_reponse')}>
+            <Button variant="outline" size="sm" className="h-9 rounded-full bg-card" disabled={envoi} onClick={() => void loggerAppel('pas_de_reponse')}>
               <PhoneMissed className="size-4" /> Pas de réponse
             </Button>
-            <Button variant="outline" size="sm" disabled={envoi} onClick={() => void loggerAppel('repondu')}>
+            <Button variant="outline" size="sm" className="h-9 rounded-full bg-card" disabled={envoi} onClick={() => void loggerAppel('repondu')}>
               <PhoneCall className="size-4" /> Je l'ai eu
             </Button>
-            <Button variant="outline" size="sm" disabled={envoi} onClick={() => void loggerAppel('rappeler')}>
+            <Button variant="outline" size="sm" className="h-9 rounded-full bg-card" disabled={envoi} onClick={() => void loggerAppel('rappeler')}>
               <Phone className="size-4" /> À rappeler
             </Button>
           </div>
@@ -284,7 +303,7 @@ export function SuiviArtisan({
 
         {/* Justification OBLIGATOIRE quand on déclare « perdu » */}
         {perduMode && (
-          <div className="space-y-3 rounded-xl border border-rose-300 bg-rose-50 p-3">
+          <div className="space-y-3 rounded-xl border border-rose-300 bg-rose-50 p-3.5 animate-in fade-in slide-in-from-top-1 duration-200">
             <p className="text-sm font-medium text-rose-800">Pourquoi ce chantier est-il perdu ?</p>
             <p className="text-xs text-rose-700">
               Une explication est obligatoire (le client a refusé, budget trop élevé, ne répond
@@ -331,7 +350,10 @@ export function SuiviArtisan({
 
         {/* Note libre */}
         <div className="space-y-2">
-          <p className="text-sm font-medium">💬 Une note pour Celexia ?</p>
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            <Send className="size-3.5 text-muted-foreground" />
+            Une note pour Celexia ?
+          </p>
           <Textarea
             placeholder="Ce qui s'est dit : besoin du client, budget évoqué, délais, objection, prochaine étape…"
             value={note}
