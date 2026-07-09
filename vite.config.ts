@@ -21,6 +21,7 @@ export default defineConfig({
           'vendor-query': ['@tanstack/react-query'],
           'vendor-map': ['leaflet', 'react-leaflet'],
           'vendor-charts': ['recharts'],
+          'vendor-pdf': ['pdfjs-dist'],
         },
       },
     },

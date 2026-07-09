@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase/client'
 import { uploaderDevis } from '@/lib/storage'
+import { extraireMontantDevis } from '@/lib/pdf-extract'
 import { cn } from '@/lib/utils'
 import { useDropzone } from '@/hooks/use-dropzone'
 
@@ -31,8 +32,8 @@ export function UploadDevis({
   const [montant, setMontant] = useState(montantInitial != null ? String(montantInitial) : '')
   const [majMontant, setMajMontant] = useState(false)
 
-  async function enregistrerMontant(silencieux = false) {
-    const n = parseFloat(montant.replace(',', '.'))
+  async function enregistrerMontant(silencieux = false, valeurOverride?: string) {
+    const n = parseFloat((valeurOverride ?? montant).replace(',', '.'))
     if (isNaN(n)) {
       if (!silencieux) toast.error('Montant invalide')
       return
@@ -60,6 +61,9 @@ export function UploadDevis({
       return
     }
     setEnvoi(true)
+    // Si aucun montant n'est déjà saisi, on tente de le lire dans le PDF en
+    // parallèle de l'upload (échec silencieux — jamais bloquant, jamais d'erreur affichée).
+    const extraction = montant.trim() ? Promise.resolve(null) : extraireMontantDevis(file)
     try {
       // Upload dans le bucket dédié (lien imprévisible) puis enregistrement sur l'affectation.
       const url = await uploaderDevis(token, slot, file)
@@ -69,8 +73,16 @@ export function UploadDevis({
         p_url: url,
       })
       if (error || !(data as { ok?: boolean })?.ok) throw new Error('Envoi impossible')
-      // Enregistre aussi le montant saisi, le cas échéant (mécaniquement).
-      if (montant.trim()) await enregistrerMontant(true)
+
+      const montantDetecte = await extraction
+      if (montantDetecte != null && !montant.trim()) {
+        // Montant lu automatiquement dans le PDF : pré-rempli et enregistré, comme une saisie manuelle.
+        setMontant(String(montantDetecte).replace('.', ','))
+        await enregistrerMontant(true, String(montantDetecte))
+      } else if (montant.trim()) {
+        // Enregistre aussi le montant saisi, le cas échéant (mécaniquement).
+        await enregistrerMontant(true)
+      }
       toast.success(`${label} envoyé`)
       onDone()
     } catch (err) {
@@ -119,6 +131,10 @@ export function UploadDevis({
           {majMontant ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
         </Button>
       </div>
+      <p className="-mt-1.5 text-xs text-muted-foreground">
+        Détecté automatiquement à partir du PDF si possible — modifiable à tout moment. Le PDF n'est
+        pas obligatoire si vous connaissez déjà le montant.
+      </p>
 
       {/* Dépôt du PDF — zone drag & drop */}
       <div
