@@ -5,22 +5,24 @@ import { cn } from '@/lib/utils'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { usePatchProjet } from '../hooks/use-projets'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
+import { ConfirmStatutDialog } from './confirm-statut-dialog'
 import type { ProjetAvecArtisan, StatutProjet } from '@/types/database'
 
 // Vue pipeline (Kanban) : une colonne par statut. On glisse une carte dans une
-// autre colonne pour changer son statut (sur ordinateur). Sur mobile, on ouvre
-// la fiche pour changer le statut.
+// autre colonne pour changer son statut (sur ordinateur, avec confirmation).
+// Sur mobile, on ouvre la fiche pour changer le statut.
 export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
   const patch = usePatchProjet()
   const { data: artisansSignes } = useArtisansSignes()
   const [over, setOver] = useState<StatutProjet | null>(null)
+  const [enAttente, setEnAttente] = useState<{ id: string; statut: StatutProjet } | null>(null)
 
   function onDrop(statut: StatutProjet, e: DragEvent) {
     e.preventDefault()
     setOver(null)
     const id = e.dataTransfer.getData('text/plain')
     const p = projets.find((x) => x.id === id)
-    if (p && p.statut !== statut) patch.mutate({ id, patch: { statut } })
+    if (p && p.statut !== statut) setEnAttente({ id, statut })
   }
 
   return (
@@ -85,6 +87,16 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
           </div>
         )
       })}
+
+      <ConfirmStatutDialog
+        open={enAttente != null}
+        statut={enAttente?.statut ?? null}
+        onOpenChange={(open) => !open && setEnAttente(null)}
+        onConfirm={() => {
+          if (enAttente) patch.mutate({ id: enAttente.id, patch: { statut: enAttente.statut } })
+          setEnAttente(null)
+        }}
+      />
     </div>
   )
 }

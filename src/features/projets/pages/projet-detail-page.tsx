@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
@@ -39,6 +40,7 @@ import { RelancesProjetCard } from '@/features/automatisations/relances-projet-c
 import { DocumentRow } from '../components/document-row'
 import { DevisProjetCard } from '@/features/devis/devis-projet-card'
 import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
+import { ConfirmStatutDialog } from '../components/confirm-statut-dialog'
 import type { ProjetInput, StatutProjet } from '@/types/database'
 
 // Fiche projet : infos, statut, assignation, montants/commission, documents.
@@ -48,6 +50,7 @@ export function ProjetDetailPage() {
   const { data: projet, isLoading } = useProjet(id)
   const patch = usePatchProjet()
   const remove = useDeleteProjet()
+  const [statutEnAttente, setStatutEnAttente] = useState<StatutProjet | null>(null)
 
   if (isLoading || !projet) {
     return (
@@ -106,7 +109,10 @@ export function ProjetDetailPage() {
             <span className="text-sm font-medium">Statut</span>
             <StatutBadge statut={projet.statut} />
           </div>
-          <Select value={projet.statut} onValueChange={(v) => changerStatut(v as StatutProjet)}>
+          <Select
+            value={projet.statut}
+            onValueChange={(v) => setStatutEnAttente(v as StatutProjet)}
+          >
             <SelectTrigger className="h-11 w-full">
               <SelectValue />
             </SelectTrigger>
@@ -235,6 +241,16 @@ export function ProjetDetailPage() {
           />
         </CardContent>
       </Card>
+
+      <ConfirmStatutDialog
+        open={statutEnAttente != null}
+        statut={statutEnAttente}
+        onOpenChange={(open) => !open && setStatutEnAttente(null)}
+        onConfirm={() => {
+          if (statutEnAttente) changerStatut(statutEnAttente)
+          setStatutEnAttente(null)
+        }}
+      />
 
       {/* Suppression */}
       <AlertDialog>

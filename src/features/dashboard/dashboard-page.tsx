@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { isSameMonth, parseISO, subMonths, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -14,10 +14,11 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from 'recharts'
-import { FolderKanban, Users, Euro, Wallet, PhoneCall, Trophy } from 'lucide-react'
+import { FolderKanban, Users, Euro, Wallet, PhoneCall, Trophy, Clock, FileText, XCircle } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { StatutBadge } from '@/components/statut-badge'
+import { KpiTile } from '@/components/kpi-tile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -27,29 +28,9 @@ import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { ActionDuJour } from './action-du-jour'
 
-// Petite carte KPI réutilisable.
-function KpiCard({
-  icon: Icon,
-  label,
-  valeur,
-  accent,
-}: {
-  icon: typeof Euro
-  label: string
-  valeur: string
-  accent?: boolean
-}) {
-  return (
-    <Card className={accent ? 'bg-primary text-primary-foreground' : ''}>
-      <CardContent className="px-4 py-4">
-        <div className="mb-1 flex items-center gap-1.5 text-xs opacity-80">
-          <Icon className="size-4 shrink-0" />
-          <span className="truncate">{label}</span>
-        </div>
-        <p className="montant text-2xl font-semibold">{valeur}</p>
-      </CardContent>
-    </Card>
-  )
+// Petit titre de section, pour structurer le dashboard en zones lisibles.
+function SectionTitre({ children }: { children: ReactNode }) {
+  return <h2 className="mb-2 mt-6 text-sm font-semibold text-muted-foreground first:mt-0">{children}</h2>
 }
 
 export function DashboardPage() {
@@ -73,6 +54,10 @@ export function DashboardPage() {
       .filter((p) => p.commission_encaissee)
       .reduce((s, p) => s + (p.commission ?? 0), 0)
 
+    const enAttente = projetsPeriode.filter((p) => p.statut === 'en_attente')
+    const devisEnvoyes = projetsPeriode.filter((p) => p.statut === 'devis_envoye')
+    const devisEnvoyesMontant = devisEnvoyes.reduce((s, p) => s + (p.montant_devis ?? 0), 0)
+
     const parStatut = STATUTS_ORDRE.map((s) => ({
       statut: s,
       label: STATUTS[s].label,
@@ -86,9 +71,20 @@ export function DashboardPage() {
       commission,
       encaissee,
       aEncaisser: commission - encaissee,
+      enAttenteCount: enAttente.length,
+      devisEnvoyesCount: devisEnvoyes.length,
+      devisEnvoyesMontant,
       parStatut,
     }
   }, [projetsPeriode])
+
+  // Projets perdus : indépendant de la période (statut transitoire, supprimé
+  // automatiquement 48h après passage en « Perdu » — voir projet-detail-page).
+  const perdus = useMemo(() => {
+    const items = (projets ?? []).filter((p) => p.statut === 'perdu')
+    const valeur = items.reduce((s, p) => s + (p.montant_devis ?? p.estimation_interne ?? 0), 0)
+    return { count: items.length, valeur }
+  }, [projets])
 
   const derniers = (projets ?? []).slice(0, 5)
 
@@ -156,6 +152,9 @@ export function DashboardPage() {
     return { total, commission: Math.round(total * 0.1), nb }
   }, [projets])
 
+  // Répartition de la commission encaissée / à encaisser (barre proportionnelle).
+  const pctEncaissee = stats.commission > 0 ? Math.round((stats.encaissee / stats.commission) * 100) : 0
+
   return (
     <div>
       <PageHeader titre="Tableau de bord" />
@@ -186,28 +185,37 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* KPIs */}
+          {/* Vue d'ensemble */}
+          <SectionTitre>Vue d'ensemble</SectionTitre>
           <div className="grid grid-cols-2 gap-3">
-            <KpiCard
-              icon={FolderKanban}
-              label="Projets"
-              valeur={String(stats.nbProjets)}
-            />
-            <KpiCard
-              icon={Users}
-              label="Artisans"
-              valeur={String(artisans?.length ?? 0)}
-            />
-            <KpiCard icon={Euro} label="CA généré" valeur={formatEuros(stats.ca)} />
-            <KpiCard
-              icon={Wallet}
-              label="Commission"
-              valeur={formatEuros(stats.commission)}
-              accent
-            />
+            <KpiTile icon={FolderKanban} label="Projets" valeur={String(stats.nbProjets)} />
+            <KpiTile icon={Users} label="Artisans" valeur={String(artisans?.length ?? 0)} />
+            <KpiTile icon={Euro} label="Ventes" sousLabel="CA généré" valeur={formatEuros(stats.ca)} />
+            <KpiTile icon={Wallet} label="Commission totale" valeur={formatEuros(stats.commission)} tone="brand" />
           </div>
 
-          {/* Potentiel du pipeline (estimation interne — non visible des artisans) */}
+          {/* Pipeline & argent en attente */}
+          <SectionTitre>Pipeline &amp; argent en attente</SectionTitre>
+          <div className="grid grid-cols-2 gap-3">
+            <KpiTile icon={Clock} label="En attente" valeur={String(stats.enAttenteCount)} tone="warning" />
+            <KpiTile
+              icon={FileText}
+              label="Devis envoyés"
+              sousLabel="en attente de réponse"
+              valeur={String(stats.devisEnvoyesCount)}
+              tone="warning"
+            />
+            <div className="col-span-2">
+              <KpiTile
+                icon={Euro}
+                label="Montant en devis envoyés"
+                sousLabel={`sur ${stats.devisEnvoyesCount} devis en attente de signature`}
+                valeur={formatEuros(stats.devisEnvoyesMontant)}
+                tone="warning"
+              />
+            </div>
+          </div>
+
           <Card className="mt-3 border-primary/30 bg-primary/5">
             <CardContent className="py-4">
               <p className="text-sm font-medium">
@@ -234,26 +242,49 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Commission encaissée vs à encaisser */}
-          <Card className="mt-3">
-            <CardContent className="grid grid-cols-2 gap-3 py-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Encaissée</p>
-                <p className="montant text-lg font-semibold text-[#22C55E]">
-                  {formatEuros(stats.encaissee)}
-                </p>
+          {/* Perdu */}
+          <SectionTitre>Perdu</SectionTitre>
+          <div className="grid grid-cols-2 gap-3">
+            <KpiTile icon={XCircle} label="Projets perdus" valeur={String(perdus.count)} tone="danger" />
+            <KpiTile icon={Euro} label="Valeur perdue" valeur={formatEuros(perdus.valeur)} tone="danger" />
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Un projet « Perdu » est supprimé automatiquement 48 h après son passage à ce statut — ces
+            chiffres ne reflètent donc que les pertes très récentes.
+          </p>
+
+          {/* Commissions */}
+          <SectionTitre>Commissions</SectionTitre>
+          <Card>
+            <CardContent className="space-y-3 py-4">
+              <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
+                <div className="h-full bg-[#22C55E]" style={{ width: `${pctEncaissee}%` }} />
+                <div className="h-full bg-[#F59E0B]" style={{ width: `${100 - pctEncaissee}%` }} />
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">À encaisser</p>
-                <p className="montant text-lg font-semibold text-[#F59E0B]">
-                  {formatEuros(stats.aEncaisser)}
-                </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <span className="size-2 rounded-full bg-[#22C55E]" /> Encaissée
+                  </p>
+                  <p className="montant text-lg font-semibold text-[#16A34A]">
+                    {formatEuros(stats.encaissee)}
+                  </p>
+                </div>
+                <div>
+                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <span className="size-2 rounded-full bg-[#F59E0B]" /> À encaisser
+                  </p>
+                  <p className="montant text-lg font-semibold text-[#B45309]">
+                    {formatEuros(stats.aEncaisser)}
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Widgets analytiques (2 colonnes sur ordinateur) */}
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+          {/* Analyse & activité */}
+          <SectionTitre>Analyse &amp; activité</SectionTitre>
+          <div className="grid gap-3 md:grid-cols-2">
             {/* À faire : à rappeler / en attente */}
             <Card>
               <CardHeader>
