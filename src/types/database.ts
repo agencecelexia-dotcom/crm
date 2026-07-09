@@ -302,6 +302,8 @@ export interface ProjetEspace {
   budget_estime: number | null
   montant_devis: number | null
   montant_devis_signe: number | null
+  commission: number | null
+  commission_encaissee: boolean
   client_ville: string | null
   photos: string[]
   devis_depose: boolean

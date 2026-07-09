@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -15,6 +15,10 @@ import {
   Save,
   X,
   FilePlus,
+  Clock,
+  XCircle,
+  Euro,
+  Wallet,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -27,6 +31,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent } from '@/components/ui/card'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { StatutBadge } from '@/components/statut-badge'
+import { KpiTile } from '@/components/kpi-tile'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
@@ -150,6 +155,9 @@ export function EspaceArtisanPage() {
           clients dès que possible et tenez-nous informés avec les boutons de suivi.
         </p>
       )}
+
+      {/* Résumé de son activité (statuts + commission due) */}
+      {signe && projets.length > 0 && <ResumeArtisan projets={projets} />}
       </div>
 
       {/* Devis (Metbach uniquement) */}
@@ -176,6 +184,90 @@ export function EspaceArtisanPage() {
         />
       )}
     </div>
+  )
+}
+
+// Résumé global de l'activité de l'artisan (tous ses chantiers confondus) :
+// en attente, perdus, devis envoyés + montant, vendu, taux de conversion, et
+// la commission qu'il doit à Celexia (due dès la signature du devis client,
+// cf. contrat d'engagement) — à régler vs déjà réglée.
+function ResumeArtisan({ projets }: { projets: ProjetEspace[] }) {
+  const stats = useMemo(() => {
+    const enAttente = projets.filter((p) => p.statut === 'en_attente').length
+    const perdus = projets.filter((p) => p.statut === 'perdu').length
+
+    const devisEnvoyes = projets.filter((p) => p.statut === 'devis_envoye')
+    const montantDevisEnvoyes = devisEnvoyes.reduce((s, p) => s + (p.montant_devis ?? 0), 0)
+
+    const signes = projets.filter((p) => p.statut === 'devis_signe' || p.statut === 'termine')
+    const vendu = signes.reduce((s, p) => s + (p.montant_devis_signe ?? 0), 0)
+
+    // Taux de conversion : parmi les chantiers où un devis a été envoyé (envoyé, signé ou terminé),
+    // combien ont fini signés.
+    const denomDevis = projets.filter((p) =>
+      ['devis_envoye', 'devis_signe', 'termine'].includes(p.statut),
+    ).length
+    const tauxConversion = denomDevis > 0 ? Math.round((signes.length / denomDevis) * 100) : null
+
+    const commissionARegler = projets
+      .filter((p) => p.commission != null && !p.commission_encaissee)
+      .reduce((s, p) => s + (p.commission ?? 0), 0)
+    const commissionReglee = projets
+      .filter((p) => p.commission_encaissee)
+      .reduce((s, p) => s + (p.commission ?? 0), 0)
+
+    return {
+      enAttente,
+      perdus,
+      devisEnvoyesCount: devisEnvoyes.length,
+      montantDevisEnvoyes,
+      vendu,
+      tauxConversion,
+      commissionARegler,
+      commissionReglee,
+    }
+  }, [projets])
+
+  return (
+    <section className="mb-4">
+      <h2 className="mb-3 text-lg font-semibold">Votre activité</h2>
+      <div className="grid grid-cols-2 gap-3">
+        <KpiTile icon={Clock} label="En attente" valeur={String(stats.enAttente)} tone="warning" />
+        <KpiTile
+          icon={FileText}
+          label="Devis envoyés"
+          sousLabel={stats.devisEnvoyesCount ? formatEuros(stats.montantDevisEnvoyes) : undefined}
+          valeur={String(stats.devisEnvoyesCount)}
+          tone="warning"
+        />
+        <KpiTile icon={XCircle} label="Perdus" valeur={String(stats.perdus)} tone="danger" />
+        <KpiTile icon={Euro} label="Vendu" valeur={formatEuros(stats.vendu)} tone="success" />
+      </div>
+
+      {stats.tauxConversion != null && (
+        <p className="mt-3 text-center text-sm text-muted-foreground">
+          Taux de conversion :{' '}
+          <strong className="text-foreground">{stats.tauxConversion}%</strong> de vos devis
+          envoyés signés
+        </p>
+      )}
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <KpiTile
+          icon={Wallet}
+          label="Commission à régler"
+          sousLabel="due à la signature du devis"
+          valeur={formatEuros(stats.commissionARegler)}
+          tone="warning"
+        />
+        <KpiTile
+          icon={CheckCircle2}
+          label="Commission réglée"
+          valeur={formatEuros(stats.commissionReglee)}
+          tone="success"
+        />
+      </div>
+    </section>
   )
 }
 
