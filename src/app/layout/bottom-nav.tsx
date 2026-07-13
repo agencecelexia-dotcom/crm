@@ -26,7 +26,7 @@ export function BottomNav() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-xs font-medium transition-colors',
+                  'flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-2 py-1.5 text-xs font-medium transition-colors active:scale-[0.98]',
                   isActive
                     ? 'text-primary'
                     : 'text-muted-foreground hover:text-foreground',
@@ -35,7 +35,14 @@ export function BottomNav() {
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={cn('size-5', isActive && 'stroke-[2.5]')} />
+                  <span
+                    className={cn(
+                      'flex items-center justify-center rounded-full px-3 py-0.5 transition-all duration-200',
+                      isActive && 'bg-primary/10',
+                    )}
+                  >
+                    <Icon className={cn('size-5', isActive && 'stroke-[2.5]')} />
+                  </span>
                   <span>{label}</span>
                 </>
               )}
