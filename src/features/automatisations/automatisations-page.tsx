@@ -2,7 +2,8 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page-header'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,9 +44,9 @@ export function AutomatisationsPage() {
         </div>
       ) : (
         <>
-          <Card className="mb-4">
+          <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
             <CardHeader>
-              <CardTitle className="text-base">Relances actives</CardTitle>
+              <CardTitre>Relances actives</CardTitre>
             </CardHeader>
             <CardContent className="space-y-4">
               <Bascule
@@ -75,9 +76,9 @@ export function AutomatisationsPage() {
             </CardContent>
           </Card>
 
-          <Card className="mb-4">
+          <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
             <CardHeader>
-              <CardTitle className="text-base">Délais & horaires</CardTitle>
+              <CardTitre>Délais & horaires</CardTitre>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
               <Champ label="1ʳᵉ relance (h)" cle="relance_premier_h" val={r.relance_premier_h} onSave={setNum} />
@@ -94,9 +95,9 @@ export function AutomatisationsPage() {
             </CardContent>
           </Card>
 
-          <Card className="mb-4">
+          <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
             <CardHeader>
-              <CardTitle className="text-base">Historique des relances</CardTitle>
+              <CardTitre>Historique des relances</CardTitre>
             </CardHeader>
             <CardContent>
               {!relances || relances.length === 0 ? (

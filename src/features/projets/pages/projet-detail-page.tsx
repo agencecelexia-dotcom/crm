@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { Loader2, Pencil, Trash2, Phone, Mail, MapPin, Map } from 'lucide-react'
+import { Pencil, Trash2, Phone, Mail, MapPin, Map } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { StatutBadge } from '@/components/statut-badge'
+import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -54,8 +56,17 @@ export function ProjetDetailPage() {
 
   if (isLoading || !projet) {
     return (
-      <div className="flex justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-primary" />
+      <div className="mx-auto max-w-2xl space-y-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-9 rounded-xl" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-7 w-1/2" />
+            <Skeleton className="h-4 w-1/3" />
+          </div>
+        </div>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-2xl" />
+        ))}
       </div>
     )
   }
@@ -103,10 +114,10 @@ export function ProjetDetailPage() {
       />
 
       {/* Statut */}
-      <Card className="mb-4">
+      <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardContent className="space-y-3 py-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Statut</span>
+            <CardTitre>Statut</CardTitre>
             <StatutBadge statut={projet.statut} />
           </div>
           <Select
@@ -126,7 +137,7 @@ export function ProjetDetailPage() {
           </Select>
 
           {projet.statut === 'perdu' && (
-            <p className="rounded-md border border-[#EF4444]/30 bg-[#EF4444]/10 p-2 text-xs text-[#991B1B]">
+            <p className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/5 p-2.5 text-xs text-[#DC2626]">
               ⚠️ Projet perdu : suppression automatique définitive 48 h après le passage en « Perdu »
               {projet.perdu_at
                 ? ` (vers le ${formatDateHeure(
@@ -143,9 +154,9 @@ export function ProjetDetailPage() {
       <AffectationsCard projet={projet} />
 
       {/* Coordonnées client */}
-      <Card className="mb-4">
+      <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardHeader>
-          <CardTitle className="text-base">Client</CardTitle>
+          <CardTitre>Client</CardTitre>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           {projet.client_telephone && (
@@ -218,9 +229,9 @@ export function ProjetDetailPage() {
       <MontantsCard projet={projet} />
 
       {/* Documents */}
-      <Card className="mb-4">
+      <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardHeader>
-          <CardTitle className="text-base">Documents (PDF)</CardTitle>
+          <CardTitre>Documents (PDF)</CardTitre>
         </CardHeader>
         <CardContent className="space-y-2">
           {/* Contrat d'engagement = signé en ligne par l'artisan (table contrats) */}

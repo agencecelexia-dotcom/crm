@@ -89,7 +89,7 @@ export function ArtisansListPage() {
                 <ShieldOff className="size-5" />
               </Link>
             </Button>
-            <Button asChild size="sm">
+            <Button asChild size="sm" className="shadow-violet">
               <Link to="/artisans/new">
                 <Plus className="size-4" />
                 Nouveau
@@ -146,7 +146,7 @@ export function ArtisansListPage() {
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
           ))}
         </div>
       ) : resultats.length === 0 ? (
@@ -168,7 +168,7 @@ export function ArtisansListPage() {
           {resultats.map((a) => (
             <li key={a.id} className="min-w-0">
               <Link to={`/artisans/${a.id}`} className="block h-full">
-                <Card className="flex h-full flex-row items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
+                <Card className="flex h-full flex-row items-center gap-3 overflow-hidden rounded-2xl border-border/70 p-3 shadow-card transition-all duration-200 hover:shadow-card-hover active:scale-[0.99]">
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="truncate font-medium">
                       {[a.prenom, a.nom].filter(Boolean).join(' ')}
@@ -179,7 +179,7 @@ export function ArtisansListPage() {
                     {signes?.has(a.id) && (
                       <Badge
                         variant="secondary"
-                        className="gap-1 border-emerald-200 bg-emerald-50 text-xs text-emerald-700"
+                        className="gap-1 border-[#22C55E]/25 bg-[#22C55E]/5 text-xs text-[#16A34A]"
                       >
                         <BadgeCheck className="size-3.5" />
                         Contrat signé

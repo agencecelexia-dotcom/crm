@@ -1,4 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Badge } from '@/components/ui/badge'
 import { formatDateHeure } from '@/lib/format'
 import { useRelancesProjet } from './use-automatisations'
@@ -16,9 +17,9 @@ export function RelancesProjetCard({ projetId }: { projetId: string }) {
   const { data: relances } = useRelancesProjet(projetId)
   if (!relances || relances.length === 0) return null
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader>
-        <CardTitle className="text-base">Relances automatiques</CardTitle>
+        <CardTitre>Relances automatiques</CardTitre>
       </CardHeader>
       <CardContent>
         <ul className="space-y-2">

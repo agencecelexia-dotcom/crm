@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { isSameMonth, parseISO, subMonths, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -17,9 +17,11 @@ import {
 import { FolderKanban, Users, Euro, Wallet, PhoneCall, Trophy, Clock, FileText, XCircle } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
+import { SectionTitre } from '@/components/section-titre'
 import { StatutBadge } from '@/components/statut-badge'
 import { KpiTile } from '@/components/kpi-tile'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
@@ -27,11 +29,6 @@ import { formatEuros, formatDate } from '@/lib/format'
 import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { ActionDuJour } from './action-du-jour'
-
-// Petit titre de section, pour structurer le dashboard en zones lisibles.
-function SectionTitre({ children }: { children: ReactNode }) {
-  return <h2 className="mb-2 mt-6 text-sm font-semibold text-muted-foreground first:mt-0">{children}</h2>
-}
 
 export function DashboardPage() {
   const { data: projets, isLoading } = useProjets()
@@ -180,13 +177,13 @@ export function DashboardPage() {
       {isLoading ? (
         <div className="grid grid-cols-2 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+            <Skeleton key={i} className="h-24 w-full rounded-2xl" />
           ))}
         </div>
       ) : (
         <>
           {/* Vue d'ensemble */}
-          <SectionTitre>Vue d'ensemble</SectionTitre>
+          <SectionTitre className="mt-8 first:mt-0">Vue d'ensemble</SectionTitre>
           <div className="grid grid-cols-2 gap-3">
             <KpiTile icon={FolderKanban} label="Projets" valeur={String(stats.nbProjets)} />
             <KpiTile icon={Users} label="Artisans" valeur={String(artisans?.length ?? 0)} />
@@ -195,7 +192,7 @@ export function DashboardPage() {
           </div>
 
           {/* Pipeline & argent en attente */}
-          <SectionTitre>Pipeline &amp; argent en attente</SectionTitre>
+          <SectionTitre className="mt-8 first:mt-0">Pipeline &amp; argent en attente</SectionTitre>
           <div className="grid grid-cols-2 gap-3">
             <KpiTile icon={Clock} label="En attente" valeur={String(stats.enAttenteCount)} tone="warning" />
             <KpiTile
@@ -216,7 +213,7 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <Card className="mt-3 border-primary/30 bg-primary/5">
+          <Card className="mt-3 rounded-2xl border-primary/25 bg-primary/5 shadow-card">
             <CardContent className="py-4">
               <p className="text-sm font-medium">
                 Potentiel du pipeline{' '}
@@ -243,7 +240,7 @@ export function DashboardPage() {
           </Card>
 
           {/* Perdu */}
-          <SectionTitre>Perdu</SectionTitre>
+          <SectionTitre className="mt-8 first:mt-0">Perdu</SectionTitre>
           <div className="grid grid-cols-2 gap-3">
             <KpiTile icon={XCircle} label="Projets perdus" valeur={String(perdus.count)} tone="danger" />
             <KpiTile icon={Euro} label="Valeur perdue" valeur={formatEuros(perdus.valeur)} tone="danger" />
@@ -254,8 +251,8 @@ export function DashboardPage() {
           </p>
 
           {/* Commissions */}
-          <SectionTitre>Commissions</SectionTitre>
-          <Card>
+          <SectionTitre className="mt-8 first:mt-0">Commissions</SectionTitre>
+          <Card className="rounded-2xl border-border/70 shadow-card">
             <CardContent className="space-y-3 py-4">
               <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
                 <div className="h-full bg-[#22C55E]" style={{ width: `${pctEncaissee}%` }} />
@@ -283,15 +280,15 @@ export function DashboardPage() {
           </Card>
 
           {/* Analyse & activité */}
-          <SectionTitre>Analyse &amp; activité</SectionTitre>
+          <SectionTitre className="mt-8 first:mt-0">Analyse &amp; activité</SectionTitre>
           <div className="grid gap-3 md:grid-cols-2">
             {/* À faire : à rappeler / en attente */}
-            <Card>
+            <Card className="rounded-2xl border-border/70 shadow-card">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
+                <CardTitre>
                   <PhoneCall className="size-4" />
                   À faire ({aFaire.length})
-                </CardTitle>
+                </CardTitre>
               </CardHeader>
               <CardContent className="space-y-2">
                 {aFaire.length === 0 ? (
@@ -301,7 +298,7 @@ export function DashboardPage() {
                     <Link
                       key={p.id}
                       to={`/projets/${p.id}`}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-accent/50"
+                      className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 p-3 transition-colors hover:bg-muted/60"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{p.client_nom}</p>
@@ -318,9 +315,9 @@ export function DashboardPage() {
             </Card>
 
             {/* Entonnoir de conversion */}
-            <Card>
+            <Card className="rounded-2xl border-border/70 shadow-card">
               <CardHeader>
-                <CardTitle className="text-base">Conversion</CardTitle>
+                <CardTitre>Conversion</CardTitre>
               </CardHeader>
               <CardContent className="space-y-2.5">
                 {[
@@ -355,9 +352,9 @@ export function DashboardPage() {
             </Card>
 
             {/* Répartition par statut */}
-            <Card>
+            <Card className="rounded-2xl border-border/70 shadow-card">
               <CardHeader>
-                <CardTitle className="text-base">Répartition par statut</CardTitle>
+                <CardTitre>Répartition par statut</CardTitre>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={200}>
@@ -383,12 +380,12 @@ export function DashboardPage() {
             </Card>
 
             {/* Top artisans */}
-            <Card>
+            <Card className="rounded-2xl border-border/70 shadow-card">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
+                <CardTitre>
                   <Trophy className="size-4" />
                   Top artisans
-                </CardTitle>
+                </CardTitre>
               </CardHeader>
               <CardContent className="space-y-2">
                 {topArtisans.length === 0 ? (
@@ -412,9 +409,9 @@ export function DashboardPage() {
           </div>
 
           {/* CA & commissions par mois */}
-          <Card className="mt-3">
+          <Card className="mt-3 rounded-2xl border-border/70 shadow-card">
             <CardHeader>
-              <CardTitle className="text-base">CA & commissions (6 mois)</CardTitle>
+              <CardTitre>CA & commissions (6 mois)</CardTitre>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={220}>
@@ -442,9 +439,9 @@ export function DashboardPage() {
           </Card>
 
           {/* Derniers projets */}
-          <Card className="mt-3">
+          <Card className="mt-3 rounded-2xl border-border/70 shadow-card">
             <CardHeader>
-              <CardTitle className="text-base">Derniers projets</CardTitle>
+              <CardTitre>Derniers projets</CardTitre>
             </CardHeader>
             <CardContent className="space-y-2">
               {derniers.length === 0 ? (
@@ -456,7 +453,7 @@ export function DashboardPage() {
                   <Link
                     key={p.id}
                     to={`/projets/${p.id}`}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-accent/50"
+                    className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 p-3 transition-colors hover:bg-muted/60"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{p.client_nom}</p>

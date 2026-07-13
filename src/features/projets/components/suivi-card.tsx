@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Loader2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useSuivis, useAddSuiviAgence } from '../hooks/use-suivis'
@@ -29,9 +30,9 @@ export function SuiviCard({ projetId }: { projetId: string }) {
   }
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader>
-        <CardTitle className="text-base">Suivi du chantier</CardTitle>
+        <CardTitre>Suivi du chantier</CardTitre>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (

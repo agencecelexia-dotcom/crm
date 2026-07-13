@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom'
 import { BadgeCheck, Clock, X, Loader2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
 import { StatutBadge } from '@/components/statut-badge'
 import { formatEuros } from '@/lib/format'
@@ -19,11 +20,11 @@ export function AffectationsCard({ projet }: { projet: ProjetAvecArtisan }) {
   const retirer = useRetirerAffectation()
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader>
-        <CardTitle className="text-base">
+        <CardTitre>
           Artisans assignés ({affectations?.length ?? 0})
-        </CardTitle>
+        </CardTitre>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading ? (

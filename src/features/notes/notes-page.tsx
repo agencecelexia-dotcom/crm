@@ -39,7 +39,7 @@ export function NotesPage() {
       <PageHeader titre="Notes" sousTitre="Bloc-notes de l'agence" />
 
       {/* Saisie rapide */}
-      <Card className="mb-4">
+      <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardContent className="space-y-2 py-4">
           <Textarea
             rows={3}

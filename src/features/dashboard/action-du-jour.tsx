@@ -80,7 +80,7 @@ export function ActionDuJour() {
     <section className="mb-5">
       <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Action du jour</h2>
       {items.length === 0 ? (
-        <Card className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+        <Card className="flex items-center gap-2 rounded-2xl border-border/70 p-4 text-sm text-muted-foreground shadow-card">
           <CheckCircle2 className="size-5 text-[#22C55E]" />
           Tout est à jour — rien à traiter dans l'immédiat. 🎉
         </Card>
@@ -88,7 +88,7 @@ export function ActionDuJour() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {items.map((i) => (
             <Link key={i.cle} to={i.to}>
-              <Card className="flex h-full flex-col gap-1 p-3 transition-colors hover:bg-accent/40">
+              <Card className="flex h-full flex-col gap-1 rounded-2xl border-border/70 p-3 shadow-card transition-all duration-200 hover:shadow-card-hover active:scale-[0.99]">
                 <div className="flex items-center gap-1.5">
                   <span
                     className="flex size-7 shrink-0 items-center justify-center rounded-full"
