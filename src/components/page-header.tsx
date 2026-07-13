@@ -17,12 +17,12 @@ export function PageHeader({
 }) {
   const navigate = useNavigate()
   return (
-    <div className="mb-4 flex items-start gap-2">
+    <div className="mb-5 flex items-start gap-2">
       {back && (
         <Button
           variant="ghost"
           size="icon"
-          className="-ml-2 mt-0.5 shrink-0"
+          className="-ml-2 mt-0.5 shrink-0 rounded-xl active:scale-[0.98]"
           onClick={() => navigate(-1)}
           aria-label="Retour"
         >
@@ -30,9 +30,9 @@ export function PageHeader({
         </Button>
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-xl font-semibold">{titre}</h1>
+        <h1 className="truncate font-display text-2xl tracking-tight sm:text-3xl">{titre}</h1>
         {sousTitre && (
-          <p className="truncate text-sm text-muted-foreground">{sousTitre}</p>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">{sousTitre}</p>
         )}
       </div>
       {action && <div className="shrink-0">{action}</div>}

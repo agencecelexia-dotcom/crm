@@ -45,7 +45,7 @@ export function CommissionsPage() {
       />
 
       {/* Total dû */}
-      <Card className="mb-4 flex items-center justify-between bg-primary/5 p-4">
+      <Card className="mb-4 flex items-center justify-between rounded-2xl border-primary/25 bg-primary/5 p-4 shadow-card">
         <span className="text-sm font-medium text-muted-foreground">
           Total à encaisser ({aEncaisser.length})
         </span>
@@ -55,7 +55,7 @@ export function CommissionsPage() {
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
           ))}
         </div>
       ) : aEncaisser.length === 0 ? (
@@ -68,7 +68,7 @@ export function CommissionsPage() {
         <ul className="grid gap-3 md:grid-cols-2">
           {aEncaisser.map((p) => (
             <li key={p.id}>
-              <Card className="flex flex-col gap-3 p-3.5">
+              <Card className="flex flex-col gap-3 rounded-2xl border-border/70 p-3.5 shadow-card transition-shadow hover:shadow-card-hover">
                 <Link to={`/projets/${p.id}`} className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{p.client_nom}</p>

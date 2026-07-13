@@ -55,13 +55,20 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-secondary px-4">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-background px-4">
+      {/* Décor violet (purement visuel) */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-violet-100 via-violet-50/60 to-transparent" />
+        <div className="absolute -right-20 -top-16 size-72 rounded-full bg-violet-300/20 blur-3xl" />
+        <div className="absolute -bottom-24 -left-16 size-64 rounded-full bg-violet-400/10 blur-3xl" />
+      </div>
+
       <div className="mb-8 flex flex-col items-center gap-3">
-        <BrandLogo className="h-10" />
+        <BrandLogo className="h-10 mix-blend-multiply" />
         <p className="text-sm text-muted-foreground">CRM — espace associés</p>
       </div>
 
-      <Card className="w-full max-w-sm shadow-card">
+      <Card className="w-full max-w-sm rounded-2xl border-border/70 shadow-card animate-in fade-in slide-in-from-bottom-2 duration-300">
         <CardContent className="pt-6">
           {supabaseMisconfigured && (
             <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
@@ -111,7 +118,7 @@ export function LoginPage() {
               />
               <Button
                 type="submit"
-                className="h-11 w-full"
+                className="h-11 w-full shadow-violet transition-transform active:scale-[0.99]"
                 disabled={submitting || supabaseMisconfigured}
               >
                 {submitting && <Loader2 className="size-4 animate-spin" />}

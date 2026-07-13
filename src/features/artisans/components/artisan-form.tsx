@@ -606,8 +606,8 @@ export function ArtisanForm({
         />
 
         {/* ----- Profil de l'entreprise ----- */}
-        <div className="space-y-4 rounded-xl border border-border p-3">
-          <p className="text-sm font-semibold">Profil de l'entreprise</p>
+        <div className="space-y-4 rounded-xl bg-muted/40 p-3.5">
+          <p className="flex items-center gap-2 text-sm font-semibold"><span aria-hidden className="inline-block h-3.5 w-1 rounded-full bg-primary" />Profil de l'entreprise</p>
 
           <FormItem>
             <FormLabel>Nombre de salariés</FormLabel>
@@ -714,8 +714,8 @@ export function ArtisanForm({
         </div>
 
         {/* ----- Société (pour le contrat) ----- */}
-        <div className="space-y-4 rounded-xl border border-border p-3">
-          <p className="text-sm font-semibold">Société (pour le contrat)</p>
+        <div className="space-y-4 rounded-xl bg-muted/40 p-3.5">
+          <p className="flex items-center gap-2 text-sm font-semibold"><span aria-hidden className="inline-block h-3.5 w-1 rounded-full bg-primary" />Société (pour le contrat)</p>
 
           <SocieteSearch onSelect={appliquerEntreprise} />
 

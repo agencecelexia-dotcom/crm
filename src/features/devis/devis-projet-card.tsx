@@ -1,6 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Badge } from '@/components/ui/badge'
 import { formatEuros, formatDate } from '@/lib/format'
 import { useDevisProjet } from './use-devis'
@@ -11,9 +12,9 @@ export function DevisProjetCard({ projetId }: { projetId: string }) {
   if (!devis || devis.length === 0) return null
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader>
-        <CardTitle className="text-base">Devis ({devis.length})</CardTitle>
+        <CardTitre>Devis ({devis.length})</CardTitre>
       </CardHeader>
       <CardContent className="space-y-2">
         {devis.map((d) => (

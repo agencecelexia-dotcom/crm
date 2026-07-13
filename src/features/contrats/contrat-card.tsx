@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Loader2, Copy, Mail, CheckCircle2, Eye, Download, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
@@ -89,9 +90,9 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
   )}`
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">Contrat d'engagement</CardTitle>
+        <CardTitre>Contrat d'engagement</CardTitre>
         {contrat &&
           (contrat.statut === 'signe' ? (
             <Badge style={{ backgroundColor: '#22C55E', color: '#fff' }} className="border-transparent">

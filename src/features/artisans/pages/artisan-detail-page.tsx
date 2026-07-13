@@ -17,7 +17,8 @@ import { StatutBadge } from '@/components/statut-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -86,7 +87,7 @@ export function ArtisanDetailPage() {
       )}
 
       {/* Total rapporté (KPI) */}
-      <Card className="mb-4 bg-primary text-primary-foreground">
+      <Card className="mb-4 rounded-2xl border-transparent bg-primary text-primary-foreground shadow-violet">
         <CardContent className="flex items-center justify-between py-4">
           <div className="flex items-center gap-2">
             <TrendingUp className="size-5" />
@@ -102,7 +103,7 @@ export function ArtisanDetailPage() {
       <ScoringArtisanCard artisanId={artisan.id} siren={artisan.siren} />
 
       {/* Coordonnées */}
-      <Card className="mb-4">
+      <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardContent className="space-y-3 py-4 text-sm">
           {artisan.telephone && (
             <a
@@ -190,11 +191,11 @@ export function ArtisanDetailPage() {
       <ContratCard artisan={artisan} />
 
       {/* Historique des projets */}
-      <Card className="mb-4">
+      <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardHeader>
-          <CardTitle className="text-base">
+          <CardTitre>
             Projets ({projets?.length ?? 0})
-          </CardTitle>
+          </CardTitre>
         </CardHeader>
         <CardContent className="space-y-2">
           {!projets || projets.length === 0 ? (
@@ -206,7 +207,7 @@ export function ArtisanDetailPage() {
               <Link
                 key={p.id}
                 to={`/projets/${p.id}`}
-                className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:bg-accent/50"
+                className="flex items-center justify-between rounded-xl bg-muted/40 p-3 transition-colors hover:bg-muted/60"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">

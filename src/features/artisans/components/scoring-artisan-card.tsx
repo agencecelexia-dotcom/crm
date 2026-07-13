@@ -128,7 +128,7 @@ export function ScoringArtisanCard({ artisanId, siren }: { artisanId: string; si
   }
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center justify-between text-base">
           <span>Scoring interne</span>

@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
 import { uploaderPhoto, supprimerPhoto } from '@/lib/storage'
 import { usePatchProjet } from '../hooks/use-projets'
@@ -46,9 +47,9 @@ export function ProjetPhotos({ projet }: { projet: ProjetAvecArtisan }) {
   }
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">Photos du chantier</CardTitle>
+        <CardTitre>Photos du chantier</CardTitre>
         <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()} disabled={busy}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
           Ajouter

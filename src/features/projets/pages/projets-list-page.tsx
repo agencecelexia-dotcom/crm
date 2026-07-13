@@ -213,7 +213,7 @@ export function ProjetsListPage() {
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
           ))}
         </div>
       ) : vue === 'pipeline' ? (
@@ -237,7 +237,7 @@ export function ProjetsListPage() {
           {resultats.map((p) => (
             <li key={p.id} className="min-w-0">
               <Link to={`/projets/${p.id}`} className="block h-full">
-                <Card className="flex h-full flex-row items-center gap-3 overflow-hidden p-3 transition-colors hover:bg-accent/50">
+                <Card className="flex h-full flex-row items-center gap-3 overflow-hidden rounded-2xl border-border/70 p-3 shadow-card transition-all duration-200 hover:shadow-card-hover active:scale-[0.99]">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="min-w-0 truncate font-medium">{p.client_nom}</p>
@@ -256,9 +256,9 @@ export function ProjetsListPage() {
                     {p.artisan && (
                       <p className="flex items-center gap-1 text-xs">
                         {artisansSignes?.has(p.artisan_id ?? '') ? (
-                          <BadgeCheck className="size-3.5 shrink-0 text-[#22C55E]" />
+                          <BadgeCheck className="size-3.5 shrink-0 text-[#16A34A]" />
                         ) : (
-                          <Clock className="size-3.5 shrink-0 text-[#F59E0B]" />
+                          <Clock className="size-3.5 shrink-0 text-[#B45309]" />
                         )}
                         <span className="min-w-0 truncate text-muted-foreground">
                           {p.artisan.societe ?? p.artisan.nom}
@@ -267,8 +267,8 @@ export function ProjetsListPage() {
                           className={cn(
                             'shrink-0 font-medium',
                             artisansSignes?.has(p.artisan_id ?? '')
-                              ? 'text-[#22C55E]'
-                              : 'text-[#F59E0B]',
+                              ? 'text-[#16A34A]'
+                              : 'text-[#B45309]',
                           )}
                         >
                           · {artisansSignes?.has(p.artisan_id ?? '') ? 'signé' : 'non signé'}

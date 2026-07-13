@@ -39,10 +39,10 @@ export function RappelProjetCard({ projetId }: { projetId: string }) {
   }
 
   return (
-    <Card className="mb-4 border-[#7C3AED]/30 bg-[#7C3AED]/5">
+    <Card className="mb-4 rounded-2xl border-primary/25 bg-primary/5 shadow-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Clock className="size-4 text-[#7C3AED]" />
+          <Clock className="size-4 text-primary" />
           Programmer un rappel
         </CardTitle>
       </CardHeader>

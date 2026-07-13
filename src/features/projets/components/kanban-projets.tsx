@@ -39,8 +39,8 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
             onDragLeave={() => setOver((o) => (o === s ? null : o))}
             onDrop={(e) => onDrop(s, e)}
             className={cn(
-              'flex w-64 shrink-0 flex-col rounded-xl border bg-secondary/30 p-2',
-              over === s ? 'border-dashed border-primary bg-primary/5' : 'border-border',
+              'flex w-64 shrink-0 flex-col rounded-2xl border bg-muted/30 p-2',
+              over === s ? 'border-dashed border-primary bg-primary/5' : 'border-border/70',
             )}
           >
             <div className="mb-2 flex items-center justify-between px-1">
@@ -48,7 +48,9 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
                 <span className="size-2.5 rounded-full" style={{ background: STATUTS[s].color }} />
                 {STATUTS[s].label}
               </span>
-              <span className="text-xs text-muted-foreground">{items.length}</span>
+              <span className="rounded-full bg-white/60 px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+                {items.length}
+              </span>
             </div>
 
             <div className="space-y-2">
@@ -57,7 +59,7 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
                   key={p.id}
                   draggable
                   onDragStart={(e) => e.dataTransfer.setData('text/plain', p.id)}
-                  className="cursor-grab rounded-lg border border-border bg-card p-2.5 shadow-sm active:cursor-grabbing"
+                  className="cursor-grab rounded-xl border border-border/70 bg-card p-2.5 shadow-soft transition-shadow hover:shadow-card active:cursor-grabbing"
                 >
                   <Link to={`/projets/${p.id}`} draggable={false} className="block">
                     <p className="truncate text-sm font-medium">{p.client_nom}</p>
@@ -68,9 +70,9 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
                     {p.artisan && (
                       <p className="flex items-center gap-1 text-xs">
                         {artisansSignes?.has(p.artisan_id ?? '') ? (
-                          <BadgeCheck className="size-3 shrink-0 text-[#22C55E]" />
+                          <BadgeCheck className="size-3 shrink-0 text-[#16A34A]" />
                         ) : (
-                          <Clock className="size-3 shrink-0 text-[#F59E0B]" />
+                          <Clock className="size-3 shrink-0 text-[#B45309]" />
                         )}
                         <span className="min-w-0 truncate text-muted-foreground">
                           {p.artisan.societe || p.artisan.nom}
@@ -81,7 +83,9 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
                 </div>
               ))}
               {items.length === 0 && (
-                <p className="px-1 py-3 text-center text-xs text-muted-foreground">—</p>
+                <p className="rounded-xl border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
+                  Aucun projet
+                </p>
               )}
             </div>
           </div>

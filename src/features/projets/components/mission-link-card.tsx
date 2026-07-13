@@ -61,7 +61,7 @@ export function MissionLinkCard({ projet }: { projet: ProjetAvecArtisan }) {
   }
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="flex items-center gap-2 text-base">
           <Link2 className="size-4" />

@@ -4,7 +4,8 @@ import { fr } from 'date-fns/locale'
 import { CalendarIcon, Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -76,9 +77,9 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
   }
 
   return (
-    <Card className="mb-4">
+    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader>
-        <CardTitle className="text-base">Argent</CardTitle>
+        <CardTitre>Argent</CardTitre>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-3">

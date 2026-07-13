@@ -43,9 +43,9 @@ export function ArtisansStatsPage() {
           {stats.map((s, i) => (
             <li key={s.id}>
               <Link to={`/artisans/${s.id}`}>
-                <Card className="flex flex-col gap-3 p-4 transition-colors hover:bg-accent/40">
+                <Card className="flex flex-col gap-3 rounded-2xl border-border/70 p-4 shadow-card transition-all duration-200 hover:shadow-card-hover active:scale-[0.99]">
                   <div className="flex items-start gap-2">
-                    <span className="text-sm font-semibold text-muted-foreground">#{i + 1}</span>
+                    <span className="montant text-sm font-semibold text-muted-foreground">#{i + 1}</span>
                     <div className="min-w-0 flex-1">
                       <p className="flex items-center gap-1.5 truncate font-medium">
                         {i === 0 && <Trophy className="size-4 shrink-0 text-[#F59E0B]" />}

@@ -4,7 +4,8 @@ import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardTitre } from '@/components/card-titre'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import {
   CLE_SIGNATURE_APPORTEUR,
@@ -52,12 +53,12 @@ export function ParametresSignaturePage() {
       />
 
       {/* Signature actuelle */}
-      <Card className="mb-4">
+      <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <PenTool className="size-4" />
+          <CardTitre>
+            <PenTool className="size-4 text-primary" />
             Signature enregistrée
-          </CardTitle>
+          </CardTitre>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -71,7 +72,7 @@ export function ParametresSignaturePage() {
                 alt="Signature de l'apporteur"
                 className="h-24 w-auto rounded-md border border-border bg-white p-2"
               />
-              <span className="flex items-center gap-1 text-sm text-[#22C55E]">
+              <span className="flex items-center gap-1 text-sm text-[#16A34A]">
                 <CheckCircle2 className="size-4" />
                 Active
               </span>
@@ -85,11 +86,11 @@ export function ParametresSignaturePage() {
       </Card>
 
       {/* Nouvelle signature */}
-      <Card>
+      <Card className="rounded-2xl border-border/70 shadow-card">
         <CardHeader>
-          <CardTitle className="text-base">
+          <CardTitre>
             {signatureCourante ? 'Modifier ma signature' : 'Déposer ma signature'}
-          </CardTitle>
+          </CardTitre>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">

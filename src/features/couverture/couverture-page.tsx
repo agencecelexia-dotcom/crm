@@ -29,9 +29,9 @@ type Drill = { lat: number; lon: number; nom: string; metier: string | null }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <Card className="p-3">
+    <Card className="rounded-2xl border-border/70 p-3.5 shadow-card">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-xl font-semibold" style={color ? { color } : undefined}>
+      <p className="montant text-xl font-semibold" style={color ? { color } : undefined}>
         {value}
       </p>
     </Card>
