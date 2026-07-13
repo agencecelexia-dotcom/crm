@@ -73,7 +73,7 @@ export function NotesPage() {
         <ul className="space-y-2">
           {notes.map((n) => (
             <li key={n.id}>
-              <Card>
+              <Card className="rounded-2xl border-border/70 shadow-card">
                 <CardContent className="flex items-start gap-3 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="whitespace-pre-wrap text-sm">{n.contenu}</p>

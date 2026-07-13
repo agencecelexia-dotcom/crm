@@ -172,7 +172,7 @@ export function CartePage() {
 
       <div className="relative isolate h-[calc(100dvh-16rem)] w-full">
         {/* Bascule fond de carte */}
-        <div className="absolute right-3 top-3 z-[1000] flex overflow-hidden rounded-lg border border-border bg-card shadow-card">
+        <div className="absolute right-3 top-3 z-[1000] flex overflow-hidden rounded-xl border border-border/70 bg-card shadow-card">
           {(['plan', 'satellite'] as const).map((f) => (
             <button
               key={f}
@@ -266,7 +266,7 @@ export function CartePage() {
       </div>
 
       {/* Légende */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3 text-xs">
+      <div className="mx-4 my-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl bg-card/95 px-3.5 py-2.5 text-xs shadow-soft backdrop-blur">
         <span className="flex items-center gap-1.5">
           <span
             className="inline-block size-3 rounded-full border-2 border-white shadow"

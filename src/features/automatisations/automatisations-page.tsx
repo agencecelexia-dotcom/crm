@@ -109,7 +109,7 @@ export function AutomatisationsPage() {
                     return (
                       <li key={x.id} className="flex items-center justify-between gap-2 text-sm">
                         <div className="flex min-w-0 items-center gap-2">
-                          <Badge className="shrink-0 border-transparent text-xs" style={{ backgroundColor: t.color, color: '#fff' }}>
+                          <Badge className="shrink-0 rounded-full border-transparent text-xs font-medium" style={{ backgroundColor: `${t.color}1a`, color: t.color }}>
                             {t.label}
                           </Badge>
                           <span className="truncate text-muted-foreground">

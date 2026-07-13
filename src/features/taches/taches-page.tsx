@@ -139,7 +139,7 @@ export function TachesPage() {
 
       {/* Ajout manuel */}
       {ouvert && (
-        <Card className="mb-4 space-y-2 rounded-2xl p-4 shadow-card">
+        <Card className="mb-4 space-y-2 rounded-2xl border-border/70 p-4 shadow-card animate-in fade-in slide-in-from-top-1 duration-200">
           <Input
             placeholder="Que faut-il faire ? (ex. Rappeler M. Durand pour le devis)"
             value={titre}
@@ -171,8 +171,8 @@ export function TachesPage() {
           </div>
 
           {/* Rappel daté : si une date est mise, ça devient un rappel (email à l'échéance). */}
-          <div className="rounded-xl border border-dashed border-[#7C3AED]/30 bg-[#7C3AED]/5 p-3">
-            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[#6D28D9]">
+          <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3">
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-primary">
               <Clock className="size-3.5" />
               Me le rappeler le… (optionnel → email + tâche à la date)
             </label>
@@ -272,8 +272,8 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
     <li>
       <Card
         className={cn(
-          'flex items-start gap-3 rounded-2xl p-3.5 shadow-sm transition-all',
-          fait ? 'opacity-55' : 'hover:shadow-card',
+          'flex items-start gap-3 rounded-2xl border-border/70 p-3.5 shadow-card transition-all duration-200',
+          fait ? 'opacity-55' : 'hover:shadow-card-hover',
         )}
       >
         {/* Case ronde */}
@@ -336,7 +336,7 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
               {t.categorie === 'commission' && t.projet_id && (
                 <Button
                   size="sm"
-                  className="h-8 rounded-full bg-[#22C55E] hover:bg-[#16A34A]"
+                  className="h-8 rounded-full bg-[#22C55E] shadow-none hover:bg-[#16A34A]"
                   disabled={encaisser.isPending}
                   onClick={() =>
                     encaisser.mutate(t.projet_id!, {
