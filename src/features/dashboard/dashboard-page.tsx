@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { CardTitre } from '@/components/card-titre'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
-import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
+import { STATUTS, STATUTS_ORDRE, STATUTS_PERTE } from '@/lib/constants'
 import { formatEuros, formatDate } from '@/lib/format'
 import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
@@ -75,10 +75,10 @@ export function DashboardPage() {
     }
   }, [projetsPeriode])
 
-  // Projets perdus : indépendant de la période (statut transitoire, supprimé
-  // automatiquement 48h après passage en « Perdu » — voir projet-detail-page).
+  // Pertes, indépendant de la période : « perdu » (lâché par un artisan, le
+  // chantier reste réattribuable) + « mort » (client parti ailleurs, agence).
   const perdus = useMemo(() => {
-    const items = (projets ?? []).filter((p) => p.statut === 'perdu')
+    const items = (projets ?? []).filter((p) => STATUTS_PERTE.includes(p.statut))
     const valeur = items.reduce((s, p) => s + (p.montant_devis ?? p.estimation_interne ?? 0), 0)
     return { count: items.length, valeur }
   }, [projets])
@@ -127,7 +127,7 @@ export function DashboardPage() {
 
   // Entonnoir de conversion (sur la période).
   const funnel = useMemo(() => {
-    const leads = projetsPeriode.filter((p) => p.statut !== 'perdu').length
+    const leads = projetsPeriode.filter((p) => !STATUTS_PERTE.includes(p.statut)).length
     const assignes = projetsPeriode.filter((p) =>
       ['artisan_assigne', 'devis_envoye', 'devis_signe'].includes(p.statut),
     ).length
@@ -142,7 +142,7 @@ export function DashboardPage() {
   // somme des estimations des projets encore en cours.
   const pipeline = useMemo(() => {
     const actifs = (projets ?? []).filter(
-      (p) => !['perdu', 'termine', 'devis_signe'].includes(p.statut),
+      (p) => !['perdu', 'mort', 'termine', 'devis_signe'].includes(p.statut),
     )
     const total = actifs.reduce((s, p) => s + (p.estimation_interne ?? 0), 0)
     const nb = actifs.filter((p) => p.estimation_interne != null).length

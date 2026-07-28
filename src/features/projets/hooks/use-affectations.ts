@@ -37,16 +37,27 @@ export function useAffectations(projetId: string | undefined) {
   })
 }
 
-/** Nombre d'artisans assignés par projet (pour les cartes liste / Kanban). */
+/** Compteurs d'affectations par projet (cartes liste / Kanban / fiche). */
+export type CompteursAffectations = {
+  /** Nombre total d'artisans assignés. */
+  total: number
+  /** Nombre d'artisans qui ont lâché le dossier — signale un lead déjà refusé. */
+  perdus: number
+}
+
 export function useAffectationsCounts() {
   return useQuery({
     queryKey: ['affectations', 'counts'],
     refetchOnWindowFocus: true,
-    queryFn: async (): Promise<Record<string, number>> => {
-      const { data, error } = await supabase.from('affectations').select('projet_id')
+    queryFn: async (): Promise<Record<string, CompteursAffectations>> => {
+      const { data, error } = await supabase.from('affectations').select('projet_id, statut')
       if (error) throw error
-      const m: Record<string, number> = {}
-      for (const r of data ?? []) m[r.projet_id] = (m[r.projet_id] ?? 0) + 1
+      const m: Record<string, CompteursAffectations> = {}
+      for (const r of data ?? []) {
+        const c = (m[r.projet_id] ??= { total: 0, perdus: 0 })
+        c.total += 1
+        if (r.statut === 'perdu') c.perdus += 1
+      }
       return m
     },
   })

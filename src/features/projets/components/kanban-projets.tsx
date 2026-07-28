@@ -4,6 +4,8 @@ import { BadgeCheck, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { usePatchProjet } from '../hooks/use-projets'
+import { useAffectationsCounts } from '../hooks/use-affectations'
+import { BadgePerduPar } from './badge-perdu-par'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { ConfirmStatutDialog } from './confirm-statut-dialog'
 import type { ProjetAvecArtisan, StatutProjet } from '@/types/database'
@@ -14,6 +16,7 @@ import type { ProjetAvecArtisan, StatutProjet } from '@/types/database'
 export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
   const patch = usePatchProjet()
   const { data: artisansSignes } = useArtisansSignes()
+  const { data: affectationsCounts } = useAffectationsCounts()
   const [over, setOver] = useState<StatutProjet | null>(null)
   const [enAttente, setEnAttente] = useState<{ id: string; statut: StatutProjet } | null>(null)
 
@@ -67,6 +70,10 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
                       {p.metiers.join(', ') || '—'}
                       {p.client_ville ? ` · ${p.client_ville}` : ''}
                     </p>
+                    <BadgePerduPar
+                      nb={affectationsCounts?.[p.id]?.perdus ?? 0}
+                      className="mt-1"
+                    />
                     {p.artisan && (
                       <p className="flex items-center gap-1 text-xs">
                         {artisansSignes?.has(p.artisan_id ?? '') ? (

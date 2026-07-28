@@ -12,7 +12,10 @@ export type StatutProjet =
   | 'devis_envoye'
   | 'devis_signe'
   | 'termine'
+  /** Perdu par UN artisan — le chantier reste vivant et réattribuable. */
   | 'perdu'
+  /** Lead définitivement mort (client parti ailleurs) — réservé à l'agence. */
+  | 'mort'
 
 /** Une zone d'intervention = une ville (géocodée) + un rayon (km). */
 export interface ZoneCouverte {
@@ -370,4 +373,26 @@ export interface EspaceArtisan {
   signe: boolean
   contrat_externe: boolean
   projets: ProjetEspace[]
+  /**
+   * Statistiques calculées côté base sur TOUTES les affectations de l'artisan,
+   * y compris celles sorties de son pipe (masquées, perdues depuis plus de
+   * 15 jours, projets morts) — nettoyer sa liste ne fausse jamais ses chiffres.
+   * Absent tant que la migration 0062 n'est pas exécutée → repli sur le calcul
+   * à partir de `projets`.
+   */
+  stats?: StatsEspaceArtisan
+}
+
+/** Bloc `stats` renvoyé par `get_espace_artisan` (migration 0062). */
+export interface StatsEspaceArtisan {
+  en_attente: number
+  perdus: number
+  devis_envoyes: number
+  montant_devis_envoyes: number
+  signes: number
+  /** Devis envoyés + signés + terminés = dénominateur du taux de conversion. */
+  devis_aboutis: number
+  vendu: number
+  commission_a_regler: number
+  commission_reglee: number
 }

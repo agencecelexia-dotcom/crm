@@ -22,6 +22,7 @@ import { METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
 import { useAffectationsCounts } from '../hooks/use-affectations'
+import { BadgePerduPar } from '../components/badge-perdu-par'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { QuickProspectDialog } from '../components/quick-prospect-dialog'
 import { KanbanProjets } from '../components/kanban-projets'
@@ -243,6 +244,7 @@ export function ProjetsListPage() {
                       <p className="min-w-0 truncate font-medium">{p.client_nom}</p>
                       <StatutBadge statut={p.statut} />
                     </div>
+                    <BadgePerduPar nb={affectationsCounts?.[p.id]?.perdus ?? 0} />
                     {p.client_telephone && (
                       <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
                         <Phone className="size-3.5 shrink-0" />
@@ -273,9 +275,9 @@ export function ProjetsListPage() {
                         >
                           · {artisansSignes?.has(p.artisan_id ?? '') ? 'signé' : 'non signé'}
                         </span>
-                        {(affectationsCounts?.[p.id] ?? 0) > 1 && (
+                        {(affectationsCounts?.[p.id]?.total ?? 0) > 1 && (
                           <span className="shrink-0 text-primary">
-                            +{(affectationsCounts?.[p.id] ?? 0) - 1}
+                            +{(affectationsCounts?.[p.id]?.total ?? 0) - 1}
                           </span>
                         )}
                       </p>

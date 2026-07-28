@@ -166,6 +166,7 @@ export const STATUTS: Record<
   devis_signe: { label: 'Devis signé', color: '#22C55E', textOnColor: '#FFFFFF' },
   termine: { label: 'Terminé', color: '#0F766E', textOnColor: '#FFFFFF' },
   perdu: { label: 'Perdu', color: '#EF4444', textOnColor: '#FFFFFF' },
+  mort: { label: 'Mort', color: '#1F2937', textOnColor: '#FFFFFF' },
 }
 
 /** Ordre d'affichage des statuts dans le pipeline. */
@@ -180,7 +181,15 @@ export const STATUTS_ORDRE: StatutProjet[] = [
   'devis_signe',
   'termine',
   'perdu',
+  'mort',
 ]
+
+/**
+ * Statuts « terminaux » de perte, pour les compteurs.
+ * `perdu` = perdu par un artisan (le chantier reste réattribuable),
+ * `mort` = lead définitivement mort, déclaré par l'agence uniquement.
+ */
+export const STATUTS_PERTE: StatutProjet[] = ['perdu', 'mort']
 
 /** Statuts de suivi déclarables par l'artisan (parcours après mise en relation). */
 export const SUIVI_STATUTS: Record<string, { label: string; color: string; emoji: string }> = {

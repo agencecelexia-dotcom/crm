@@ -30,7 +30,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
-import { formatEuros, formatDateHeure, formatTel } from '@/lib/format'
+import { formatEuros, formatTel } from '@/lib/format'
 import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets'
 import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
@@ -43,6 +43,8 @@ import { DocumentRow } from '../components/document-row'
 import { DevisProjetCard } from '@/features/devis/devis-projet-card'
 import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
 import { ConfirmStatutDialog } from '../components/confirm-statut-dialog'
+import { BadgePerduPar } from '../components/badge-perdu-par'
+import { useAffectationsCounts } from '../hooks/use-affectations'
 import type { ProjetInput, StatutProjet } from '@/types/database'
 
 // Fiche projet : infos, statut, assignation, montants/commission, documents.
@@ -52,6 +54,7 @@ export function ProjetDetailPage() {
   const { data: projet, isLoading } = useProjet(id)
   const patch = usePatchProjet()
   const remove = useDeleteProjet()
+  const { data: affectationsCounts } = useAffectationsCounts()
   const [statutEnAttente, setStatutEnAttente] = useState<StatutProjet | null>(null)
 
   if (isLoading || !projet) {
@@ -116,9 +119,12 @@ export function ProjetDetailPage() {
       {/* Statut */}
       <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardContent className="space-y-3 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <CardTitre>Statut</CardTitre>
-            <StatutBadge statut={projet.statut} />
+            <div className="flex items-center gap-2">
+              <BadgePerduPar nb={affectationsCounts?.[projet.id]?.perdus ?? 0} />
+              <StatutBadge statut={projet.statut} />
+            </div>
           </div>
           <Select
             value={projet.statut}
@@ -138,13 +144,18 @@ export function ProjetDetailPage() {
 
           {projet.statut === 'perdu' && (
             <p className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/5 p-2.5 text-xs text-[#DC2626]">
-              ⚠️ Projet perdu : suppression automatique définitive 48 h après le passage en « Perdu »
-              {projet.perdu_at
-                ? ` (vers le ${formatDateHeure(
-                    new Date(new Date(projet.perdu_at).getTime() + 48 * 3600 * 1000).toISOString(),
-                  )})`
-                : ''}
-              . Repasse-le à un autre statut pour annuler.
+              Perdu par l'artisan : le chantier reste vivant, tu peux le réassigner à quelqu'un
+              d'autre. Il disparaît du pipe de l'artisan au bout de 15 jours (ses statistiques le
+              comptent toujours). Si le client est parti ailleurs et qu'il n'y a plus rien à en
+              tirer, passe-le en « Mort ».
+            </p>
+          )}
+
+          {projet.statut === 'mort' && (
+            <p className="rounded-xl border border-[#1F2937]/25 bg-[#1F2937]/5 p-2.5 text-xs text-[#1F2937]">
+              Lead mort : le client a trouvé ailleurs. Le chantier disparaît immédiatement des
+              espaces artisans, mais reste ici et dans les statistiques. Seule l'agence peut poser
+              ce statut.
             </p>
           )}
         </CardContent>
