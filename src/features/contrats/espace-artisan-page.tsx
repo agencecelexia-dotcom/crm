@@ -41,6 +41,7 @@ import { finaliserContenu } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
 import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
+import { RetraitChantierDialog } from './retrait-chantier-dialog'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
 import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
@@ -810,6 +811,15 @@ function ProjetItem({
                   onDone={onChange}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Retrait volontaire. Disponible même contrat non signé : un artisan
+              qui ne veut pas du dossier n'a pas à signer pour le décliner.
+              Masqué sur un chantier terminé, où le retrait n'a plus de sens. */}
+          {projet.statut !== 'termine' && (
+            <div className="flex justify-end border-t border-border pt-3">
+              <RetraitChantierDialog token={projet.token} onRetire={onChange} />
             </div>
           )}
         </div>
