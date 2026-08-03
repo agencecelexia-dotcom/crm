@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react'
+import { Loader2, PauseCircle, PlayCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page-header'
@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { formatDateHeure } from '@/lib/format'
 import { useReglages, useSetReglage, useRelances, destinataireRelance } from './use-automatisations'
 
@@ -44,7 +45,58 @@ export function AutomatisationsPage() {
         </div>
       ) : (
         <>
-          <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
+          {/* Interrupteur maître. Volontairement séparé et au-dessus : couper
+              temporairement TOUT sans perdre le réglage fin de chaque relance. */}
+          <Card
+            className={cn(
+              'mb-4 rounded-2xl shadow-card transition-colors',
+              r.relances_pause ? 'border-[#F59E0B]/50 bg-[#F59E0B]/5' : 'border-border/70',
+            )}
+          >
+            <CardContent className="flex items-start gap-3 py-4">
+              <span
+                className={cn(
+                  'flex size-9 shrink-0 items-center justify-center rounded-full',
+                  r.relances_pause
+                    ? 'bg-[#F59E0B]/15 text-[#B45309]'
+                    : 'bg-muted text-muted-foreground',
+                )}
+              >
+                {r.relances_pause ? <PauseCircle className="size-5" /> : <PlayCircle className="size-5" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">
+                  {r.relances_pause ? 'Relances en pause' : 'Relances automatiques actives'}
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {r.relances_pause
+                    ? "Aucune relance ne part vers les artisans. Les mails « nouveau chantier » et vos rappels de tâches continuent normalement. Les réglages ci-dessous sont conservés."
+                    : 'Les relances ci-dessous tournent toutes les 30 min, dans la plage horaire définie.'}
+                </p>
+              </div>
+              <Switch
+                checked={!r.relances_pause}
+                onCheckedChange={(v) =>
+                  set.mutate(
+                    { cle: 'relances_pause', valeur: v ? 'off' : 'on' },
+                    {
+                      onSuccess: () =>
+                        toast.success(v ? 'Relances réactivées' : 'Relances mises en pause'),
+                    },
+                  )
+                }
+                aria-label="Activer ou mettre en pause toutes les relances automatiques"
+              />
+            </CardContent>
+          </Card>
+
+          <Card
+            className={cn(
+              'mb-4 rounded-2xl border-border/70 shadow-card transition-opacity',
+              r.relances_pause && 'pointer-events-none opacity-50',
+            )}
+            aria-disabled={r.relances_pause}
+          >
             <CardHeader>
               <CardTitre>Relances actives</CardTitre>
             </CardHeader>

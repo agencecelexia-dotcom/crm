@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase/client'
 // Réglages des automatisations (table app_settings) + historique des relances.
 
 export interface Reglages {
+  /** Pause générale : court-circuite TOUTES les relances, sans effacer les
+   *  bascules ci-dessous (elles reprennent telles quelles à la reprise).
+   *  Lu côté base par traiter_relances_si_actif() — migration 0062. */
+  relances_pause: boolean
   auto_contrat: boolean
   auto_inaction: boolean
   auto_orphelin: boolean
@@ -18,6 +22,7 @@ export interface Reglages {
 }
 
 const DEFAUTS: Reglages = {
+  relances_pause: false,
   auto_contrat: true,
   auto_inaction: true,
   auto_orphelin: true,
@@ -39,6 +44,8 @@ export function useReglages() {
       if (error) throw error
       const map = Object.fromEntries((data ?? []).map((r) => [r.cle, r.valeur]))
       return {
+        // Défaut 'off' : en l'absence de réglage, les relances tournent.
+        relances_pause: (map.relances_pause ?? 'off') === 'on',
         auto_contrat: (map.auto_contrat ?? 'on') === 'on',
         auto_inaction: (map.auto_inaction ?? 'on') === 'on',
         auto_orphelin: (map.auto_orphelin ?? 'on') === 'on',
