@@ -44,7 +44,12 @@ import { UploadDevis } from './upload-devis'
 import { RetraitChantierDialog } from './retrait-chantier-dialog'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
-import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
+import type {
+  EspaceArtisan,
+  ProjetEspace,
+  StatsEspaceArtisan,
+  StatutProjet,
+} from '@/types/database'
 
 // Le générateur de devis n'est activé QUE pour cet artisan (Metbach) pour l'instant.
 const METBACH_ID = '98a39398-2b7f-4a44-b9bc-aa6f893e9d32'
@@ -225,7 +230,9 @@ export function EspaceArtisanPage() {
       )}
 
       {/* Résumé de son activité (statuts + commission due) */}
-      {signe && projets.length > 0 && <ResumeArtisan projets={projets} />}
+      {signe && (projets.length > 0 || data.stats) && (
+        <ResumeArtisan projets={projets} statsBase={data.stats} />
+      )}
       </div>
 
       {/* Devis (Metbach uniquement) */}
@@ -259,8 +266,35 @@ export function EspaceArtisanPage() {
 // en attente, perdus, devis envoyés + montant, vendu, taux de conversion, et
 // la commission qu'il doit à Celexia (due dès la signature du devis client,
 // cf. contrat d'engagement) — à régler vs déjà réglée.
-function ResumeArtisan({ projets }: { projets: ProjetEspace[] }) {
+function ResumeArtisan({
+  projets,
+  statsBase,
+}: {
+  projets: ProjetEspace[]
+  /** Stats calculées en base sur TOUS ses chantiers, y compris ceux sortis de
+   *  son pipe (masqués, perdus depuis plus de 15 jours, projets morts). */
+  statsBase?: StatsEspaceArtisan
+}) {
   const stats = useMemo(() => {
+    // Source de vérité : le bloc `stats` du RPC. Le calcul ci-dessous ne sert
+    // que de repli tant que la migration 0062 n'est pas exécutée — il ne voit
+    // alors que le pipe visible.
+    if (statsBase) {
+      return {
+        enAttente: statsBase.en_attente,
+        perdus: statsBase.perdus,
+        devisEnvoyesCount: statsBase.devis_envoyes,
+        montantDevisEnvoyes: statsBase.montant_devis_envoyes,
+        vendu: statsBase.vendu,
+        tauxConversion:
+          statsBase.devis_aboutis > 0
+            ? Math.round((statsBase.signes / statsBase.devis_aboutis) * 100)
+            : null,
+        commissionARegler: statsBase.commission_a_regler,
+        commissionReglee: statsBase.commission_reglee,
+      }
+    }
+
     const enAttente = projets.filter((p) => p.statut === 'en_attente').length
     const perdus = projets.filter((p) => p.statut === 'perdu').length
 
@@ -294,7 +328,7 @@ function ResumeArtisan({ projets }: { projets: ProjetEspace[] }) {
       commissionARegler,
       commissionReglee,
     }
-  }, [projets])
+  }, [projets, statsBase])
 
   return (
     <section className="mt-8">
