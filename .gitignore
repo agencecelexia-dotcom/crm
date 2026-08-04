@@ -39,3 +39,11 @@ Contrat-apporteur-affaires-Celexia.docx
 
 # Documents sources (contrats Word) — hors repo
 *.docx
+
+# Documents clients reçus (PDF de demandes de devis, factures…).
+# Ils contiennent des données personnelles réelles — noms, téléphones,
+# adresses. Leur place est le bucket privé `documents` de Supabase, pas
+# l'historique git, d'où on ne peut plus les retirer sans réécriture.
+pdf/
+"pdf "/
+*.pdf
