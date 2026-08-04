@@ -91,6 +91,31 @@ export async function uploaderDocument(
 }
 
 /**
+ * Téléverse une pièce jointe libre d'un projet dans le bucket PRIVÉ et
+ * renvoie son chemin de stockage.
+ *
+ * Contrairement à `uploaderDocument`, le chemin est unique par fichier : on ne
+ * veut rien écraser, un projet pouvant porter autant de pièces que nécessaire.
+ * Le nom d'origine n'entre pas dans le chemin — il est conservé en base, dans
+ * `projet_documents.nom` — ce qui évite toute question d'échappement et de
+ * caractères exotiques dans une clé de stockage.
+ */
+export async function uploaderPieceProjet(projetId: string, file: File): Promise<string> {
+  const chemin = `${projetId}/pieces/${crypto.randomUUID()}.pdf`
+  const { error } = await supabase.storage.from(BUCKET).upload(chemin, file, {
+    contentType: file.type || 'application/pdf',
+  })
+  if (error) throw error
+  return chemin
+}
+
+/** Supprime une pièce jointe du bucket privé. */
+export async function supprimerPieceProjet(chemin: string): Promise<void> {
+  const { error } = await supabase.storage.from(BUCKET).remove([chemin])
+  if (error) throw error
+}
+
+/**
  * Génère une URL signée (valable 1h par défaut) pour consulter un document privé.
  * `download` force le téléchargement (Content-Disposition: attachment) ; on peut
  * passer un nom de fichier (string) ou `true` pour garder le nom d'origine.

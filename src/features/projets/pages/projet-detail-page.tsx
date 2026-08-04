@@ -40,6 +40,7 @@ import { NotesInternesCard } from '../components/notes-internes-card'
 import { RappelProjetCard } from '../components/rappel-projet-card'
 import { RelancesProjetCard } from '@/features/automatisations/relances-projet-card'
 import { DocumentRow } from '../components/document-row'
+import { PiecesJointes } from '../components/pieces-jointes'
 import { DevisProjetCard } from '@/features/devis/devis-projet-card'
 import { ContratEngagementRow } from '@/features/contrats/contrat-engagement-row'
 import { ConfirmStatutDialog } from '../components/confirm-statut-dialog'
@@ -261,6 +262,15 @@ export function ProjetDetailPage() {
             champ="devis_signe_url"
             cheminActuel={projet.devis_signe_url}
           />
+
+          {/* Pièces libres : autant de PDF que nécessaire, sans écrasement.
+              Séparées des 3 emplacements ci-dessus, qui pilotent le statut. */}
+          <div className="pt-2">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Autres documents
+            </p>
+            <PiecesJointes projetId={projet.id} />
+          </div>
         </CardContent>
       </Card>
 

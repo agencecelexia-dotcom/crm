@@ -1,8 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AppProviders } from './providers'
 import { AppLayout } from './layout/app-layout'
 import { AuthProvider } from '@/lib/auth/auth-provider'
 import { ProtectedRoute } from '@/lib/auth/protected-route'
+import { ErrorBoundary } from '@/components/error-boundary'
+import { PageIntrouvable } from '@/features/page-introuvable'
 
 import { LoginPage } from '@/features/auth/login-page'
 import { SignerPage } from '@/features/contrats/signer-page'
@@ -36,18 +38,37 @@ export default function App() {
     <AppProviders>
       <AuthProvider>
         <BrowserRouter>
+          <ErrorBoundary>
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
-            {/* Pages publiques (sans authentification) */}
-            <Route path="/signer/:token" element={<SignerPage />} />
+            {/* Pages publiques (sans authentification).
+                Chacune a sa PROPRE frontière d'erreur : un plantage sur l'une
+                ne doit pas emporter les autres, et un artisan en train de
+                signer doit voir un message plutôt qu'un écran blanc. */}
+            <Route
+              path="/signer/:token"
+              element={<ErrorBoundary><SignerPage /></ErrorBoundary>}
+            />
             {/* Espace artisan par projet : signature → dossier client → dépôt devis */}
-            <Route path="/mission/:token" element={<MissionPage />} />
+            <Route
+              path="/mission/:token"
+              element={<ErrorBoundary><MissionPage /></ErrorBoundary>}
+            />
             {/* Espace artisan UNIQUE (un lien par artisan) : contrat + tous ses chantiers */}
-            <Route path="/artisan/:token" element={<EspaceArtisanPage />} />
+            <Route
+              path="/artisan/:token"
+              element={<ErrorBoundary><EspaceArtisanPage /></ErrorBoundary>}
+            />
             {/* Auto-inscription artisan (lien public externe : WhatsApp/Facebook…) */}
-            <Route path="/rejoindre" element={<InscriptionArtisanPage />} />
-            <Route path="/rejoindre/:canal" element={<InscriptionArtisanPage />} />
+            <Route
+              path="/rejoindre"
+              element={<ErrorBoundary><InscriptionArtisanPage /></ErrorBoundary>}
+            />
+            <Route
+              path="/rejoindre/:canal"
+              element={<ErrorBoundary><InscriptionArtisanPage /></ErrorBoundary>}
+            />
 
             {/* Privé (nécessite une session) */}
             <Route element={<ProtectedRoute />}>
@@ -78,9 +99,12 @@ export default function App() {
               </Route>
             </Route>
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 404 explicite. Avant : redirection muette vers "/", donc vers
+                /login pour un visiteur non authentifié — un artisan avec un
+                lien tronqué se retrouvait bloqué sans explication. */}
+            <Route path="*" element={<PageIntrouvable />} />
           </Routes>
+          </ErrorBoundary>
         </BrowserRouter>
       </AuthProvider>
     </AppProviders>

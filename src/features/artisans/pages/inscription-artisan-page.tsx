@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { CheckCircle2, Loader2, ArrowRight, ShieldCheck, Phone, LayoutDashboard } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
-import { N8N_WEBHOOK_URL } from '@/lib/constants'
+import { N8N_WEBHOOK_URL, TAUX_COMMISSION_STANDARD, TEL_APPORTEUR } from '@/lib/constants'
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,6 @@ import { ArtisanForm } from '../components/artisan-form'
 import type { ArtisanInput, ContratPublic } from '@/types/database'
 
 // Numéro à faire enregistrer par l'artisan.
-const TEL_APPORTEUR = '0769136182'
 
 async function geocodeArtisan(input: ArtisanInput) {
   const candidats = [
@@ -69,8 +68,13 @@ type Step = 'form' | 'explication' | 'contrat' | 'fini'
 export function InscriptionArtisanPage() {
   const { canal } = useParams()
   const [params] = useSearchParams()
-  // Taux de commission porté par le lien (?taux=15), borné 5–30, défaut 10.
-  const tauxPct = Math.min(30, Math.max(5, Number(params.get('taux')) || 10))
+  // Taux de commission porté par le lien (?taux=20), borné 5–30.
+  // Sans paramètre : le taux standard. Le bornage est aussi appliqué côté
+  // serveur (trigger clamp_taux_inscription_publique, migration 0065).
+  const tauxPct = Math.min(
+    30,
+    Math.max(5, Number(params.get('taux')) || TAUX_COMMISSION_STANDARD * 100),
+  )
   const [step, setStep] = useState<Step>('form')
   const [submitting, setSubmitting] = useState(false)
   const [contratToken, setContratToken] = useState<string | null>(null)
