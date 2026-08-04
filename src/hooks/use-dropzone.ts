@@ -2,7 +2,12 @@ import { useState, type DragEvent } from 'react'
 
 // Petit hook de glisser-déposer : renvoie l'état "survol" + les handlers à poser
 // sur la zone. Au dépôt, le 1er fichier est transmis à `onFile`.
-export function useDropzone(onFile: (file: File) => void) {
+// Si `onFiles` est fourni, c'est LUI qui reçoit la totalité des fichiers déposés
+// (les pièces jointes d'un projet acceptent un dépôt multiple).
+export function useDropzone(
+  onFile: (file: File) => void,
+  onFiles?: (files: File[]) => void,
+) {
   const [dragActive, setDragActive] = useState(false)
 
   const handlers = {
@@ -17,8 +22,10 @@ export function useDropzone(onFile: (file: File) => void) {
     onDrop: (e: DragEvent) => {
       e.preventDefault()
       setDragActive(false)
-      const file = e.dataTransfer.files?.[0]
-      if (file) onFile(file)
+      const files = Array.from(e.dataTransfer.files ?? [])
+      if (!files.length) return
+      if (onFiles) onFiles(files)
+      else onFile(files[0])
     },
   }
 

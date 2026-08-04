@@ -396,3 +396,19 @@ export interface StatsEspaceArtisan {
   commission_a_regler: number
   commission_reglee: number
 }
+
+/**
+ * Pièce jointe libre d'un projet (table `projet_documents`, migration 0069).
+ *
+ * `chemin` est un chemin de stockage dans le bucket PRIVÉ `documents`, jamais
+ * une URL : on génère une URL signée à la demande via `urlSignee()`.
+ * `nom` conserve le nom d'origine du fichier, seul élément affiché.
+ */
+export interface ProjetDocument {
+  id: string
+  projet_id: string
+  nom: string
+  chemin: string
+  taille_octets: number | null
+  created_at: string
+}
