@@ -169,6 +169,16 @@ export const STATUTS: Record<
   mort: { label: 'Mort', color: '#1F2937', textOnColor: '#FFFFFF' },
 }
 
+/**
+ * Taux de commission proposé par défaut aux NOUVEAUX artisans.
+ *
+ * Ne s'applique qu'aux fiches créées à partir de maintenant : les artisans
+ * déjà en base gardent leur taux, et surtout leur contrat signé — dont le
+ * texte est figé à la signature (contrats.contenu) et ne peut pas être
+ * modifié rétroactivement.
+ */
+export const TAUX_COMMISSION_STANDARD = 0.15
+
 /** Téléphone de l'apporteur (Celexia), affiché aux artisans sur les pages publiques. */
 export const TEL_APPORTEUR = '0769136182'
 

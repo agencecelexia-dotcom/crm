@@ -25,7 +25,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { METIERS, SOUS_METIERS, DEPARTEMENTS, DEPARTEMENT_NOM } from '@/lib/constants'
+import {
+  METIERS,
+  SOUS_METIERS,
+  DEPARTEMENTS,
+  DEPARTEMENT_NOM,
+  TAUX_COMMISSION_STANDARD,
+} from '@/lib/constants'
 import { CpVilleFields } from '@/components/cp-ville-fields'
 import { geocoder } from '@/lib/geocoding'
 import { SocieteSearch } from './societe-search'
@@ -103,7 +109,9 @@ function valeursParDefaut(artisan?: Artisan): FormValues {
     representant: artisan?.representant ?? '',
     qualite_representant: artisan?.qualite_representant ?? '',
     taux_commission: String(
-      artisan?.taux_commission != null ? Math.round(artisan.taux_commission * 100) : 10,
+      artisan?.taux_commission != null
+        ? Math.round(artisan.taux_commission * 100)
+        : Math.round(TAUX_COMMISSION_STANDARD * 100),
     ),
   }
 }
@@ -216,7 +224,7 @@ export function ArtisanForm({
       qualite_representant: clean(values.qualite_representant),
       taux_commission: (() => {
         const t = parseFloat((values.taux_commission ?? '').replace(',', '.'))
-        return Number.isFinite(t) && t >= 0 ? t / 100 : 0.1
+        return Number.isFinite(t) && t >= 0 ? t / 100 : TAUX_COMMISSION_STANDARD
       })(),
       // Coordonnées recalculées par le hook au moment du save.
       latitude: null,
