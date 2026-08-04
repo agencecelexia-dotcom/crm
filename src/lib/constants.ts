@@ -169,6 +169,33 @@ export const STATUTS: Record<
   mort: { label: 'Mort', color: '#1F2937', textOnColor: '#FFFFFF' },
 }
 
+/** Téléphone de l'apporteur (Celexia), affiché aux artisans sur les pages publiques. */
+export const TEL_APPORTEUR = '0769136182'
+
+/**
+ * Repli pour un statut absent de STATUTS.
+ *
+ * `projets.statut` et `affectations.statut` sont des colonnes `text` sans
+ * contrainte côté base : n'importe quelle valeur peut y arriver (migration
+ * déployée avant le front, correction manuelle en SQL…). Un accès direct
+ * `STATUTS[s].color` lève alors un TypeError qui blanchit toute la page —
+ * y compris les pages publiques de signature.
+ *
+ * `noUncheckedIndexedAccess` n'étant pas activé, TypeScript ne signale pas
+ * ces accès : il faut passer par `statutInfo()`.
+ */
+export const STATUT_INCONNU = {
+  label: 'Statut inconnu',
+  color: '#64748B',
+  textOnColor: '#FFFFFF',
+} as const
+
+/** Accès sûr à la configuration d'un statut. À préférer à `STATUTS[...]`. */
+export function statutInfo(statut: string | null | undefined) {
+  if (!statut) return STATUT_INCONNU
+  return STATUTS[statut as StatutProjet] ?? STATUT_INCONNU
+}
+
 /** Ordre d'affichage des statuts dans le pipeline. */
 export const STATUTS_ORDRE: StatutProjet[] = [
   'nouveau',

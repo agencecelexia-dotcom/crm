@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Type-check · Lint · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Budget de taille du bundle initial
+        run: |
+          # Chunks chargés au premier rendu (les vendors pdf/jspdf sont différés
+          # par import() dynamique et n'en font pas partie).
+          TAILLE=$(cat dist/assets/index-*.js \
+                       dist/assets/vendor-react-*.js \
+                       dist/assets/vendor-supabase-*.js \
+                       dist/assets/vendor-query-*.js \
+                       dist/assets/vendor-map-*.js \
+                       dist/assets/vendor-charts-*.js 2>/dev/null | wc -c)
+          echo "Bundle initial : $((TAILLE / 1024)) kB"
+          # Seuil posé juste au-dessus de l'existant (~1 702 kB), à abaisser
+          # au fur et à mesure du découpage par routes (audit A6-01).
+          if [ "$TAILLE" -gt 1843200 ]; then
+            echo "::error::Bundle initial > 1800 kB — découper par routes avant d'ajouter du poids"
+            exit 1
+          fi
+
+  securite:
+    name: Vulnérabilités des dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      # Seuil « critical » et non « high » : react-router traîne un advisory
+      # RSC (GHSA-qwww-vcr4-c8h2) non atteignable ici — l'app est une SPA
+      # cliente, sans RSC ni SSR — dont le seul « correctif » proposé est un
+      # downgrade en 7.11.0 qui reperdrait 4 correctifs réels.
+      # À repasser à --audit-level=high dès que l'advisory est levé en amont.
+      - name: npm audit (production)
+        run: npm audit --omit=dev --audit-level=critical
+
+  e2e:
+    name: Tests end-to-end
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - run: npx playwright test
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

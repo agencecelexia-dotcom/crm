@@ -34,7 +34,7 @@ import { StatutBadge } from '@/components/statut-badge'
 import { StatTile, SplitBar } from './stat-tile'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
-import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
+import { STATUTS_ORDRE, statutInfo } from '@/lib/constants'
 import { formatEuros, formatTel, formatDate } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
@@ -501,7 +501,7 @@ function ListeChantiers({
   const filtres: { cle: 'tous' | 'en_cours' | StatutProjet; label: string; n: number }[] = [
     { cle: 'tous', label: 'Tous', n: projets.length },
     { cle: 'en_cours', label: 'En cours', n: nbEnCours },
-    ...statutsPresents.map((s) => ({ cle: s, label: STATUTS[s].label, n: compte(s) })),
+    ...statutsPresents.map((s) => ({ cle: s, label: statutInfo(s).label, n: compte(s) })),
   ]
 
   const liste = projets.filter((p) =>
@@ -696,7 +696,7 @@ function ProjetItem({
       <span
         aria-hidden
         className="absolute inset-y-0 left-0 w-1"
-        style={{ background: STATUTS[projet.statut].color }}
+        style={{ background: statutInfo(projet.statut).color }}
       />
       <button
         type="button"

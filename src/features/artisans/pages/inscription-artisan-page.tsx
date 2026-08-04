@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { CheckCircle2, Loader2, ArrowRight, ShieldCheck, Phone, LayoutDashboard } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
-import { N8N_WEBHOOK_URL } from '@/lib/constants'
+import { N8N_WEBHOOK_URL, TEL_APPORTEUR } from '@/lib/constants'
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,6 @@ import { ArtisanForm } from '../components/artisan-form'
 import type { ArtisanInput, ContratPublic } from '@/types/database'
 
 // Numéro à faire enregistrer par l'artisan.
-const TEL_APPORTEUR = '0769136182'
 
 async function geocodeArtisan(input: ArtisanInput) {
   const candidats = [

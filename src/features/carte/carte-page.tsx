@@ -16,6 +16,7 @@ import {
   METIERS,
   STATUTS,
   STATUTS_ORDRE,
+  statutInfo,
   COULEUR_ARTISAN,
   CARTE_CENTRE,
   CARTE_ZOOM,
@@ -240,7 +241,7 @@ export function CartePage() {
               <Popup>
                 <p className="font-medium">{p.client_nom}</p>
                 <p className="text-xs">
-                  {p.metiers.join(', ')} · {STATUTS[p.statut].label}
+                  {p.metiers.join(', ')} · {statutInfo(p.statut).label}
                 </p>
                 {p.montant_devis_signe != null && (
                   <p className="text-xs">Signé : {formatEuros(p.montant_devis_signe)}</p>
