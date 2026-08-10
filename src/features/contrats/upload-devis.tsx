@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FileText, Upload, Loader2, CheckCircle2, Check } from 'lucide-react'
+import { FileText, Upload, Loader2, CheckCircle2, Check, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ export function UploadDevis({
   slot,
   label,
   depose,
+  url,
   montantInitial,
   onDone,
 }: {
@@ -24,6 +25,8 @@ export function UploadDevis({
   slot: 'devis' | 'devis_signe'
   label: string
   depose: boolean
+  /** URL du PDF déjà déposé, pour que l'artisan puisse le relire. */
+  url?: string | null
   montantInitial?: number | null
   onDone: () => void
 }) {
@@ -109,11 +112,23 @@ export function UploadDevis({
           </span>
           <span className="truncate">{label}</span>
         </p>
-        {depose && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#22C55E]/10 px-2.5 py-1 text-xs font-medium text-[#16A34A]">
-            <CheckCircle2 className="size-3.5" /> Reçu
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* Relire le PDF déposé. Sans ce bouton, l'artisan ne pouvait que le
+              remplacer à l'aveugle, sans vérifier ce qu'il avait envoyé. */}
+          {depose && url && (
+            <Button size="sm" variant="outline" className="h-8 bg-card" asChild>
+              <a href={url} target="_blank" rel="noopener">
+                <Eye className="size-3.5" />
+                Voir
+              </a>
+            </Button>
+          )}
+          {depose && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#22C55E]/10 px-2.5 py-1 text-xs font-medium text-[#16A34A]">
+              <CheckCircle2 className="size-3.5" /> Reçu
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Montant TTC */}

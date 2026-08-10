@@ -864,6 +864,7 @@ function ProjetItem({
                   slot="devis"
                   label="Devis"
                   depose={projet.devis_depose}
+                  url={projet.devis_url}
                   montantInitial={projet.montant_devis}
                   onDone={onChange}
                 />
@@ -872,6 +873,7 @@ function ProjetItem({
                   slot="devis_signe"
                   label="Devis signé par le client"
                   depose={projet.devis_signe_depose}
+                  url={projet.devis_signe_url}
                   montantInitial={projet.montant_devis_signe}
                   onDone={onChange}
                 />
