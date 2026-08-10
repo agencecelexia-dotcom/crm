@@ -1,5 +1,18 @@
 -- ============================================================
---  0062 — Deux natures de perte + nettoyage du pipe artisan.
+--  0070 — Deux natures de perte, nettoyage du pipe artisan, espace « Perdus ».
+--
+--  ⚠️ Historique : cette migration a été écrite le 28/07/2026 sous le numéro
+--  0062 mais n'a JAMAIS été appliquée en production. Les migrations 0062 à
+--  0069 ont été appliquées entre-temps, d'où la renumérotation en 0070 pour
+--  refléter l'ordre réel. Conséquence concrète de cet oubli : le front
+--  attendait un bloc `stats` que la base ne renvoyait pas, et retombait sur
+--  un calcul de repli limité au pipe visible — d'où des statistiques fausses.
+--
+--  Deux ajouts par rapport à la version d'origine :
+--   - le filtre `retire_at` de la migration 0061 est CONSERVÉ (sans quoi
+--     réappliquer get_espace_artisan casserait « se retirer d'un chantier ») ;
+--   - un bloc `projets_perdus` + une RPC de restauration, pour que l'artisan
+--     consulte ses chantiers perdus et puisse les remettre dans son pipe.
 --
 --  1. Nouveau statut « mort » (AGENCE UNIQUEMENT) : le client a trouvé un
 --     artisan ailleurs, le lead n'existe plus pour Celexia. À distinguer de
@@ -43,11 +56,10 @@ comment on column public.affectations.perdu_at is
 comment on column public.affectations.masque_at is
   'Masquage explicite par l''agence : le chantier disparaît du pipe de l''artisan, tout est conservé côté agence.';
 
--- Backfill : les pertes déjà enregistrées prennent leur date de dernière
--- modification comme date de perte (les vieilles sortent donc tout de suite).
-update public.affectations
-  set perdu_at = updated_at
-  where statut = 'perdu' and perdu_at is null;
+-- Pas de backfill : il serait redondant. Les requêtes utilisent
+-- `coalesce(af.perdu_at, af.updated_at)`, donc les pertes déjà enregistrées
+-- sont traitées correctement sans écrire une seule ligne. Aucune donnée
+-- existante n'est modifiée par cette migration.
 
 -- ---------- 3. add_suivi_by_token : « mort » interdit à l'artisan ----------
 -- Reprise de la version 0058 (réassignation quand plus aucun artisan actif),
@@ -235,13 +247,118 @@ begin
         join public.projets p on p.id = af.projet_id
         where af.artisan_id = a.id
           and p.deleted_at is null
+          and af.retire_at is null          -- ← 0061 : retrait volontaire de l'artisan
           -- Pipe nettoyé : masqués par l'agence, perdus depuis plus de 15
           -- jours, et projets déclarés morts sortent de la liste.
           and af.masque_at is null
           and p.statut <> 'mort'
           and not (af.statut = 'perdu' and coalesce(af.perdu_at, af.updated_at) < now() - interval '15 days')
       ) sub
+    ),
+
+    -- Espace « Perdus » : tout ce qui est sorti du pipe ci-dessus, à
+    -- l'exception des projets déclarés morts par l'agence — inutile de
+    -- proposer à l'artisan de récupérer un lead parti chez un concurrent.
+    -- `restaurable` indique s'il peut le remettre dans son pipe lui-même.
+    'projets_perdus', (
+      select coalesce(json_agg(p_json order by sorti_le desc), '[]'::json)
+      from (
+        select
+          coalesce(af.retire_at, af.perdu_at, af.updated_at) as sorti_le,
+          json_build_object(
+            'id', af.id, 'token', af.token, 'statut', af.statut,
+            'metier', p.metier, 'metiers', p.metiers, 'sous_metier', p.sous_metier,
+            'description', p.description, 'budget_estime', p.budget_estime,
+            'montant_devis', af.montant_devis,
+            'client_ville', p.client_ville,
+            'sorti_le', coalesce(af.retire_at, af.perdu_at, af.updated_at),
+            'motif', case
+                       when af.retire_at is not null then 'retrait'
+                       when af.statut = 'perdu'      then 'perdu'
+                       else 'masque' end,
+            -- Un chantier repris par un autre artisan n'est plus récupérable.
+            'restaurable', (p.statut <> 'mort' and p.deleted_at is null
+                            and (p.artisan_id is null or p.artisan_id = af.artisan_id)),
+            'derniere_raison', (
+              select s.message from public.suivis s
+               where s.affectation_id = af.id and coalesce(btrim(s.message), '') <> ''
+               order by s.created_at desc limit 1
+            )
+          ) as p_json
+        from public.affectations af
+        join public.projets p on p.id = af.projet_id
+        where af.artisan_id = a.id
+          and p.deleted_at is null
+          and p.statut <> 'mort'
+          and (
+            af.retire_at is not null
+            or af.masque_at is not null
+            or (af.statut = 'perdu'
+                and coalesce(af.perdu_at, af.updated_at) < now() - interval '15 days')
+          )
+      ) sub
     )
   );
 end;
 $function$;
+
+-- ---------- 5. Remettre un chantier perdu dans son pipe ----------
+-- Cas d'usage : le client recontacte l'artisan après coup. Il récupère le
+-- chantier lui-même, sans passer par l'agence, mais celle-ci est notifiée.
+create or replace function public.restaurer_chantier_by_token(p_token text)
+returns json
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  af public.affectations;
+  p  public.projets;
+begin
+  select * into af from public.affectations where token = p_token;
+  if af.id is null then
+    return json_build_object('ok', false, 'error', 'introuvable');
+  end if;
+
+  select * into p from public.projets where id = af.projet_id;
+
+  -- Un projet mort ou supprimé ne se récupère pas : décision d'agence.
+  if p.id is null or p.deleted_at is not null or p.statut = 'mort' then
+    return json_build_object('ok', false, 'error', 'projet_clos');
+  end if;
+
+  -- Ni un chantier déjà repris par un CONFRÈRE.
+  if p.artisan_id is not null and p.artisan_id <> af.artisan_id then
+    return json_build_object('ok', false, 'error', 'deja_attribue');
+  end if;
+
+  update public.affectations
+     set statut     = 'artisan_assigne',
+         retire_at  = null,
+         perdu_at   = null,
+         masque_at  = null
+   where id = af.id;
+
+  -- Le projet ne redevient actif que s'il n'a pas déjà avancé avec quelqu'un.
+  update public.projets
+     set statut = 'artisan_assigne'
+   where id = af.projet_id
+     and statut in ('nouveau', 'a_rappeler', 'perdu');
+
+  insert into public.suivis (projet_id, affectation_id, auteur, type, statut_artisan, message)
+  values (af.projet_id, af.id, 'artisan', 'note', null,
+          'Chantier remis dans le pipe par l''artisan (client recontacté).');
+
+  insert into public.notifications (type, titre, message, projet_id)
+  values ('chantier_restaure',
+    'Chantier repris : ' || coalesce(p.client_nom, 'chantier'),
+    coalesce((select coalesce(a.societe, a.nom) from public.artisans a where a.id = af.artisan_id), 'Un artisan')
+      || ' a remis ce chantier dans son pipe.',
+    af.projet_id);
+
+  return json_build_object('ok', true);
+end;
+$function$;
+
+revoke execute on function public.restaurer_chantier_by_token(text) from public;
+grant  execute on function public.restaurer_chantier_by_token(text) to anon, authenticated;

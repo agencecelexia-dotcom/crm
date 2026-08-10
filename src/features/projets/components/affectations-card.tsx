@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
-import { BadgeCheck, Clock, X, Loader2, FileText } from 'lucide-react'
+import { BadgeCheck, Clock, X, Loader2, FileText, Eye, Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
 import { StatutBadge } from '@/components/statut-badge'
+import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { useAffectations, useRetirerAffectation } from '../hooks/use-affectations'
@@ -39,6 +40,7 @@ export function AffectationsCard({ projet }: { projet: ProjetAvecArtisan }) {
           affectations.map((af) => {
             const a = af.artisan
             const signe = signes?.has(af.artisan_id)
+            const nomArtisan = a?.societe || (a ? `${a.nom} ${a.prenom ?? ''}`.trim() : 'artisan')
             return (
               <div key={af.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-start gap-2">
@@ -89,31 +91,24 @@ export function AffectationsCard({ projet }: { projet: ProjetAvecArtisan }) {
                   af.montant_devis_signe != null ||
                   af.devis_url ||
                   af.devis_signe_url) && (
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
-                    {af.montant_devis != null && <span>Devis : {formatEuros(af.montant_devis)}</span>}
-                    {af.devis_url && (
-                      <a
-                        href={af.devis_url}
-                        target="_blank"
-                        rel="noopener"
-                        className="flex items-center gap-1 text-primary"
-                      >
-                        <FileText className="size-3" /> Devis
-                      </a>
-                    )}
-                    {af.montant_devis_signe != null && (
-                      <span>Signé : {formatEuros(af.montant_devis_signe)}</span>
-                    )}
-                    {af.devis_signe_url && (
-                      <a
-                        href={af.devis_signe_url}
-                        target="_blank"
-                        rel="noopener"
-                        className="flex items-center gap-1 text-primary"
-                      >
-                        <FileText className="size-3" /> Devis signé
-                      </a>
-                    )}
+                  <div className="mt-2 space-y-2 border-t border-border pt-2">
+                    {/* Devis déposés par l'artisan. Auparavant réduits à deux
+                        micro-liens noyés dans une ligne de métadonnées, ils
+                        passaient inaperçus : ce sont désormais de vrais
+                        boutons, avec le montant associé. */}
+                    <DevisDepose
+                      label="Devis"
+                      url={af.devis_url}
+                      montant={af.montant_devis}
+                      nomFichier={`Devis ${nomArtisan}.pdf`}
+                    />
+                    <DevisDepose
+                      label="Devis signé"
+                      url={af.devis_signe_url}
+                      montant={af.montant_devis_signe}
+                      nomFichier={`Devis signé ${nomArtisan}.pdf`}
+                      accent
+                    />
                   </div>
                 )}
               </div>
@@ -124,5 +119,64 @@ export function AffectationsCard({ projet }: { projet: ProjetAvecArtisan }) {
         <AssignArtisan projet={projet} />
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Un devis déposé par l'artisan : montant + accès au PDF.
+ *
+ * Les PDF vivent dans le bucket `devis` sous un chemin non devinable, préfixé
+ * par le token d'affectation. On ouvre l'onglet DANS le geste de clic (les
+ * navigateurs mobiles bloquent une ouverture asynchrone), et le téléchargement
+ * force un nom de fichier lisible plutôt que le nom aléatoire du stockage.
+ */
+function DevisDepose({
+  label,
+  url,
+  montant,
+  nomFichier,
+  accent,
+}: {
+  label: string
+  url: string | null
+  montant: number | null
+  nomFichier: string
+  accent?: boolean
+}) {
+  if (url == null && montant == null) return null
+
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-2 rounded-lg border p-2',
+        accent ? 'border-[#22C55E]/30 bg-[#22C55E]/5' : 'border-border bg-muted/30',
+      )}
+    >
+      <FileText
+        className={cn('size-4 shrink-0', accent ? 'text-[#22C55E]' : 'text-muted-foreground')}
+      />
+      <span className="text-sm font-medium">{label}</span>
+      {montant != null && (
+        <span className="montant text-sm font-semibold">{formatEuros(montant)}</span>
+      )}
+
+      {url ? (
+        <div className="ml-auto flex items-center gap-1">
+          <Button size="sm" variant="outline" className="h-8 bg-card" asChild>
+            <a href={url} target="_blank" rel="noopener">
+              <Eye className="size-3.5" />
+              Voir
+            </a>
+          </Button>
+          <Button size="icon" variant="ghost" className="size-8" asChild>
+            <a href={url} download={nomFichier} aria-label={`Télécharger ${label}`}>
+              <Download className="size-3.5" />
+            </a>
+          </Button>
+        </div>
+      ) : (
+        <span className="ml-auto text-xs italic text-muted-foreground">PDF non déposé</span>
+      )}
+    </div>
   )
 }
