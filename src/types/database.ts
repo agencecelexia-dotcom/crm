@@ -311,6 +311,10 @@ export interface ProjetEspace {
   photos: string[]
   devis_depose: boolean
   devis_signe_depose: boolean
+  /** URLs des PDF déposés — permettent à l'artisan de RELIRE son devis
+   *  (migration 0072), pas seulement de savoir qu'un fichier existe. */
+  devis_url?: string | null
+  devis_signe_url?: string | null
   suivis: Suivi[]
   // Identité client : null tant que le contrat n'est pas signé
   client_nom: string | null
