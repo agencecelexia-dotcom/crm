@@ -294,6 +294,28 @@ export interface ContratPublic {
 }
 
 /** Un chantier vu depuis l'espace artisan (identité client masquée tant que non signé). */
+/** Étape du funnel réellement atteinte. Monotone : ne recule jamais seule. */
+export type EtapeFunnel = 'contacte' | 'rdv_pris' | 'devis_envoye' | 'devis_signe' | 'termine'
+
+/** Issue commerciale, orthogonale à l'étape (migration 0073). */
+export type IssueChantier = 'en_cours' | 'gagne' | 'perdu'
+
+export const ETAPES_ORDRE: EtapeFunnel[] = [
+  'contacte', 'rdv_pris', 'devis_envoye', 'devis_signe', 'termine',
+]
+
+export const ETAPE_LABEL: Record<EtapeFunnel, string> = {
+  contacte: 'Client contacté',
+  rdv_pris: 'RDV pris',
+  devis_envoye: 'Devis envoyé',
+  devis_signe: 'Devis signé',
+  termine: 'Chantier terminé',
+}
+
+export function rangEtape(e: EtapeFunnel | null | undefined): number {
+  return e ? ETAPES_ORDRE.indexOf(e) + 1 : 0
+}
+
 export interface ProjetEspace {
   id: string
   token: string // token du projet (pour suivi + upload devis)
@@ -315,6 +337,16 @@ export interface ProjetEspace {
    *  (migration 0072), pas seulement de savoir qu'un fichier existe. */
   devis_url?: string | null
   devis_signe_url?: string | null
+  /** --- Modèle à deux axes (migration 0073) --- */
+  etape?: EtapeFunnel | null
+  issue?: IssueChantier
+  /** Drapeaux secondaires : s'affichent EN PLUS de l'étape, ne l'écrasent plus. */
+  en_attente_depuis?: string | null
+  rappel_le?: string | null
+  /** --- Dimension temporelle (audit §4) --- */
+  recu_le?: string | null
+  derniere_activite?: string | null
+  date_rdv?: string | null
   suivis: Suivi[]
   // Identité client : null tant que le contrat n'est pas signé
   client_nom: string | null
@@ -391,17 +423,44 @@ export interface EspaceArtisan {
 }
 
 /** Bloc `stats` renvoyé par `get_espace_artisan` (migration 0062). */
+/**
+ * KPI d'un artisan, calculés sur les FAITS par `stats_artisan_faits()`
+ * (migrations 0075/0076) et non plus sur le champ `statut`.
+ */
 export interface StatsEspaceArtisan {
-  en_attente: number
+  leads_recus: number
+  en_cours: number
+  gagnes: number
   perdus: number
+  /** Funnel cumulatif : « a atteint au moins cette étape ». */
+  contactes: number
+  rdv: number
   devis_envoyes: number
-  montant_devis_envoyes: number
-  signes: number
-  /** Devis envoyés + signés + terminés = dénominateur du taux de conversion. */
-  devis_aboutis: number
-  vendu: number
-  commission_a_regler: number
+  devis_signes: number
+  termines: number
+  montant_devis_total: number
+  panier_moyen: number
+  panier_median: number
+  ca_signe: number
+  pipe_en_cours: number
+  montant_perdu: number
+  commission_due: number
   commission_reglee: number
+  tranches: number
+  taux_contact: number | null
+  taux_rdv: number | null
+  taux_devis: number | null
+  /** Parmi les dossiers réellement chiffrés et arbitrés. */
+  taux_signature: number | null
+  /** Part des leads refusés avant tout chiffrage — qualité des leads. */
+  taux_refus_avant_devis: number | null
+  /** Médianes, robustes aux saisies rétroactives. */
+  delai_contact_j: number | null
+  delai_devis_j: number | null
+  delai_signature_j: number | null
+  rappels_echus: number
+  jamais_contactes_48h: number
+  devis_sans_reponse_15j: number
 }
 
 /**

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -16,8 +16,6 @@ import {
   X,
   FilePlus,
   Clock,
-  XCircle,
-  Wallet,
   RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -32,7 +30,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { StatutBadge } from '@/components/statut-badge'
-import { StatTile, SplitBar } from './stat-tile'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { STATUTS_ORDRE, statutInfo } from '@/lib/constants'
@@ -44,14 +41,10 @@ import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
 import { RetraitChantierDialog } from './retrait-chantier-dialog'
 import { ChantiersPerdus } from './chantiers-perdus'
+import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
-import type {
-  EspaceArtisan,
-  ProjetEspace,
-  StatsEspaceArtisan,
-  StatutProjet,
-} from '@/types/database'
+import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
 
 // Le générateur de devis n'est activé QUE pour cet artisan (Metbach) pour l'instant.
 const METBACH_ID = '98a39398-2b7f-4a44-b9bc-aa6f893e9d32'
@@ -261,9 +254,7 @@ export function EspaceArtisanPage() {
       )}
 
       {/* Résumé de son activité (statuts + commission due) */}
-      {signe && (projets.length > 0 || data.stats) && (
-        <ResumeArtisan projets={projets} statsBase={data.stats} />
-      )}
+      {signe && data.stats && <TableauDeBordArtisan stats={data.stats} />}
       </div>
 
       {/* Devis (Metbach uniquement) */}
@@ -296,151 +287,7 @@ export function EspaceArtisanPage() {
 // Résumé global de l'activité de l'artisan (tous ses chantiers confondus) :
 // en attente, perdus, devis envoyés + montant, vendu, taux de conversion, et
 // la commission qu'il doit à Celexia (due dès la signature du devis client,
-// cf. contrat d'engagement) — à régler vs déjà réglée.
-function ResumeArtisan({
-  projets,
-  statsBase,
-}: {
-  projets: ProjetEspace[]
-  /** Stats calculées en base sur TOUS ses chantiers, y compris ceux sortis de
-   *  son pipe (masqués, perdus depuis plus de 15 jours, projets morts). */
-  statsBase?: StatsEspaceArtisan
-}) {
-  const stats = useMemo(() => {
-    // Source de vérité : le bloc `stats` du RPC. Le calcul ci-dessous ne sert
-    // que de repli tant que la migration 0062 n'est pas exécutée — il ne voit
-    // alors que le pipe visible.
-    if (statsBase) {
-      return {
-        enAttente: statsBase.en_attente,
-        perdus: statsBase.perdus,
-        devisEnvoyesCount: statsBase.devis_envoyes,
-        montantDevisEnvoyes: statsBase.montant_devis_envoyes,
-        vendu: statsBase.vendu,
-        tauxConversion:
-          statsBase.devis_aboutis > 0
-            ? Math.round((statsBase.signes / statsBase.devis_aboutis) * 100)
-            : null,
-        commissionARegler: statsBase.commission_a_regler,
-        commissionReglee: statsBase.commission_reglee,
-      }
-    }
-
-    const enAttente = projets.filter((p) => p.statut === 'en_attente').length
-    const perdus = projets.filter((p) => p.statut === 'perdu').length
-
-    const devisEnvoyes = projets.filter((p) => p.statut === 'devis_envoye')
-    const montantDevisEnvoyes = devisEnvoyes.reduce((s, p) => s + (p.montant_devis ?? 0), 0)
-
-    const signes = projets.filter((p) => p.statut === 'devis_signe' || p.statut === 'termine')
-    const vendu = signes.reduce((s, p) => s + (p.montant_devis_signe ?? 0), 0)
-
-    // Taux de conversion : parmi les chantiers où un devis a été envoyé (envoyé, signé ou terminé),
-    // combien ont fini signés.
-    const denomDevis = projets.filter((p) =>
-      ['devis_envoye', 'devis_signe', 'termine'].includes(p.statut),
-    ).length
-    const tauxConversion = denomDevis > 0 ? Math.round((signes.length / denomDevis) * 100) : null
-
-    const commissionARegler = projets
-      .filter((p) => p.commission != null && !p.commission_encaissee)
-      .reduce((s, p) => s + (p.commission ?? 0), 0)
-    const commissionReglee = projets
-      .filter((p) => p.commission_encaissee)
-      .reduce((s, p) => s + (p.commission ?? 0), 0)
-
-    return {
-      enAttente,
-      perdus,
-      devisEnvoyesCount: devisEnvoyes.length,
-      montantDevisEnvoyes,
-      vendu,
-      tauxConversion,
-      commissionARegler,
-      commissionReglee,
-    }
-  }, [projets, statsBase])
-
-  return (
-    <section className="mt-8">
-      <SectionTitre>Votre activité</SectionTitre>
-
-      {/* Stat héro : total vendu + taux de conversion intégré */}
-      <div className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-violet">
-        <p className="flex items-center gap-1.5 text-xs font-medium opacity-80">
-          <CheckCircle2 className="size-4" /> Vendu (devis signés)
-        </p>
-        <p className="montant mt-1 text-3xl font-semibold sm:text-4xl">{formatEuros(stats.vendu)}</p>
-        {stats.tauxConversion != null && (
-          <div className="mt-4">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
-              <div
-                className="h-full rounded-full bg-white transition-all duration-500"
-                style={{ width: `${stats.tauxConversion}%` }}
-              />
-            </div>
-            <p className="mt-1.5 text-xs opacity-80">
-              <strong className="font-semibold opacity-100">{stats.tauxConversion}%</strong> de vos
-              devis envoyés signés
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Tuiles secondaires */}
-      <div className="mt-3 grid grid-cols-3 gap-2.5">
-        <StatTile icon={Clock} label="En attente" valeur={String(stats.enAttente)} tone="warning" />
-        <StatTile
-          icon={FileText}
-          label="Devis envoyés"
-          sousLabel={stats.devisEnvoyesCount ? formatEuros(stats.montantDevisEnvoyes) : undefined}
-          valeur={String(stats.devisEnvoyesCount)}
-          tone="warning"
-        />
-        <StatTile icon={XCircle} label="Perdus" valeur={String(stats.perdus)} tone="danger" />
-      </div>
-
-      {/* Commission Celexia : à régler / réglée */}
-      <div className="mt-3 rounded-2xl border border-border/70 bg-card p-4 shadow-card">
-        <p className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Wallet className="size-4" />
-          </span>
-          Commission Celexia
-        </p>
-        <SplitBar
-          gauche={stats.commissionARegler}
-          droite={stats.commissionReglee}
-          couleurGauche="#F59E0B"
-          couleurDroite="#22C55E"
-        />
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div>
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="size-2 rounded-full bg-[#F59E0B]" /> À régler
-            </p>
-            <p className="montant text-lg font-semibold text-[#B45309]">
-              {formatEuros(stats.commissionARegler)}
-            </p>
-          </div>
-          <div>
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="size-2 rounded-full bg-[#22C55E]" /> Réglée
-            </p>
-            <p className="montant text-lg font-semibold text-[#16A34A]">
-              {formatEuros(stats.commissionReglee)}
-            </p>
-          </div>
-        </div>
-        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-          Due à la signature du devis par le client (cf. contrat d'engagement).
-        </p>
-      </div>
-    </section>
-  )
-}
-
-// Titre de section du portail : tiret violet + Clash Display + compteur optionnel.
+// Titre de section du portail artisan.
 function SectionTitre({ children, compte }: { children: ReactNode; compte?: number }) {
   return (
     <h2 className="mb-4 flex items-center gap-2.5 font-display text-xl tracking-tight sm:text-2xl">
@@ -453,7 +300,6 @@ function SectionTitre({ children, compte }: { children: ReactNode; compte?: numb
   )
 }
 
-// Liste des devis générés par l'artisan (Metbach).
 function MesDevis({ token }: { token: string }) {
   const { data: devis } = useListeDevis(token)
   if (!devis || devis.length === 0) return null
