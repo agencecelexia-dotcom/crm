@@ -18,6 +18,7 @@ import {
   Clock,
   XCircle,
   Wallet,
+  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -42,6 +43,7 @@ import { ContratFormate } from './contrat-format'
 import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
 import { RetraitChantierDialog } from './retrait-chantier-dialog'
+import { ChantiersPerdus } from './chantiers-perdus'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
 import type {
@@ -69,6 +71,8 @@ export function EspaceArtisanPage() {
     },
   })
   const [devisInitial, setDevisInitial] = useState<DevisInitial | null>(null)
+  // Bascule pipe actif / espace « Perdus » (migration 0070).
+  const [vuePerdus, setVuePerdus] = useState(false)
 
   if (isLoading)
     return (
@@ -106,6 +110,7 @@ export function EspaceArtisanPage() {
     )
 
   const { artisan, engagement, signe, contrat_externe, projets } = data
+  const projetsPerdus = data.projets_perdus ?? []
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
   const isMetbach = artisan.id === METBACH_ID
 
@@ -163,6 +168,20 @@ export function EspaceArtisanPage() {
                 <Lock className="size-3.5" /> Contrat à signer
               </a>
             )}
+            {projetsPerdus.length > 0 && !vuePerdus && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="bg-card"
+                onClick={() => setVuePerdus(true)}
+              >
+                <RotateCcw className="size-4" />
+                Perdus
+                <span className="ml-0.5 rounded-full bg-muted px-1.5 text-xs font-semibold">
+                  {projetsPerdus.length}
+                </span>
+              </Button>
+            )}
             {isMetbach && (
               <Button size="sm" variant="outline" className="bg-card" onClick={() => setDevisInitial({})}>
                 <FilePlus className="size-4" />
@@ -173,8 +192,20 @@ export function EspaceArtisanPage() {
         </div>
       </header>
 
+      {/* Espace « Perdus » : remplace le pipe le temps de la consultation.
+          L'artisan y récupère un chantier si le client le recontacte. */}
+      {vuePerdus && (
+        <div className="mx-auto max-w-2xl">
+          <ChantiersPerdus
+            projets={projetsPerdus}
+            onRetour={() => setVuePerdus(false)}
+            onChange={() => void refetch()}
+          />
+        </div>
+      )}
+
       {/* Contrat + intro gardés dans une colonne lisible (centrée) même sur grand écran */}
-      <div className="mx-auto max-w-2xl">
+      <div className={cn('mx-auto max-w-2xl', vuePerdus && 'hidden')}>
       {/* Contrat (signé une fois pour tous les chantiers).
           Si contrat signé HORS application : on n'affiche aucun bloc contrat. */}
       {contrat_externe ? null : signe ? (

@@ -372,6 +372,9 @@ export interface EspaceArtisan {
   }
   signe: boolean
   contrat_externe: boolean
+  /** Chantiers sortis du pipe : retirés par l'artisan, masqués par l'agence,
+   *  ou perdus depuis plus de 15 jours. Migration 0070. */
+  projets_perdus?: ProjetPerdu[]
   projets: ProjetEspace[]
   /**
    * Statistiques calculées côté base sur TOUTES les affectations de l'artisan,
@@ -411,4 +414,33 @@ export interface ProjetDocument {
   chemin: string
   taille_octets: number | null
   created_at: string
+}
+
+/**
+ * Chantier sorti du pipe de l'artisan (bloc `projets_perdus` de
+ * `get_espace_artisan`, migration 0070).
+ *
+ * Volontairement plus pauvre que `ProjetEspace` : aucune coordonnée client
+ * n'est exposée sur un chantier que l'artisan ne suit plus.
+ */
+export interface ProjetPerdu {
+  /** id de l'AFFECTATION (pas du projet). */
+  id: string
+  /** token d'affectation — sert à la restauration. */
+  token: string
+  statut: StatutProjet
+  metier: string
+  metiers: string[]
+  sous_metier: string | null
+  description: string | null
+  budget_estime: number | null
+  montant_devis: number | null
+  client_ville: string | null
+  sorti_le: string
+  /** Pourquoi il est sorti du pipe. */
+  motif: 'retrait' | 'perdu' | 'masque'
+  /** false si le projet est repris par un confrère ou clos par l'agence. */
+  restaurable: boolean
+  /** Dernier message de suivi (souvent la raison saisie au retrait). */
+  derniere_raison: string | null
 }
