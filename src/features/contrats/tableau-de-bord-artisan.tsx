@@ -52,7 +52,15 @@ function CranFunnel({
  * Tout vient désormais de `stats_artisan_faits()` : une base unique pour le
  * CA, les devis et la commission, qui divergeaient auparavant dans la même page.
  */
-export function TableauDeBordArtisan({ stats }: { stats: StatsEspaceArtisan }) {
+export function TableauDeBordArtisan({
+  stats,
+  onFiltrer,
+}: {
+  stats: StatsEspaceArtisan
+  /** Rend les urgences cliquables : un tableau de bord non actionnable est
+   *  de la décoration (audit §2). */
+  onFiltrer?: (f: 'urgents') => void
+}) {
   const urgences =
     stats.rappels_echus + stats.jamais_contactes_48h + stats.devis_sans_reponse_15j
 
@@ -62,10 +70,21 @@ export function TableauDeBordArtisan({ stats }: { stats: StatsEspaceArtisan }) {
           quand il ouvre l'app. Masqué s'il n'y a rien à traiter. */}
       {urgences > 0 && (
         <div className="rounded-2xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-4">
-          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#B45309]">
-            <AlertTriangle className="size-4" />
-            À faire aujourd'hui
-          </p>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold text-[#B45309]">
+              <AlertTriangle className="size-4" />
+              À faire aujourd'hui
+            </p>
+            {onFiltrer && (
+              <button
+                type="button"
+                onClick={() => onFiltrer('urgents')}
+                className="rounded-full border border-[#B45309]/30 bg-card px-2.5 py-1 text-xs font-medium text-[#B45309] transition-colors hover:bg-[#F59E0B]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Voir ces chantiers
+              </button>
+            )}
+          </div>
           <ul className="space-y-1 text-sm text-[#92400E]">
             {stats.rappels_echus > 0 && (
               <li>
