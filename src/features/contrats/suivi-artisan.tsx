@@ -14,8 +14,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { SUIVI_STATUTS } from '@/lib/constants'
+import { FilDiscussion } from './fil-discussion'
 import type { Suivi } from '@/types/database'
-import { SuiviTimeline } from '@/features/projets/components/suivi-timeline'
 
 // Parcours principal (dans l'ordre) + statuts secondaires hors parcours.
 const PARCOURS = ['contacte', 'rdv_pris', 'devis_envoye', 'devis_signe', 'termine'] as const
@@ -44,6 +44,7 @@ export function SuiviArtisan({
   const [perduRaison, setPerduRaison] = useState('')
 
   // Étapes déjà franchies (d'après l'historique) + date du RDV éventuelle.
+  const nonLus = suivis.filter((s) => s.auteur === 'agence' && !s.lu_at).length
   const franchies = new Set(suivis.filter((s) => s.statut).map((s) => s.statut as string))
   const rdvInfo = [...suivis].reverse().find((s) => s.statut === 'rdv_pris' && s.message)?.message
 
@@ -371,13 +372,21 @@ export function SuiviArtisan({
           </Button>
         </div>
 
-        {/* Historique */}
+        {/* Fil partagé avec Celexia. Remplace l'ancien historique en lecture
+            seule, qui attribuait tous les événements à « Artisan ». */}
         {suivis.length > 0 && (
           <>
             <Separator />
             <div>
-              <p className="mb-2 text-sm font-medium">Historique</p>
-              <SuiviTimeline suivis={suivis} />
+              <p className="mb-2 flex items-center gap-2 text-sm font-medium">
+                Échanges avec Celexia
+                {nonLus > 0 && (
+                  <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                    {nonLus} nouveau{nonLus > 1 ? 'x' : ''}
+                  </span>
+                )}
+              </p>
+              <FilDiscussion suivis={suivis} token={token} onLu={onChange} />
             </div>
           </>
         )}

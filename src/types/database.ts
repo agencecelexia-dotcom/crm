@@ -253,6 +253,8 @@ export interface Suivi {
   statut: StatutSuivi | null
   message: string | null
   created_at: string
+  /** Accusé de lecture des messages agence (migration 0080). */
+  lu_at?: string | null
 }
 
 /** Note rapide attachée à un projet (suivi interne agence). */
@@ -347,6 +349,8 @@ export interface ProjetEspace {
   recu_le?: string | null
   derniere_activite?: string | null
   date_rdv?: string | null
+  /** Messages de l'agence non lus sur ce chantier (migration 0081). */
+  non_lus?: number
   suivis: Suivi[]
   // Identité client : null tant que le contrat n'est pas signé
   client_nom: string | null

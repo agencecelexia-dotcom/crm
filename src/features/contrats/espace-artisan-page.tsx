@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -17,6 +17,8 @@ import {
   FilePlus,
   Clock,
   RotateCcw,
+  Search,
+  AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -41,6 +43,7 @@ import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
 import { RetraitChantierDialog } from './retrait-chantier-dialog'
 import { ChantiersPerdus } from './chantiers-perdus'
+import { correspond, urgenceChantier, COULEUR_URGENCE, ancienneteLabel } from './urgence-chantier'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
@@ -368,26 +371,65 @@ function ListeChantiers({
   onChange: () => void
   onCreerDevis?: (p: ProjetEspace) => void
 }) {
-  const [filtre, setFiltre] = useState<'tous' | 'en_cours' | StatutProjet>('tous')
+  const [filtre, setFiltre] = useState<'tous' | 'en_cours' | 'urgents' | StatutProjet>('tous')
+  const [recherche, setRecherche] = useState('')
 
-  // Compteurs par statut (uniquement les statuts réellement présents)
   const compte = (s: StatutProjet) => projets.filter((p) => p.statut === s).length
   const nbEnCours = projets.filter((p) => EN_COURS.includes(p.statut)).length
   const statutsPresents = STATUTS_ORDRE.filter((s) => compte(s) > 0)
 
-  const filtres: { cle: 'tous' | 'en_cours' | StatutProjet; label: string; n: number }[] = [
+  // Urgence calculée une fois par chantier : sert au filtre, au tri et au badge.
+  const urgences = useMemo(
+    () => new Map(projets.map((p) => [p.id, urgenceChantier(p)])),
+    [projets],
+  )
+  const nbUrgents = projets.filter(
+    (p) => (urgences.get(p.id)?.niveau ?? 'aucune') !== 'aucune'
+       && urgences.get(p.id)!.score >= 600,
+  ).length
+
+  const filtres: { cle: 'tous' | 'en_cours' | 'urgents' | StatutProjet; label: string; n: number }[] = [
     { cle: 'tous', label: 'Tous', n: projets.length },
+    ...(nbUrgents > 0 ? [{ cle: 'urgents' as const, label: 'À traiter', n: nbUrgents }] : []),
     { cle: 'en_cours', label: 'En cours', n: nbEnCours },
     ...statutsPresents.map((s) => ({ cle: s, label: statutInfo(s).label, n: compte(s) })),
   ]
 
-  const liste = projets.filter((p) =>
-    filtre === 'tous' ? true : filtre === 'en_cours' ? EN_COURS.includes(p.statut) : p.statut === filtre,
+  // Tri par urgence décroissante : sans hiérarchie, l'artisan ne sait pas par
+  // quoi commencer — c'est le manque le plus coûteux relevé à l'audit.
+  const liste = useMemo(
+    () =>
+      projets
+        .filter((p) =>
+          filtre === 'tous'
+            ? true
+            : filtre === 'urgents'
+              ? (urgences.get(p.id)?.score ?? 0) >= 600
+              : filtre === 'en_cours'
+                ? EN_COURS.includes(p.statut)
+                : p.statut === filtre,
+        )
+        .filter((p) => correspond(p, recherche))
+        .sort((a, b) => (urgences.get(b.id)?.score ?? 0) - (urgences.get(a.id)?.score ?? 0)),
+    [projets, filtre, recherche, urgences],
   )
 
   return (
     <section className="mt-10">
       <SectionTitre compte={projets.length}>Vos chantiers</SectionTitre>
+
+      {/* Recherche : 65 cartes sans moyen de retrouver un client (audit §6). */}
+      <div className="relative mb-3">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Rechercher un client, une ville, un métier…"
+          className="h-11 pl-9"
+          aria-label="Rechercher un chantier"
+        />
+      </div>
 
       {/* Filtres par statut */}
       <div className="scrollbar-hide -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -566,6 +608,9 @@ function ProjetItem({
     .filter(Boolean)
     .join(', ')
   const montantAffiche = projet.montant_devis_signe ?? projet.montant_devis
+  const urgence = urgenceChantier(projet)
+  const age = ancienneteLabel(projet.recu_le)
+  const nonLusChantier = projet.non_lus ?? 0
 
   return (
     <Card className="relative overflow-hidden py-0 shadow-card transition-shadow hover:shadow-card-hover">
@@ -582,27 +627,51 @@ function ProjetItem({
         className="flex w-full items-center gap-3 p-4 pl-5 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-5 sm:pl-6"
       >
         <div className="min-w-0 flex-1">
+          {/* Hiérarchie inversée corrigée (audit §9) : on scanne des dizaines
+              de cartes pour retrouver un CLIENT, pas un métier. Le nom et la
+              ville passent donc devant, en contraste plein. */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="min-w-0 truncate font-display text-base tracking-tight">
-              {metiers.join(', ')}
+              {signe && projet.client_nom ? (
+                projet.client_nom
+              ) : (
+                <span className="flex items-center gap-1 italic text-muted-foreground">
+                  <Lock className="size-3.5 shrink-0" /> Client confidentiel
+                </span>
+              )}
             </span>
-            <StatutBadge statut={projet.statut} />
-          </div>
-          <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-muted-foreground">
-            {signe && projet.client_nom ? (
-              <span className="truncate">{projet.client_nom}</span>
-            ) : (
-              <span className="flex items-center gap-1 italic">
-                <Lock className="size-3.5 shrink-0" /> Client confidentiel
-              </span>
-            )}
             {projet.client_ville && (
-              <span className="flex min-w-0 items-center gap-0.5">
+              <span className="flex min-w-0 items-center gap-0.5 text-sm text-foreground/70">
                 <MapPin className="size-3.5 shrink-0" />
                 <span className="truncate">{projet.client_ville}</span>
               </span>
             )}
+            {nonLusChantier > 0 && (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                {nonLusChantier} message{nonLusChantier > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span className="truncate">{metiers.join(', ')}</span>
+            <StatutBadge statut={projet.statut} />
+            {age && <span className="text-xs">· reçu {age}</span>}
           </p>
+
+          {/* Urgence : sans hiérarchie, tous les dossiers se ressemblent et
+              l'artisan ne sait pas par quoi commencer (audit §4). */}
+          {urgence.raison && (
+            <p
+              className={cn(
+                'mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+                COULEUR_URGENCE[urgence.niveau],
+              )}
+            >
+              {urgence.niveau === 'critique' && <AlertTriangle className="size-3" />}
+              {urgence.raison}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {montantAffiche != null && (
