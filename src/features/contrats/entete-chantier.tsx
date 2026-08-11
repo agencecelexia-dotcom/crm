@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { StatutBadge } from '@/components/statut-badge'
 import { formatEuros } from '@/lib/format'
 import { statutInfo } from '@/lib/constants'
-import { ancienneteLabel, COULEUR_URGENCE, urgenceChantier } from './urgence-chantier'
+import { ancienneteLabel, COULEUR_URGENCE, estNouveau, urgenceChantier } from './urgence-chantier'
 import type { ProjetEspace } from '@/types/database'
 
 /**
@@ -39,6 +39,7 @@ export function EnteteChantier({
   const age = ancienneteLabel(projet.recu_le)
   const nonLus = projet.non_lus ?? 0
   const depliable = onToggle != null
+  const nouveau = estNouveau(projet)
 
   const titre =
     signe && projet.client_nom ? (
@@ -72,6 +73,13 @@ export function EnteteChantier({
             <span className="flex min-w-0 items-center gap-0.5 text-sm text-foreground/70">
               <MapPin className="size-3.5 shrink-0" />
               <span className="truncate">{projet.client_ville}</span>
+            </span>
+          )}
+          {/* Un chantier tout juste reçu n'a encore déclenché aucune règle
+              d'urgence : sans marqueur, il se noie parmi les anciens. */}
+          {nouveau && (
+            <span className="rounded-full bg-[#0EA5E9] px-2 py-0.5 text-xs font-semibold text-white">
+              Nouveau
             </span>
           )}
           {nonLus > 0 && (

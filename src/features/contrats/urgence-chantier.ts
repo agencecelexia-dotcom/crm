@@ -12,11 +12,26 @@ export type NiveauUrgence = 'critique' | 'haute' | 'normale' | 'aucune'
 
 export interface Urgence {
   niveau: NiveauUrgence
-  /** Score décroissant, pour le tri. */
+  /** Score décroissant, pour le tri à l'intérieur d'un groupe. */
   score: number
   /** Libellé court affiché sur la carte. */
   raison: string | null
+  /** Famille d'action — sert à REGROUPER la liste. Un tri par score unique
+   *  ne suffit pas : 20 RDV passés monopolisaient les 20 premières places et
+   *  un lead reçu le jour même tombait en position 21. */
+  groupe: GroupeAction
 }
+
+export type GroupeAction = 'nouveaux' | 'rdv' | 'relances' | 'devis' | 'suivi' | 'clos'
+
+export const GROUPES: { cle: GroupeAction; label: string; aide: string }[] = [
+  { cle: 'nouveaux', label: 'Nouveaux à appeler', aide: 'Reçus il y a moins de 48 h' },
+  { cle: 'rdv',      label: 'Rendez-vous',        aide: 'RDV passés à mettre à jour, ou à venir' },
+  { cle: 'relances', label: 'À relancer',         aide: 'Jamais contactés, ou rappel prévu' },
+  { cle: 'devis',    label: 'Devis en attente',   aide: 'Envoyés, sans réponse du client' },
+  { cle: 'suivi',    label: 'Autres chantiers',   aide: 'Rien d\'urgent pour l\'instant' },
+  { cle: 'clos',     label: 'Terminés et perdus', aide: '' },
+]
 
 const JOUR = 86_400_000
 
@@ -42,51 +57,88 @@ export function ancienneteLabel(iso: string | null | undefined): string | null {
  */
 export function urgenceChantier(p: ProjetEspace): Urgence {
   if (p.issue === 'gagne' || p.issue === 'perdu') {
-    return { niveau: 'aucune', score: 0, raison: null }
+    return { niveau: 'aucune', score: 0, raison: null, groupe: 'clos' }
   }
 
   const rappel = p.rappel_le ? new Date(p.rappel_le).getTime() : null
   if (rappel != null && rappel <= Date.now()) {
-    return { niveau: 'critique', score: 1000, raison: 'Rappel à passer' }
+    return { niveau: 'critique', score: 1000, raison: 'Rappel à passer', groupe: 'relances' }
   }
 
   // RDV daté dans le passé sans suite : c'est le cas que l'audit signalait.
   const rdv = p.date_rdv ? new Date(p.date_rdv).getTime() : null
   if (rdv != null && rdv < Date.now() && p.etape === 'rdv_pris') {
     const j = Math.floor((Date.now() - rdv) / JOUR)
-    return { niveau: 'critique', score: 900 + j, raison: 'RDV passé, à mettre à jour' }
+    return {
+      niveau: 'critique',
+      score: 980 + Math.min(j, 15),
+      raison: 'RDV passé, à mettre à jour',
+      groupe: 'rdv',
+    }
   }
 
-  // Jamais contacté depuis plus de 48 h.
+  // Chantier neuf, jamais contacté : c'est une OPPORTUNITÉ, pas un retard.
+  // Placé haut volontairement — avec le tri précédent, un lead reçu le jour
+  // même tombait en position 25, sous des dossiers anciens dont le score
+  // montait avec l'âge. Plus un lead pourrissait, plus il masquait les neufs.
   const age = joursDepuis(p.recu_le)
+  if (!p.etape && age != null && age < 2) {
+    return { niveau: 'haute', score: 950, raison: 'Nouveau — à appeler', groupe: 'nouveaux' }
+  }
+
+  // Jamais contacté au-delà de 48 h : là, c'est un retard. Le score est
+  // PLAFONNÉ pour qu'un dossier très ancien ne passe jamais devant un
+  // rappel échu ni devant un chantier fraîchement reçu.
   if (!p.etape && age != null && age >= 2) {
-    return { niveau: 'haute', score: 700 + age, raison: `Jamais contacté (${age} j)` }
+    return {
+      niveau: 'haute',
+      score: 700 + Math.min(age, 60),
+      raison: `Jamais contacté (${age} j)`,
+      groupe: 'relances',
+    }
   }
 
   // Devis envoyé resté sans réponse.
   if (p.etape === 'devis_envoye') {
     const inactif = joursDepuis(p.derniere_activite)
     if (inactif != null && inactif >= 15) {
-      return { niveau: 'haute', score: 600 + inactif, raison: `Devis sans réponse (${inactif} j)` }
+      return {
+        niveau: 'haute',
+        score: 600 + inactif,
+        raison: `Devis sans réponse (${inactif} j)`,
+        groupe: 'devis',
+      }
     }
   }
 
   // RDV à venir : utile à voir, sans être une alerte.
   if (rdv != null && rdv >= Date.now()) {
-    return { niveau: 'normale', score: 400, raison: 'RDV programmé' }
+    return { niveau: 'normale', score: 400, raison: 'RDV programmé', groupe: 'rdv' }
   }
 
   if (rappel != null) {
-    return { niveau: 'normale', score: 300, raison: 'Rappel programmé' }
+    return { niveau: 'normale', score: 300, raison: 'Rappel programmé', groupe: 'relances' }
   }
 
   // Dossier dormant : dernière activité ancienne.
   const inactif = joursDepuis(p.derniere_activite)
   if (inactif != null && inactif >= 21) {
-    return { niveau: 'normale', score: 200 + inactif, raison: `Sans activité (${inactif} j)` }
+    return {
+      niveau: 'normale',
+      score: 200 + inactif,
+      raison: `Sans activité (${inactif} j)`,
+      groupe: 'suivi',
+    }
   }
 
-  return { niveau: 'aucune', score: 0, raison: null }
+  // Filet de sécurité : reçu il y a moins de 48 h, aucune règle ne s'est
+  // déclenchée. Il n'est pas urgent, mais il ne doit pas tomber dans le
+  // fourre-tout « Autres chantiers » où l'artisan ne descend jamais.
+  if (age != null && age < 2) {
+    return { niveau: 'normale', score: 900, raison: 'Reçu récemment', groupe: 'nouveaux' }
+  }
+
+  return { niveau: 'aucune', score: 0, raison: null, groupe: 'suivi' }
 }
 
 export const COULEUR_URGENCE: Record<NiveauUrgence, string> = {
@@ -110,4 +162,27 @@ export function correspond(p: ProjetEspace, q: string): boolean {
     p.description,
   ]
   return champs.some((c) => c?.toLowerCase().includes(t))
+}
+
+/**
+ * Date de réception d'un chantier, en millisecondes.
+ *
+ * Sert de tri secondaire : à urgence égale, le plus récent passe devant.
+ * Sans ce critère, un chantier reçu le jour même — qui n'a encore déclenché
+ * aucune règle d'urgence — se retrouvait en bas de liste, derrière des
+ * dossiers plus anciens. C'est exactement le prospect qu'il ne faut pas rater.
+ */
+export function dateReception(p: ProjetEspace): number {
+  const iso = p.recu_le ?? p.derniere_activite
+  return iso ? new Date(iso).getTime() : 0
+}
+
+/**
+ * Un chantier neuf mérite d'être signalé, même sans urgence : c'est une
+ * opportunité fraîche, pas un dossier en retard.
+ */
+export function estNouveau(p: ProjetEspace): boolean {
+  if (p.etape || p.issue !== 'en_cours') return false
+  const j = joursDepuis(p.recu_le)
+  return j != null && j <= 2
 }
