@@ -479,9 +479,14 @@ export interface StatsEspaceArtisan {
   /** Part des leads refusés avant tout chiffrage — qualité des leads. */
   taux_refus_avant_devis: number | null
   /** Médianes, robustes aux saisies rétroactives. */
+  /** Médiane, publiée seulement à partir de 3 observations exploitables. */
   delai_contact_j: number | null
+  /** Effectif ayant servi au calcul — affiché pour situer la fiabilité. */
+  delai_contact_n: number
   delai_devis_j: number | null
+  delai_devis_n: number
   delai_signature_j: number | null
+  delai_signature_n: number
   rappels_echus: number
   jamais_contactes_48h: number
   devis_sans_reponse_15j: number

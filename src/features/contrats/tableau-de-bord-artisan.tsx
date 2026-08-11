@@ -216,20 +216,41 @@ export function TableauDeBordArtisan({
           />
         </div>
 
-        {/* Délais : médianes, insensibles aux saisies rétroactives. */}
-        {(stats.delai_contact_j != null || stats.delai_devis_j != null) && (
-          <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
-            Délais médians :
-            {stats.delai_contact_j != null && (
-              <> réception → contact <strong>{stats.delai_contact_j} j</strong></>
+        {/* Délais : un chiffre n'est affiché que s'il repose sur assez
+            d'observations. Une saisie groupée (deux étapes cliquées à la
+            suite) ne mesure aucune durée et n'entre pas dans le calcul. */}
+        {(stats.delai_contact_j != null ||
+          stats.delai_devis_j != null ||
+          stats.delai_signature_j != null) && (
+          <div className="mt-3 border-t border-border pt-3">
+            <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="font-medium">Délais médians :</span>
+              {stats.delai_contact_j != null && (
+                <span>
+                  réception → contact <strong>{stats.delai_contact_j} j</strong>{' '}
+                  <span className="opacity-70">({stats.delai_contact_n})</span>
+                </span>
+              )}
+              {stats.delai_devis_j != null && (
+                <span>
+                  → devis <strong>{stats.delai_devis_j} j</strong>{' '}
+                  <span className="opacity-70">({stats.delai_devis_n})</span>
+                </span>
+              )}
+              {stats.delai_signature_j != null && (
+                <span>
+                  devis → signature <strong>{stats.delai_signature_j} j</strong>{' '}
+                  <span className="opacity-70">({stats.delai_signature_n})</span>
+                </span>
+              )}
+            </p>
+            {stats.delai_signature_j == null && stats.funnel.devis_signe.atteint > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Délai de signature non calculable : pas assez de chantiers où le devis a
+                été déposé avant d'être marqué signé.
+              </p>
             )}
-            {stats.delai_devis_j != null && (
-              <> · → devis <strong>{stats.delai_devis_j} j</strong></>
-            )}
-            {stats.delai_signature_j != null && (
-              <> · devis → signature <strong>{stats.delai_signature_j} j</strong></>
-            )}
-          </p>
+          </div>
         )}
       </div>
 
