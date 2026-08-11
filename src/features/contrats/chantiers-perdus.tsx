@@ -7,9 +7,10 @@ import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/empty-state'
 import { formatEuros, formatDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase/client'
+import { MOTIF_LABEL } from '@/lib/motifs-perte'
 import type { ProjetPerdu } from '@/types/database'
 
-const MOTIF_LABEL: Record<ProjetPerdu['motif'], string> = {
+const ORIGINE_LABEL: Record<ProjetPerdu['motif'], string> = {
   retrait: 'Vous vous êtes retiré',
   perdu: 'Déclaré perdu',
   masque: 'Retiré par Celexia',
@@ -37,6 +38,8 @@ export function ChantiersPerdus({
   onChange: () => void
 }) {
   const [enCours, setEnCours] = useState<string | null>(null)
+  // Montant total perdu : information stratégique absente de cette vue.
+  const totalPerdu = projets.reduce((t, p) => t + (p.montant_devis ?? 0), 0)
 
   async function restaurer(p: ProjetPerdu) {
     setEnCours(p.id)
@@ -55,7 +58,7 @@ export function ChantiersPerdus({
           (r?.error && messages[r.error]) || "Le chantier n'a pas pu être remis dans votre pipe.",
         )
       }
-      toast.success('Chantier remis dans votre pipe', {
+      toast.success('Chantier repris', {
         description: 'Celexia a été prévenu.',
       })
       onChange()
@@ -78,6 +81,9 @@ export function ChantiersPerdus({
         <span className="text-sm text-muted-foreground">
           {projets.length} chantier{projets.length > 1 ? 's' : ''} perdu
           {projets.length > 1 ? 's' : ''}
+          {totalPerdu > 0 && (
+            <> · <strong className="montant">{formatEuros(totalPerdu)}</strong> de devis</>
+          )}
         </span>
       </div>
 
@@ -85,7 +91,7 @@ export function ChantiersPerdus({
         <EmptyState
           icon={RotateCcw}
           titre="Aucun chantier perdu"
-          description="Les chantiers que vous retirez ou déclarez perdus apparaîtront ici. Vous pourrez les remettre dans votre pipe si le client vous recontacte."
+          description="Les chantiers que vous retirez ou déclarez perdus apparaîtront ici. Vous pourrez les reprendre si le client vous recontacte."
         />
       ) : (
         <div className="space-y-3">
@@ -95,13 +101,25 @@ export function ChantiersPerdus({
               <Card key={p.id} className="rounded-2xl border-border/70 p-4 shadow-card">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="font-display text-base tracking-tight">{metiers.join(', ')}</p>
+                    {/* Le nom du client manquait totalement dans cette vue
+                        (audit §8), rendant les dossiers non identifiables. */}
+                    <p className="font-display text-base tracking-tight">
+                      {p.client_nom ?? 'Client non communiqué'}
+                    </p>
                     <p className="mt-0.5 text-sm text-muted-foreground">
-                      {p.client_ville ?? 'Ville non précisée'}
+                      {metiers.join(', ')}
+                      {p.client_ville && ` · ${p.client_ville}`}
                       {p.montant_devis != null && ` · devis ${formatEuros(p.montant_devis)}`}
                     </p>
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      {MOTIF_LABEL[p.motif]} le {formatDate(p.sorti_le)}
+                    <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      {p.motif_perte && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
+                          {MOTIF_LABEL[p.motif_perte] ?? p.motif_perte}
+                        </span>
+                      )}
+                      <span>
+                        {ORIGINE_LABEL[p.motif]} le {formatDate(p.sorti_le)}
+                      </span>
                     </p>
                     {p.derniere_raison && (
                       <p className="mt-1.5 rounded-lg bg-muted/50 p-2 text-xs italic text-muted-foreground">
@@ -125,14 +143,14 @@ export function ChantiersPerdus({
                       ) : (
                         <>
                           <RotateCcw className="size-4" />
-                          Remettre dans mon pipe
+                          Reprendre ce chantier
                         </>
                       )}
                     </Button>
                   ) : (
                     <span className="flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
                       <Lock className="size-3.5" />
-                      Repris ailleurs
+                      Confié à un autre artisan
                     </span>
                   )}
                 </div>

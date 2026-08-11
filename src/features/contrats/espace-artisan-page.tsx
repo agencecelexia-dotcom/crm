@@ -6,19 +6,12 @@ import {
   FileText,
   CheckCircle2,
   Download,
-  Phone,
-  Mail,
-  MapPin,
-  ChevronDown,
   Lock,
-  Pencil,
-  Save,
-  X,
   FilePlus,
-  Clock,
-  XCircle,
-  Wallet,
   RotateCcw,
+  Search,
+  Rows3,
+  Columns3,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -26,32 +19,29 @@ import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
-import { StatutBadge } from '@/components/statut-badge'
-import { StatTile, SplitBar } from './stat-tile'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { STATUTS_ORDRE, statutInfo } from '@/lib/constants'
-import { formatEuros, formatTel, formatDate } from '@/lib/format'
+import { formatDate } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
-import { SuiviArtisan } from './suivi-artisan'
-import { UploadDevis } from './upload-devis'
-import { RetraitChantierDialog } from './retrait-chantier-dialog'
 import { ChantiersPerdus } from './chantiers-perdus'
+import { PiedDePageArtisan } from './pied-de-page-artisan'
+import { EnteteChantier, LisereStatut } from './entete-chantier'
+import { CorpsChantier } from './corps-chantier'
+import { KanbanChantiers } from './kanban-chantiers'
+import { DrawerChantier } from './drawer-chantier'
+import { ReleveCommissions } from './releve-commissions'
+import { correspond, urgenceChantier } from './urgence-chantier'
+import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
-import type {
-  EspaceArtisan,
-  ProjetEspace,
-  StatsEspaceArtisan,
-  StatutProjet,
-} from '@/types/database'
+import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
 
 // Le générateur de devis n'est activé QUE pour cet artisan (Metbach) pour l'instant.
 const METBACH_ID = '98a39398-2b7f-4a44-b9bc-aa6f893e9d32'
@@ -73,6 +63,8 @@ export function EspaceArtisanPage() {
   const [devisInitial, setDevisInitial] = useState<DevisInitial | null>(null)
   // Bascule pipe actif / espace « Perdus » (migration 0070).
   const [vuePerdus, setVuePerdus] = useState(false)
+  // Filtre demandé depuis le tableau de bord.
+  const [filtreDemande, setFiltreDemande] = useState<'urgents' | null>(null)
 
   if (isLoading)
     return (
@@ -254,15 +246,21 @@ export function EspaceArtisanPage() {
             A
           </span>
           <p className="text-sm leading-relaxed text-foreground/90">
-            Vous venez de la part d'<strong>Antoine</strong>. Voici vos chantiers — contactez vos
+            <strong>Antoine</strong> vous transmet ces chantiers. Contactez vos
             clients dès que possible et tenez-nous informés avec les boutons de suivi.
           </p>
         </div>
       )}
 
       {/* Résumé de son activité (statuts + commission due) */}
-      {signe && (projets.length > 0 || data.stats) && (
-        <ResumeArtisan projets={projets} statsBase={data.stats} />
+      {signe && data.stats && (
+        <TableauDeBordArtisan
+          stats={data.stats}
+          onFiltrer={(f) => {
+            setFiltreDemande(f)
+            document.getElementById('mes-chantiers')?.scrollIntoView({ behavior: 'smooth' })
+          }}
+        />
       )}
       </div>
 
@@ -271,6 +269,8 @@ export function EspaceArtisanPage() {
 
       {/* Liste des chantiers : en cours / terminés */}
       <ListeChantiers
+        filtreDemande={filtreDemande}
+        onFiltreApplique={() => setFiltreDemande(null)}
         projets={projets}
         signe={signe}
         onChange={() => void refetch()}
@@ -289,158 +289,21 @@ export function EspaceArtisanPage() {
           onDone={() => void refetch()}
         />
       )}
+
+      {/* Relevé détaillé : la commission n'était qu'un total agrégé. */}
+      {!vuePerdus && signe && token && (
+        <div className="mx-auto max-w-2xl">
+          <ReleveCommissions token={token} />
+        </div>
+      )}
+
+      {/* Contact, aide et mentions : totalement absents auparavant (audit §9). */}
+      {!vuePerdus && <PiedDePageArtisan />}
     </div>
   )
 }
 
-// Résumé global de l'activité de l'artisan (tous ses chantiers confondus) :
-// en attente, perdus, devis envoyés + montant, vendu, taux de conversion, et
-// la commission qu'il doit à Celexia (due dès la signature du devis client,
-// cf. contrat d'engagement) — à régler vs déjà réglée.
-function ResumeArtisan({
-  projets,
-  statsBase,
-}: {
-  projets: ProjetEspace[]
-  /** Stats calculées en base sur TOUS ses chantiers, y compris ceux sortis de
-   *  son pipe (masqués, perdus depuis plus de 15 jours, projets morts). */
-  statsBase?: StatsEspaceArtisan
-}) {
-  const stats = useMemo(() => {
-    // Source de vérité : le bloc `stats` du RPC. Le calcul ci-dessous ne sert
-    // que de repli tant que la migration 0062 n'est pas exécutée — il ne voit
-    // alors que le pipe visible.
-    if (statsBase) {
-      return {
-        enAttente: statsBase.en_attente,
-        perdus: statsBase.perdus,
-        devisEnvoyesCount: statsBase.devis_envoyes,
-        montantDevisEnvoyes: statsBase.montant_devis_envoyes,
-        vendu: statsBase.vendu,
-        tauxConversion:
-          statsBase.devis_aboutis > 0
-            ? Math.round((statsBase.signes / statsBase.devis_aboutis) * 100)
-            : null,
-        commissionARegler: statsBase.commission_a_regler,
-        commissionReglee: statsBase.commission_reglee,
-      }
-    }
-
-    const enAttente = projets.filter((p) => p.statut === 'en_attente').length
-    const perdus = projets.filter((p) => p.statut === 'perdu').length
-
-    const devisEnvoyes = projets.filter((p) => p.statut === 'devis_envoye')
-    const montantDevisEnvoyes = devisEnvoyes.reduce((s, p) => s + (p.montant_devis ?? 0), 0)
-
-    const signes = projets.filter((p) => p.statut === 'devis_signe' || p.statut === 'termine')
-    const vendu = signes.reduce((s, p) => s + (p.montant_devis_signe ?? 0), 0)
-
-    // Taux de conversion : parmi les chantiers où un devis a été envoyé (envoyé, signé ou terminé),
-    // combien ont fini signés.
-    const denomDevis = projets.filter((p) =>
-      ['devis_envoye', 'devis_signe', 'termine'].includes(p.statut),
-    ).length
-    const tauxConversion = denomDevis > 0 ? Math.round((signes.length / denomDevis) * 100) : null
-
-    const commissionARegler = projets
-      .filter((p) => p.commission != null && !p.commission_encaissee)
-      .reduce((s, p) => s + (p.commission ?? 0), 0)
-    const commissionReglee = projets
-      .filter((p) => p.commission_encaissee)
-      .reduce((s, p) => s + (p.commission ?? 0), 0)
-
-    return {
-      enAttente,
-      perdus,
-      devisEnvoyesCount: devisEnvoyes.length,
-      montantDevisEnvoyes,
-      vendu,
-      tauxConversion,
-      commissionARegler,
-      commissionReglee,
-    }
-  }, [projets, statsBase])
-
-  return (
-    <section className="mt-8">
-      <SectionTitre>Votre activité</SectionTitre>
-
-      {/* Stat héro : total vendu + taux de conversion intégré */}
-      <div className="rounded-2xl bg-primary p-5 text-primary-foreground shadow-violet">
-        <p className="flex items-center gap-1.5 text-xs font-medium opacity-80">
-          <CheckCircle2 className="size-4" /> Vendu (devis signés)
-        </p>
-        <p className="montant mt-1 text-3xl font-semibold sm:text-4xl">{formatEuros(stats.vendu)}</p>
-        {stats.tauxConversion != null && (
-          <div className="mt-4">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
-              <div
-                className="h-full rounded-full bg-white transition-all duration-500"
-                style={{ width: `${stats.tauxConversion}%` }}
-              />
-            </div>
-            <p className="mt-1.5 text-xs opacity-80">
-              <strong className="font-semibold opacity-100">{stats.tauxConversion}%</strong> de vos
-              devis envoyés signés
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Tuiles secondaires */}
-      <div className="mt-3 grid grid-cols-3 gap-2.5">
-        <StatTile icon={Clock} label="En attente" valeur={String(stats.enAttente)} tone="warning" />
-        <StatTile
-          icon={FileText}
-          label="Devis envoyés"
-          sousLabel={stats.devisEnvoyesCount ? formatEuros(stats.montantDevisEnvoyes) : undefined}
-          valeur={String(stats.devisEnvoyesCount)}
-          tone="warning"
-        />
-        <StatTile icon={XCircle} label="Perdus" valeur={String(stats.perdus)} tone="danger" />
-      </div>
-
-      {/* Commission Celexia : à régler / réglée */}
-      <div className="mt-3 rounded-2xl border border-border/70 bg-card p-4 shadow-card">
-        <p className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Wallet className="size-4" />
-          </span>
-          Commission Celexia
-        </p>
-        <SplitBar
-          gauche={stats.commissionARegler}
-          droite={stats.commissionReglee}
-          couleurGauche="#F59E0B"
-          couleurDroite="#22C55E"
-        />
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div>
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="size-2 rounded-full bg-[#F59E0B]" /> À régler
-            </p>
-            <p className="montant text-lg font-semibold text-[#B45309]">
-              {formatEuros(stats.commissionARegler)}
-            </p>
-          </div>
-          <div>
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="size-2 rounded-full bg-[#22C55E]" /> Réglée
-            </p>
-            <p className="montant text-lg font-semibold text-[#16A34A]">
-              {formatEuros(stats.commissionReglee)}
-            </p>
-          </div>
-        </div>
-        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-          Due à la signature du devis par le client (cf. contrat d'engagement).
-        </p>
-      </div>
-    </section>
-  )
-}
-
-// Titre de section du portail : tiret violet + Clash Display + compteur optionnel.
+// Titre de section du portail artisan.
 function SectionTitre({ children, compte }: { children: ReactNode; compte?: number }) {
   return (
     <h2 className="mb-4 flex items-center gap-2.5 font-display text-xl tracking-tight sm:text-2xl">
@@ -453,12 +316,11 @@ function SectionTitre({ children, compte }: { children: ReactNode; compte?: numb
   )
 }
 
-// Liste des devis générés par l'artisan (Metbach).
 function MesDevis({ token }: { token: string }) {
   const { data: devis } = useListeDevis(token)
   if (!devis || devis.length === 0) return null
   return (
-    <section className="mt-10">
+    <section id="mes-chantiers" className="mt-10">
       <SectionTitre compte={devis.length}>Mes devis</SectionTitre>
       <ul className="grid gap-2.5 sm:grid-cols-2">
         {devis.map((d) => (
@@ -516,32 +378,107 @@ function ListeChantiers({
   signe,
   onChange,
   onCreerDevis,
+  filtreDemande,
+  onFiltreApplique,
 }: {
   projets: ProjetEspace[]
   signe: boolean
   onChange: () => void
   onCreerDevis?: (p: ProjetEspace) => void
+  filtreDemande?: 'urgents' | null
+  onFiltreApplique?: () => void
 }) {
-  const [filtre, setFiltre] = useState<'tous' | 'en_cours' | StatutProjet>('tous')
+  const [filtreLocal, setFiltreLocal] = useState<'tous' | 'en_cours' | 'urgents' | StatutProjet>('tous')
+  const [recherche, setRecherche] = useState('')
+  const [vue, setVue] = useState<'liste' | 'kanban'>('liste')
+  const [ouvertDrawer, setOuvertDrawer] = useState<ProjetEspace | null>(null)
 
-  // Compteurs par statut (uniquement les statuts réellement présents)
+  // Filtre poussé par le tableau de bord : valeur DÉRIVÉE plutôt qu'un
+  // setState dans un effet, qui déclencherait un rendu en cascade.
+  const filtre = filtreDemande ?? filtreLocal
+  const setFiltre = (f: typeof filtreLocal) => {
+    setFiltreLocal(f)
+    onFiltreApplique?.()
+  }
+
   const compte = (s: StatutProjet) => projets.filter((p) => p.statut === s).length
   const nbEnCours = projets.filter((p) => EN_COURS.includes(p.statut)).length
   const statutsPresents = STATUTS_ORDRE.filter((s) => compte(s) > 0)
 
-  const filtres: { cle: 'tous' | 'en_cours' | StatutProjet; label: string; n: number }[] = [
+  // Urgence calculée une fois par chantier : sert au filtre, au tri et au badge.
+  const urgences = useMemo(
+    () => new Map(projets.map((p) => [p.id, urgenceChantier(p)])),
+    [projets],
+  )
+  const nbUrgents = projets.filter(
+    (p) => (urgences.get(p.id)?.niveau ?? 'aucune') !== 'aucune'
+       && urgences.get(p.id)!.score >= 600,
+  ).length
+
+  const filtres: { cle: 'tous' | 'en_cours' | 'urgents' | StatutProjet; label: string; n: number }[] = [
     { cle: 'tous', label: 'Tous', n: projets.length },
+    ...(nbUrgents > 0 ? [{ cle: 'urgents' as const, label: 'À traiter', n: nbUrgents }] : []),
     { cle: 'en_cours', label: 'En cours', n: nbEnCours },
     ...statutsPresents.map((s) => ({ cle: s, label: statutInfo(s).label, n: compte(s) })),
   ]
 
-  const liste = projets.filter((p) =>
-    filtre === 'tous' ? true : filtre === 'en_cours' ? EN_COURS.includes(p.statut) : p.statut === filtre,
+  // Tri par urgence décroissante : sans hiérarchie, l'artisan ne sait pas par
+  // quoi commencer — c'est le manque le plus coûteux relevé à l'audit.
+  const liste = useMemo(
+    () =>
+      projets
+        .filter((p) =>
+          filtre === 'tous'
+            ? true
+            : filtre === 'urgents'
+              ? (urgences.get(p.id)?.score ?? 0) >= 600
+              : filtre === 'en_cours'
+                ? EN_COURS.includes(p.statut)
+                : p.statut === filtre,
+        )
+        .filter((p) => correspond(p, recherche))
+        .sort((a, b) => (urgences.get(b.id)?.score ?? 0) - (urgences.get(a.id)?.score ?? 0)),
+    [projets, filtre, recherche, urgences],
   )
 
   return (
     <section className="mt-10">
-      <SectionTitre compte={projets.length}>Vos chantiers</SectionTitre>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <SectionTitre compte={projets.length}>Vos chantiers</SectionTitre>
+        {/* Une liste plate ne montre pas où le flux se bloque (audit §6). */}
+        <div role="tablist" aria-label="Affichage" className="flex gap-1 rounded-full bg-muted p-1">
+          {(['liste', 'kanban'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={vue === v}
+              onClick={() => setVue(v)}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                vue === v ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+              )}
+            >
+              {v === 'liste' ? <Rows3 className="size-3.5" /> : <Columns3 className="size-3.5" />}
+              {v === 'liste' ? 'Liste' : 'Kanban'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Recherche : 65 cartes sans moyen de retrouver un client (audit §6). */}
+      <div className="relative mb-3">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Rechercher un client, une ville, un métier…"
+          className="h-11 pl-9"
+          aria-label="Rechercher un chantier"
+        />
+      </div>
 
       {/* Filtres par statut */}
       <div className="scrollbar-hide -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -572,12 +509,16 @@ function ListeChantiers({
         ))}
       </div>
 
-      {liste.length === 0 ? (
+      {vue === 'kanban' ? (
+        <KanbanChantiers projets={liste} signe={signe} onOuvrir={setOuvertDrawer} />
+      ) : liste.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/50 p-8 text-center">
           <span className="mx-auto mb-3 flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
             <FileText className="size-5" />
           </span>
-          <p className="text-sm text-muted-foreground">Aucun chantier dans ce filtre.</p>
+          <p className="text-sm text-muted-foreground">
+            {recherche ? 'Aucun chantier ne correspond à cette recherche.' : 'Aucun chantier dans ce filtre.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -586,6 +527,15 @@ function ListeChantiers({
           ))}
         </div>
       )}
+
+      {/* Détail en panneau latéral : la liste reste visible derrière. */}
+      <DrawerChantier
+        projet={ouvertDrawer}
+        signe={signe}
+        onClose={() => setOuvertDrawer(null)}
+        onChange={onChange}
+        onCreerDevis={onCreerDevis}
+      />
     </section>
   )
 }
@@ -715,343 +665,30 @@ function ProjetItem({
   onCreerDevis?: (p: ProjetEspace) => void
 }) {
   const [ouvert, setOuvert] = useState(false)
-  const metiers = projet.metiers?.length ? projet.metiers : [projet.metier]
   const adresse = [projet.client_adresse, projet.client_code_postal, projet.client_ville]
     .filter(Boolean)
     .join(', ')
-  const montantAffiche = projet.montant_devis_signe ?? projet.montant_devis
 
   return (
     <Card className="relative overflow-hidden py-0 shadow-card transition-shadow hover:shadow-card-hover">
-      {/* Liseré de statut (piloté par la couleur du statut) */}
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-1"
-        style={{ background: statutInfo(projet.statut).color }}
+      <LisereStatut statut={projet.statut} />
+      <EnteteChantier
+        projet={projet}
+        signe={signe}
+        ouvert={ouvert}
+        onToggle={() => setOuvert((v) => !v)}
       />
-      <button
-        type="button"
-        onClick={() => setOuvert((v) => !v)}
-        aria-expanded={ouvert}
-        className="flex w-full items-center gap-3 p-4 pl-5 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-5 sm:pl-6"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0 truncate font-display text-base tracking-tight">
-              {metiers.join(', ')}
-            </span>
-            <StatutBadge statut={projet.statut} />
-          </div>
-          <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-muted-foreground">
-            {signe && projet.client_nom ? (
-              <span className="truncate">{projet.client_nom}</span>
-            ) : (
-              <span className="flex items-center gap-1 italic">
-                <Lock className="size-3.5 shrink-0" /> Client confidentiel
-              </span>
-            )}
-            {projet.client_ville && (
-              <span className="flex min-w-0 items-center gap-0.5">
-                <MapPin className="size-3.5 shrink-0" />
-                <span className="truncate">{projet.client_ville}</span>
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {montantAffiche != null && (
-            <span className="montant hidden text-sm font-semibold sm:block">
-              {formatEuros(montantAffiche)}
-            </span>
-          )}
-          <span
-            className={cn(
-              'flex size-8 items-center justify-center rounded-full transition-all duration-200',
-              ouvert ? 'rotate-180 bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
-            )}
-          >
-            <ChevronDown className="size-5" />
-          </span>
-        </div>
-      </button>
 
       {ouvert && (
-        <div className="space-y-5 border-t border-border p-4 pl-5 animate-in fade-in slide-in-from-top-1 duration-200 sm:p-5 sm:pl-6">
-          {/* Détails non confidentiels (toujours visibles) */}
-          {(projet.budget_estime != null || projet.description) && (
-            <div className="rounded-xl bg-muted/40 p-3.5 text-sm">
-              {projet.budget_estime != null && (
-                <p className="text-muted-foreground">
-                  Budget estimé :{' '}
-                  <span className="montant font-medium text-foreground">
-                    {formatEuros(projet.budget_estime)}
-                  </span>
-                </p>
-              )}
-              {projet.description && (
-                <p className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">
-                  {projet.description}
-                </p>
-              )}
-            </div>
-          )}
-
-          {!signe ? (
-            <div className="rounded-xl border border-dashed border-[#F59E0B]/40 bg-[#F59E0B]/5 p-5 text-center">
-              <span className="mx-auto mb-2.5 flex size-10 items-center justify-center rounded-full bg-[#F59E0B]/15 text-[#B45309]">
-                <Lock className="size-5" />
-              </span>
-              <p className="text-sm text-[#92400E]">
-                Signez le contrat pour accéder aux coordonnées du client et déposer votre devis.
-              </p>
-              <Button asChild variant="outline" size="sm" className="mt-3 bg-card">
-                <a href="#contrat">Signer le contrat</a>
-              </Button>
-            </div>
-          ) : (
-            <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
-              {/* Colonne gauche : client + suivi */}
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <SousTitre icon={Phone}>Client</SousTitre>
-                  {/* Coordonnées client (éditables sauf le téléphone) */}
-                  <ClientBloc projet={projet} adresse={adresse} onChange={onChange} />
-
-                  {/* Photos */}
-                  {projet.photos?.length > 0 && (
-                    <div className="grid grid-cols-3 gap-2">
-                      {projet.photos.map((url) => (
-                        <a
-                          key={url}
-                          href={url}
-                          target="_blank"
-                          rel="noopener"
-                          className="aspect-square overflow-hidden rounded-xl border border-border transition-opacity hover:opacity-90"
-                        >
-                          <img src={url} alt="Photo chantier" className="size-full object-cover" />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <SousTitre icon={Clock}>Avancement</SousTitre>
-                  {/* Suivi (statut + notes) */}
-                  <SuiviArtisan
-                    token={projet.token}
-                    suivis={projet.suivis ?? []}
-                    onChange={onChange}
-                    statutActuel={projet.statut}
-                  />
-                </div>
-              </div>
-
-              {/* Colonne droite : documents */}
-              <div className="space-y-2">
-                <SousTitre icon={FileText}>Documents</SousTitre>
-                {onCreerDevis && (
-                  <Button
-                    className="w-full shadow-violet transition-transform active:scale-[0.99]"
-                    onClick={() => onCreerDevis(projet)}
-                  >
-                    <FilePlus className="size-4" />
-                    Créer un devis
-                  </Button>
-                )}
-                <UploadDevis
-                  token={projet.token}
-                  slot="devis"
-                  label="Devis"
-                  depose={projet.devis_depose}
-                  url={projet.devis_url}
-                  montantInitial={projet.montant_devis}
-                  onDone={onChange}
-                />
-                <UploadDevis
-                  token={projet.token}
-                  slot="devis_signe"
-                  label="Devis signé par le client"
-                  depose={projet.devis_signe_depose}
-                  url={projet.devis_signe_url}
-                  montantInitial={projet.montant_devis_signe}
-                  onDone={onChange}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Retrait volontaire. Disponible même contrat non signé : un artisan
-              qui ne veut pas du dossier n'a pas à signer pour le décliner.
-              Masqué sur un chantier terminé, où le retrait n'a plus de sens. */}
-          {projet.statut !== 'termine' && (
-            <div className="flex justify-end border-t border-border pt-3">
-              <RetraitChantierDialog token={projet.token} onRetire={onChange} />
-            </div>
-          )}
-        </div>
+        <CorpsChantier
+          projet={projet}
+          signe={signe}
+          adresse={adresse}
+          onChange={onChange}
+          onCreerDevis={onCreerDevis}
+        />
       )}
     </Card>
-  )
-}
-
-// Mini-en-tête de sous-section dans un chantier déplié.
-function SousTitre({ icon: Icon, children }: { icon: typeof Phone; children: ReactNode }) {
-  return (
-    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-      <Icon className="size-3.5" />
-      {children}
-    </p>
-  )
-}
-
-// Coordonnées client : consultation + édition (tout sauf le téléphone).
-function ClientBloc({
-  projet,
-  adresse,
-  onChange,
-}: {
-  projet: ProjetEspace
-  adresse: string
-  onChange: () => void
-}) {
-  const [edition, setEdition] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [f, setF] = useState({
-    nom: projet.client_nom ?? '',
-    email: projet.client_email ?? '',
-    adresse: projet.client_adresse ?? '',
-    cp: projet.client_code_postal ?? '',
-    ville: projet.client_ville ?? '',
-    description: projet.description ?? '',
-    budget: projet.budget_estime != null ? String(projet.budget_estime) : '',
-  })
-  const maj = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }))
-
-  async function enregistrer() {
-    setSaving(true)
-    try {
-      const budget = f.budget.trim() ? parseFloat(f.budget.replace(',', '.')) : null
-      const { data, error } = await supabase.rpc('update_projet_by_token', {
-        p_token: projet.token,
-        p_client_nom: f.nom,
-        p_client_email: f.email,
-        p_client_adresse: f.adresse,
-        p_client_code_postal: f.cp,
-        p_client_ville: f.ville,
-        p_description: f.description,
-        p_budget: budget,
-      })
-      if (error || !(data as { ok?: boolean })?.ok) throw new Error('Échec')
-      toast.success('Infos mises à jour')
-      setEdition(false)
-      onChange()
-    } catch {
-      toast.error("Impossible d'enregistrer")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (edition) {
-    return (
-      <div className="space-y-2 rounded-xl border border-border/70 bg-card p-3.5 text-sm shadow-card">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Nom du prospect</Label>
-          <Input className="h-10" value={f.nom} onChange={(e) => maj('nom', e.target.value)} />
-        </div>
-        <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          <Lock className="mr-1 inline size-3" />
-          Téléphone (non modifiable) : <strong>{formatTel(projet.client_telephone ?? '')}</strong>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Email</Label>
-          <Input className="h-10" value={f.email} onChange={(e) => maj('email', e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Adresse</Label>
-          <Input className="h-10" value={f.adresse} onChange={(e) => maj('adresse', e.target.value)} />
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Code postal</Label>
-            <Input className="h-10" value={f.cp} onChange={(e) => maj('cp', e.target.value)} />
-          </div>
-          <div className="col-span-2 space-y-1.5">
-            <Label className="text-xs">Ville</Label>
-            <Input className="h-10" value={f.ville} onChange={(e) => maj('ville', e.target.value)} />
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Budget estimé (€)</Label>
-          <Input
-            type="number"
-            className="h-10"
-            value={f.budget}
-            onChange={(e) => maj('budget', e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Description / notes</Label>
-          <Textarea
-            rows={3}
-            value={f.description}
-            onChange={(e) => maj('description', e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          <Button variant="outline" onClick={() => setEdition(false)} disabled={saving}>
-            <X className="size-4" />
-            Annuler
-          </Button>
-          <Button onClick={enregistrer} disabled={saving}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            Enregistrer
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-2.5 rounded-xl border border-border/70 bg-card p-3.5 text-sm shadow-card">
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 break-words font-display text-base tracking-tight">
-          {projet.client_nom}
-        </p>
-        <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setEdition(true)}>
-          <Pencil className="size-4" />
-          Modifier
-        </Button>
-      </div>
-      {projet.client_telephone && (
-        <Button asChild className="h-11 w-full shadow-violet transition-transform active:scale-[0.98]">
-          <a href={`tel:${projet.client_telephone}`}>
-            <Phone className="size-4" />
-            Appeler {formatTel(projet.client_telephone)}
-          </a>
-        </Button>
-      )}
-      {projet.client_email && (
-        <a
-          href={`mailto:${projet.client_email}`}
-          className="flex items-center gap-2.5 break-all text-primary transition-opacity hover:opacity-80"
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <Mail className="size-4" />
-          </span>
-          {projet.client_email}
-        </a>
-      )}
-      {adresse && (
-        <div className="flex items-start gap-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            <MapPin className="size-4" />
-          </span>
-          <span className="min-w-0 break-words pt-1.5">{adresse}</span>
-        </div>
-      )}
-    </div>
   )
 }
 

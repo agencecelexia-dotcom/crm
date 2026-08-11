@@ -30,6 +30,7 @@ import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { ActionDuJour } from './action-du-jour'
 import { StatsGlobales } from './stats-globales'
+import { QualiteLeads } from './qualite-leads'
 
 export function DashboardPage() {
   const { data: projets, isLoading } = useProjets()
@@ -162,6 +163,8 @@ export function DashboardPage() {
       {/* Vue cumulée, calculée en SQL. Le reste de la page raisonne sur la
           période sélectionnée ci-dessous. */}
       <StatsGlobales />
+
+      <QualiteLeads />
 
       {/* Filtre période */}
       <Tabs

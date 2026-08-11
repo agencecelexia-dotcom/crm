@@ -11,6 +11,7 @@ import { formatEuros } from '@/lib/format'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { useAffectations, useRetirerAffectation } from '../hooks/use-affectations'
 import { AssignArtisan } from './assign-artisan'
+import { MessageArtisan } from './message-artisan'
 import type { ProjetAvecArtisan } from '@/types/database'
 
 // Liste des artisans assignés à un projet (multi-assignation), avec pour chacun :
@@ -111,6 +112,15 @@ export function AffectationsCard({ projet }: { projet: ProjetAvecArtisan }) {
                     />
                   </div>
                 )}
+
+                {/* Fil : l'agence peut enfin répondre dans le dossier. */}
+                <div className="mt-2">
+                  <MessageArtisan
+                    affectationId={af.id}
+                    projetId={projet.id}
+                    nomArtisan={nomArtisan}
+                  />
+                </div>
               </div>
             )
           })
