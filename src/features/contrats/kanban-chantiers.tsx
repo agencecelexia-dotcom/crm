@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
 import { EnteteChantier, LisereStatut } from './entete-chantier'
-import { urgenceChantier } from './urgence-chantier'
+import { dateReception, urgenceChantier } from './urgence-chantier'
 import { ETAPE_LABEL, ETAPES_ORDRE, type EtapeFunnel } from '@/types/database'
 import type { ProjetEspace } from '@/types/database'
 
@@ -50,7 +50,12 @@ export function KanbanChantiers({
   const parColonne = COLONNES.map((c) => {
     const items = actifs
       .filter((p) => (c.cle === COLONNE_INITIALE ? !p.etape : p.etape === c.cle))
-      .sort((a, b) => urgenceChantier(b).score - urgenceChantier(a).score)
+      // Urgence puis le plus récent : même règle que la liste, sinon un
+      // chantier neuf se retrouve en bas de sa colonne.
+      .sort((a, b) => {
+        const ecart = urgenceChantier(b).score - urgenceChantier(a).score
+        return ecart !== 0 ? ecart : dateReception(b) - dateReception(a)
+      })
     return {
       ...c,
       items,

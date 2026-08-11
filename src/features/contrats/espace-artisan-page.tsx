@@ -37,7 +37,7 @@ import { CorpsChantier } from './corps-chantier'
 import { KanbanChantiers } from './kanban-chantiers'
 import { DrawerChantier } from './drawer-chantier'
 import { ReleveCommissions } from './releve-commissions'
-import { correspond, urgenceChantier } from './urgence-chantier'
+import { correspond, dateReception, GROUPES, urgenceChantier } from './urgence-chantier'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
@@ -410,10 +410,15 @@ function ListeChantiers({
     () => new Map(projets.map((p) => [p.id, urgenceChantier(p)])),
     [projets],
   )
-  const nbUrgents = projets.filter(
-    (p) => (urgences.get(p.id)?.niveau ?? 'aucune') !== 'aucune'
-       && urgences.get(p.id)!.score >= 600,
-  ).length
+  // « À traiter » se fonde sur le NIVEAU, pas sur un seuil de score : le score
+  // sert au classement interne d'un groupe et bouge quand une règle change.
+  // Un seuil numérique laissait entrer « Reçu récemment » (900), qui n'est
+  // pas une action en retard.
+  const estUrgent = (id: string) => {
+    const n = urgences.get(id)?.niveau
+    return n === 'critique' || n === 'haute'
+  }
+  const nbUrgents = projets.filter((p) => estUrgent(p.id)).length
 
   const filtres: { cle: 'tous' | 'en_cours' | 'urgents' | StatutProjet; label: string; n: number }[] = [
     { cle: 'tous', label: 'Tous', n: projets.length },
@@ -431,13 +436,22 @@ function ListeChantiers({
           filtre === 'tous'
             ? true
             : filtre === 'urgents'
-              ? (urgences.get(p.id)?.score ?? 0) >= 600
+              ? estUrgent(p.id)
               : filtre === 'en_cours'
                 ? EN_COURS.includes(p.statut)
                 : p.statut === filtre,
         )
         .filter((p) => correspond(p, recherche))
-        .sort((a, b) => (urgences.get(b.id)?.score ?? 0) - (urgences.get(a.id)?.score ?? 0)),
+        // À l'intérieur d'un groupe : urgence, puis le PLUS RÉCENT. Le tri
+        // par urgence seule renvoyait un chantier reçu aujourd'hui tout en
+        // bas, sous des dossiers plus anciens dont le score montait avec
+        // l'âge — le prospect à ne pas rater était le moins visible.
+        .sort((a, b) => {
+          const ecart = (urgences.get(b.id)?.score ?? 0) - (urgences.get(a.id)?.score ?? 0)
+          if (ecart !== 0) return ecart
+          return dateReception(b) - dateReception(a)
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- estUrgent dérive de `urgences`
     [projets, filtre, recherche, urgences],
   )
 
@@ -521,10 +535,36 @@ function ListeChantiers({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {liste.map((p) => (
-            <ProjetItem key={p.id} projet={p} signe={signe} onChange={onChange} onCreerDevis={onCreerDevis} />
-          ))}
+        <div className="space-y-6">
+          {/* Groupé par nature d'action : un tri à plat laissait 20 RDV passés
+              monopoliser le haut de liste, et un chantier reçu le jour même
+              tombait en position 21 — invisible en pratique. */}
+          {GROUPES.map((g) => {
+            const items = liste.filter((p) => urgences.get(p.id)?.groupe === g.cle)
+            if (items.length === 0) return null
+            return (
+              <div key={g.cle}>
+                <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+                  <h3 className="text-sm font-semibold">{g.label}</h3>
+                  <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+                    {items.length}
+                  </span>
+                  {g.aide && <span className="text-xs text-muted-foreground">{g.aide}</span>}
+                </div>
+                <div className="space-y-3">
+                  {items.map((p) => (
+                    <ProjetItem
+                      key={p.id}
+                      projet={p}
+                      signe={signe}
+                      onChange={onChange}
+                      onCreerDevis={onCreerDevis}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 
