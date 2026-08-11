@@ -1,42 +1,62 @@
-import { AlertTriangle, Euro, Hourglass, Target, TrendingUp, Wallet } from 'lucide-react'
+import { AlertTriangle, Euro, Hourglass, Target, TrendingUp, Wallet, XCircle } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
 import { StatTile } from './stat-tile'
-import type { StatsEspaceArtisan } from '@/types/database'
+import type { CranFunnelStats, StatsEspaceArtisan } from '@/types/database'
 
-/** Un cran du funnel, avec son taux de passage depuis le cran précédent. */
+/**
+ * Un cran du funnel.
+ *
+ * `atteint` est monotone : il inclut les dossiers ensuite perdus. Affiché
+ * seul, il se lit comme un nombre d'affaires gagnées — c'est exactement le
+ * malentendu qu'avait produit « Devis signé : 8 » à côté de « 2 gagnés ».
+ * On montre donc systématiquement la décomposition.
+ */
 function CranFunnel({
   label,
-  valeur,
+  cran,
   total,
   taux,
   ton,
 }: {
   label: string
-  valeur: number
+  cran: CranFunnelStats
   total: number
   taux: number | null
   ton: string
 }) {
-  const largeur = total > 0 ? Math.max(4, Math.round((valeur / total) * 100)) : 0
+  const largeur = total > 0 ? Math.max(4, Math.round((cran.atteint / total) * 100)) : 0
+  // Part encore vivante ou gagnée, sur la barre : le perdu reste en creux.
+  const partVivante =
+    cran.atteint > 0 ? Math.round(((cran.actif + cran.gagne) / cran.atteint) * 100) : 0
+
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between gap-2">
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
         <span className="text-sm font-medium">{label}</span>
         <span className="flex items-baseline gap-1.5">
-          <span className="montant text-sm font-semibold tabular-nums">{valeur}</span>
+          <span className="montant text-sm font-semibold tabular-nums">{cran.atteint}</span>
           {taux != null && (
             <span className="text-xs text-muted-foreground tabular-nums">{taux} %</span>
           )}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted">
+
+      <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+        <div className={cn('h-full transition-all', ton)} style={{ width: `${(largeur * partVivante) / 100}%` }} />
         <div
-          className={cn('h-full rounded-full transition-all', ton)}
-          style={{ width: `${largeur}%` }}
+          className="h-full bg-[#DC2626]/30 transition-all"
+          style={{ width: `${(largeur * (100 - partVivante)) / 100}%` }}
         />
       </div>
+
+      {/* Décomposition explicite : atteint = actif + perdu + gagné. */}
+      <p className="mt-1 flex flex-wrap gap-x-2 text-xs text-muted-foreground tabular-nums">
+        {cran.actif > 0 && <span>{cran.actif} en cours</span>}
+        {cran.gagne > 0 && <span className="text-[#16A34A]">{cran.gagne} gagné{cran.gagne > 1 ? 's' : ''}</span>}
+        {cran.perdu > 0 && <span className="text-[#DC2626]">{cran.perdu} perdu{cran.perdu > 1 ? 's' : ''}</span>}
+      </p>
     </div>
   )
 }
@@ -110,7 +130,7 @@ export function TableauDeBordArtisan({
       )}
 
       {/* Argent */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatTile
           icon={Euro}
           label="Chiffre d'affaires signé"
@@ -138,6 +158,19 @@ export function TableauDeBordArtisan({
           sousLabel={`${formatEuros(stats.commission_reglee)} déjà réglés`}
           tone={stats.commission_due > 0 ? 'warning' : 'default'}
         />
+        <StatTile
+          icon={XCircle}
+          label="Chantiers perdus"
+          valeur={String(stats.perdus)}
+          sousLabel={`${formatEuros(stats.montant_perdu)} de devis`}
+          tone={stats.perdus > 0 ? 'danger' : 'default'}
+        />
+        <StatTile
+          icon={Hourglass}
+          label="En cours"
+          valeur={String(stats.en_cours)}
+          sousLabel={`sur ${stats.leads_recus} chantiers reçus`}
+        />
       </div>
 
       {/* Funnel — chaque cran est cumulatif : « a atteint au moins cette étape ». */}
@@ -155,28 +188,28 @@ export function TableauDeBordArtisan({
         <div className="space-y-3">
           <CranFunnel
             label="Client contacté"
-            valeur={stats.contactes}
+            cran={stats.funnel.contacte}
             total={stats.leads_recus}
             taux={stats.taux_contact}
             ton="bg-[#0EA5E9]"
           />
           <CranFunnel
             label="RDV pris"
-            valeur={stats.rdv}
+            cran={stats.funnel.rdv_pris}
             total={stats.leads_recus}
             taux={stats.taux_rdv}
             ton="bg-[#7C3AED]"
           />
           <CranFunnel
             label="Devis envoyé"
-            valeur={stats.devis_envoyes}
+            cran={stats.funnel.devis_envoye}
             total={stats.leads_recus}
             taux={stats.taux_devis}
             ton="bg-[#F59E0B]"
           />
           <CranFunnel
             label="Devis signé"
-            valeur={stats.devis_signes}
+            cran={stats.funnel.devis_signe}
             total={stats.leads_recus}
             taux={stats.taux_signature}
             ton="bg-[#22C55E]"
@@ -199,6 +232,18 @@ export function TableauDeBordArtisan({
           </p>
         )}
       </div>
+
+      {/* Une étape « signé » sans PDF ni montant ne peut fonder aucune
+          commission : on le dit, plutôt que de la compter silencieusement. */}
+      {stats.signatures_declarees_sans_preuve > 0 && (
+        <p className="rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-3 text-xs text-[#92400E]">
+          <strong className="tabular-nums">{stats.signatures_declarees_sans_preuve}</strong>{' '}
+          chantier{stats.signatures_declarees_sans_preuve > 1 ? 's ont' : ' a'} été marqué
+          {stats.signatures_declarees_sans_preuve > 1 ? 's' : ''} « devis signé » sans devis
+          déposé ni montant saisi. Complétez-les : sans justificatif, ces montants ne peuvent
+          pas être comptés.
+        </p>
+      )}
 
       {/* Ce que les abandons après chiffrage ont coûté : l'information la plus
           actionnable pour l'artisan comme pour l'agence. */}

@@ -431,7 +431,27 @@ export interface EspaceArtisan {
  * KPI d'un artisan, calculés sur les FAITS par `stats_artisan_faits()`
  * (migrations 0075/0076) et non plus sur le champ `statut`.
  */
+/**
+ * Un cran du funnel, décomposé.
+ *
+ * `atteint` est MONOTONE : il compte les dossiers ayant franchi ce cran au
+ * moins une fois, même perdus depuis. Le lire seul laisse croire à des
+ * affaires gagnées — d'où la décomposition obligatoire.
+ * Invariant garanti en base : atteint = actif + perdu + gagne.
+ */
+export interface CranFunnelStats {
+  atteint: number
+  actif: number
+  perdu: number
+  gagne: number
+}
+
 export interface StatsEspaceArtisan {
+  funnel: Record<'contacte' | 'rdv_pris' | 'devis_envoye' | 'devis_signe' | 'termine', CranFunnelStats>
+  /** Signatures appuyées par un PDF ou un montant : seule base facturable. */
+  signatures_prouvees: number
+  /** Déclarées au stepper sans aucune preuve matérielle. */
+  signatures_declarees_sans_preuve: number
   leads_recus: number
   en_cours: number
   gagnes: number
