@@ -252,7 +252,7 @@ function Dossier({
         <CardContent className="space-y-3 py-5">
           <p className="text-lg font-semibold">🎯 À vous de jouer !</p>
           <p className="text-sm">
-            Vous venez de la part d'<strong>Antoine</strong>. Un client vous attend
+            <strong>Antoine</strong> vous transmet ce chantier. Un client vous attend
             pour son projet — contactez-le dès que possible.
           </p>
           {projet.client_telephone && (

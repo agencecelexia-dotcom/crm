@@ -510,4 +510,8 @@ export interface ProjetPerdu {
   restaurable: boolean
   /** Dernier message de suivi (souvent la raison saisie au retrait). */
   derniere_raison: string | null
+  /** Nom du client, absent de cette vue auparavant. */
+  client_nom?: string | null
+  /** Motif normalisé (migration 0079). */
+  motif_perte?: string | null
 }

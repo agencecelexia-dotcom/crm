@@ -43,6 +43,7 @@ import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
 import { RetraitChantierDialog } from './retrait-chantier-dialog'
 import { ChantiersPerdus } from './chantiers-perdus'
+import { PiedDePageArtisan } from './pied-de-page-artisan'
 import { correspond, urgenceChantier, COULEUR_URGENCE, ancienneteLabel } from './urgence-chantier'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
@@ -250,7 +251,7 @@ export function EspaceArtisanPage() {
             A
           </span>
           <p className="text-sm leading-relaxed text-foreground/90">
-            Vous venez de la part d'<strong>Antoine</strong>. Voici vos chantiers — contactez vos
+            <strong>Antoine</strong> vous transmet ces chantiers. Contactez vos
             clients dès que possible et tenez-nous informés avec les boutons de suivi.
           </p>
         </div>
@@ -283,13 +284,13 @@ export function EspaceArtisanPage() {
           onDone={() => void refetch()}
         />
       )}
+
+      {/* Contact, aide et mentions : totalement absents auparavant (audit §9). */}
+      {!vuePerdus && <PiedDePageArtisan />}
     </div>
   )
 }
 
-// Résumé global de l'activité de l'artisan (tous ses chantiers confondus) :
-// en attente, perdus, devis envoyés + montant, vendu, taux de conversion, et
-// la commission qu'il doit à Celexia (due dès la signature du devis client,
 // Titre de section du portail artisan.
 function SectionTitre({ children, compte }: { children: ReactNode; compte?: number }) {
   return (
@@ -872,7 +873,7 @@ function ClientBloc({
     return (
       <div className="space-y-2 rounded-xl border border-border/70 bg-card p-3.5 text-sm shadow-card">
         <div className="space-y-1.5">
-          <Label className="text-xs">Nom du prospect</Label>
+          <Label className="text-xs">Nom du client</Label>
           <Input className="h-10" value={f.nom} onChange={(e) => maj('nom', e.target.value)} />
         </div>
         <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
