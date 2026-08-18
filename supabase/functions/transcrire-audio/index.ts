@@ -21,7 +21,10 @@ function cors(origin: string | null) {
   const ok = origin && (ORIGINES.includes(origin) || /^https:\/\/[\w-]+\.vercel\.app$/.test(origin))
   return {
     'Access-Control-Allow-Origin': ok ? origin! : ORIGINES[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    // `x-audio-type` porte le format réel du blob (webm sur Chrome, mp4 sur
+    // Safari). Sans lui dans cette liste, le préflight échoue et le navigateur
+    // renvoie un « Failed to fetch » opaque.
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-audio-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Vary': 'Origin',
   }
