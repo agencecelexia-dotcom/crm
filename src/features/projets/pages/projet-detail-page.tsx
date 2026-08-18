@@ -143,6 +143,14 @@ export function ProjetDetailPage() {
             </SelectContent>
           </Select>
 
+          {projet.statut === 'artisan_demarche' && (
+            <p className="rounded-xl border border-[#0891B2]/25 bg-[#0891B2]/5 p-2.5 text-xs text-[#0E7490]">
+              Ce n'est pas un client : un artisan qui cherche du travail. La fiche est sortie
+              du pipeline commercial et ne remontera dans aucune liste de prospects à
+              rappeler. Elle reste consultable si tu cherches un artisan dans ce secteur.
+            </p>
+          )}
+
           {projet.statut === 'perdu' && (
             <p className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/5 p-2.5 text-xs text-[#DC2626]">
               Perdu par l'artisan : le chantier reste vivant, tu peux le réassigner à quelqu'un

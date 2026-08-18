@@ -63,7 +63,10 @@ export function ValidationLead({
     void chercherDoublon(tel).then(setDoublons)
   }, [form.client_telephone])
 
-  const artisan = lead?.nature_appel === 'artisan_cherche_travail'
+  // L'IA propose, le commercial dispose : elle peut manquer le cas — un
+  // artisan qui ne se présente qu'à la fin de l'appel, ou une transcription
+  // trop pauvre. Le classement doit donc rester modifiable à la main.
+  const [artisan, setArtisan] = useState(lead?.nature_appel === 'artisan_cherche_travail')
 
   const anomalies = verifierMecaniquement({
     client_telephone: form.client_telephone,
@@ -140,21 +143,37 @@ export function ValidationLead({
     <div className="mx-auto max-w-2xl space-y-4 p-4 pb-28">
       <PageHeader titre={artisan ? 'Artisan démarché' : "Vérifier avant d'enregistrer"} />
 
-      {artisan && (
-        <div className="rounded-2xl border border-[#0891B2]/40 bg-[#0891B2]/5 p-3">
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-[#0E7490]">
-            <HardHat className="size-4" />
-            Ce n'est pas un client
-          </p>
-          <p className="mt-0.5 text-xs text-[#155E75]">
-            {lead?.artisan_metier
-              ? `${lead.artisan_metier}. `
-              : "Un artisan qui cherche du travail. "}
-            Enregistré hors pipeline, il ne remontera dans aucune liste de prospects. Sa
-            fiche reste consultable si vous cherchez un artisan dans ce secteur.
-          </p>
-        </div>
-      )}
+      {/* Bascule manuelle : ne jamais dépendre de la seule détection auto. */}
+      <button
+        type="button"
+        onClick={() => setArtisan((a) => !a)}
+        className={cn(
+          'flex w-full items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors',
+          artisan
+            ? 'border-[#0891B2]/40 bg-[#0891B2]/5'
+            : 'border-border bg-card hover:bg-accent/40',
+        )}
+      >
+        <span
+          className={cn(
+            'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border',
+            artisan ? 'border-[#0891B2] bg-[#0891B2] text-white' : 'border-muted-foreground/40',
+          )}
+        >
+          {artisan && <Check className="size-3.5" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            <HardHat className={cn('size-4', artisan ? 'text-[#0E7490]' : 'text-muted-foreground')} />
+            Ce n'est pas un client — artisan qui cherche du travail
+          </span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            {artisan
+              ? `${lead?.artisan_metier ? lead.artisan_metier + '. ' : ''}Enregistré hors pipeline : il ne remontera dans aucune liste de prospects à rappeler.`
+              : 'Cochez si votre interlocuteur propose ses services au lieu de demander des travaux.'}
+          </span>
+        </span>
+      </button>
 
       {doublons.length > 0 && (
         <div className="rounded-2xl border border-[#DC2626]/30 bg-[#DC2626]/5 p-3">

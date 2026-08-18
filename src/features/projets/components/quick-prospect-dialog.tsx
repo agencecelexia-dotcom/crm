@@ -134,6 +134,12 @@ export function QuickProspectDialog() {
                 <SelectItem value="a_rappeler">{STATUTS.a_rappeler.label}</SelectItem>
                 <SelectItem value="en_attente">{STATUTS.en_attente.label}</SelectItem>
                 <SelectItem value="nouveau">{STATUTS.nouveau.label}</SelectItem>
+                {/* Pas un prospect : un artisan qui propose ses services. Sans
+                    cette option, la fiche repart dans le pipeline et se fait
+                    rappeler comme un lead. */}
+                <SelectItem value="artisan_demarche">
+                  {STATUTS.artisan_demarche.label}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
