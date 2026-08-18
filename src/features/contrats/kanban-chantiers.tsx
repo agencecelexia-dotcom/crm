@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
 import { EnteteChantier, LisereStatut } from './entete-chantier'
-import { dateReception, urgenceChantier } from './urgence-chantier'
+import { dateReception } from './urgence-chantier'
 import { ETAPE_LABEL, ETAPES_ORDRE, type EtapeFunnel } from '@/types/database'
 import type { ProjetEspace } from '@/types/database'
 
@@ -50,12 +50,10 @@ export function KanbanChantiers({
   const parColonne = COLONNES.map((c) => {
     const items = actifs
       .filter((p) => (c.cle === COLONNE_INITIALE ? !p.etape : p.etape === c.cle))
-      // Urgence puis le plus récent : même règle que la liste, sinon un
-      // chantier neuf se retrouve en bas de sa colonne.
-      .sort((a, b) => {
-        const ecart = urgenceChantier(b).score - urgenceChantier(a).score
-        return ecart !== 0 ? ecart : dateReception(b) - dateReception(a)
-      })
+      // Ordre chronologique, comme la liste : les colonnes portent déjà
+      // l'information d'étape, un tri par urgence par-dessus rendait la
+      // position des cartes imprévisible d'un jour à l'autre.
+      .sort((a, b) => dateReception(b) - dateReception(a))
     return {
       ...c,
       items,
