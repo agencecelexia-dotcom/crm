@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/empty-state'
 import { formatEuros, formatDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase/client'
 import { MOTIF_LABEL } from '@/lib/motifs-perte'
+import { DrawerChantierPerdu } from './drawer-chantier-perdu'
 import type { ProjetPerdu } from '@/types/database'
 
 const ORIGINE_LABEL: Record<ProjetPerdu['motif'], string> = {
@@ -30,14 +31,20 @@ const ORIGINE_LABEL: Record<ProjetPerdu['motif'], string> = {
  */
 export function ChantiersPerdus({
   projets,
+  signe,
   onRetour,
   onChange,
 }: {
   projets: ProjetPerdu[]
+  /** Contrat signé : conditionne l'accès aux coordonnées client. */
+  signe: boolean
   onRetour: () => void
   onChange: () => void
 }) {
   const [enCours, setEnCours] = useState<string | null>(null)
+  /** Dossier ouvert en panneau : voir ce qui s'est passé avant de décider
+   *  d'une réattribution. */
+  const [ouvert, setOuvert] = useState<ProjetPerdu | null>(null)
   // Montant total perdu : information stratégique absente de cette vue.
   const totalPerdu = projets.reduce((t, p) => t + (p.montant_devis ?? 0), 0)
 
@@ -98,7 +105,11 @@ export function ChantiersPerdus({
           {projets.map((p) => {
             const metiers = p.metiers?.length ? p.metiers : [p.metier]
             return (
-              <Card key={p.id} className="rounded-2xl border-border/70 p-4 shadow-card">
+              <Card
+                key={p.id}
+                className="cursor-pointer rounded-2xl border-border/70 p-4 shadow-card transition-colors hover:bg-accent/40"
+                onClick={() => setOuvert(p)}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     {/* Le nom du client manquait totalement dans cette vue
@@ -126,6 +137,13 @@ export function ChantiersPerdus({
                         « {p.derniere_raison} »
                       </p>
                     )}
+                    {(p.suivis?.length ?? 0) > 0 && (
+                      <p className="mt-1.5 text-xs text-primary">
+                        Voir l'historique ({p.suivis!.length} échange
+                        {p.suivis!.length > 1 ? 's' : ''})
+                        {p.devis_depose && ' · devis déposé'}
+                      </p>
+                    )}
                   </div>
 
                   {p.restaurable ? (
@@ -133,7 +151,10 @@ export function ChantiersPerdus({
                       size="sm"
                       variant="outline"
                       disabled={enCours === p.id}
-                      onClick={() => void restaurer(p)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void restaurer(p)
+                      }}
                     >
                       {enCours === p.id ? (
                         <>
@@ -159,6 +180,17 @@ export function ChantiersPerdus({
           })}
         </div>
       )}
+
+      <DrawerChantierPerdu
+        projet={ouvert}
+        signe={signe}
+        onClose={() => setOuvert(null)}
+        enCours={enCours === ouvert?.id}
+        onRestaurer={(p) => {
+          setOuvert(null)
+          void restaurer(p)
+        }}
+      />
     </div>
   )
 }
