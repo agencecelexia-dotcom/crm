@@ -24,6 +24,14 @@ export type StatutProjet =
    * n'est encore couvert. À ne jamais rappeler comme prospect.
    */
   | 'artisan_demarche'
+  /**
+   * Sollicitation commerciale : agence web, référencement, assurance, énergie.
+   *
+   * Ni un client, ni un fournisseur potentiel. Contrairement à
+   * « artisan_demarche », la fiche n'a aucune valeur future — elle sert
+   * uniquement à ne pas rappeler ce numéro et à le reconnaître s'il insiste.
+   */
+  | 'demarchage'
 
 /** Une zone d'intervention = une ville (géocodée) + un rayon (km). */
 export interface ZoneCouverte {

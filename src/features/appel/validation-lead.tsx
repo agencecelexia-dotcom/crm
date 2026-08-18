@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, HardHat, MapPin, RotateCcw, UserPlus } from 'lucide-react'
+import { AlertTriangle, Check, HardHat, MapPin, Megaphone, RotateCcw, UserPlus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -69,7 +69,10 @@ export function ValidationLead({
   // pour l'interlocuteur. Une fiche mal taguée sort du pipeline sans qu'on
   // s'en aperçoive — le coût d'un faux positif est bien plus élevé que celui
   // d'une case à cocher.
-  const [artisan, setArtisan] = useState(false)
+  type Nature = 'client' | 'artisan' | 'demarchage'
+  const [nature, setNature] = useState<Nature>('client')
+  const artisan = nature === 'artisan'
+  const demarchage = nature === 'demarchage'
 
   const anomalies = verifierMecaniquement({
     client_telephone: form.client_telephone,
@@ -90,7 +93,7 @@ export function ValidationLead({
 
   /** `statut` distingue un vrai lead d'un artisan démarché : ce dernier ne doit
    *  jamais ressortir dans une liste de prospects à rappeler. */
-  async function enregistrer(statut: 'nouveau' | 'artisan_demarche' = 'nouveau') {
+  async function enregistrer(statut: 'nouveau' | 'artisan_demarche' | 'demarchage' = 'nouveau') {
     setErreur(null)
     setEnregistre(true)
     try {
@@ -144,39 +147,53 @@ export function ValidationLead({
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 pb-28">
-      <PageHeader titre={artisan ? 'Artisan démarché' : "Vérifier avant d'enregistrer"} />
-
-      {/* Bascule manuelle : ne jamais dépendre de la seule détection auto. */}
-      <button
-        type="button"
-        onClick={() => setArtisan((a) => !a)}
-        className={cn(
-          'flex w-full items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors',
+      <PageHeader
+        titre={
           artisan
-            ? 'border-[#0891B2]/40 bg-[#0891B2]/5'
-            : 'border-border bg-card hover:bg-accent/40',
-        )}
-      >
-        <span
-          className={cn(
-            'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border',
-            artisan ? 'border-[#0891B2] bg-[#0891B2] text-white' : 'border-muted-foreground/40',
-          )}
-        >
-          {artisan && <Check className="size-3.5" />}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1.5 text-sm font-semibold">
-            <HardHat className={cn('size-4', artisan ? 'text-[#0E7490]' : 'text-muted-foreground')} />
-            Ce n'est pas un client — artisan qui cherche du travail
-          </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
+            ? 'Artisan démarché'
+            : demarchage
+              ? 'Démarchage'
+              : "Vérifier avant d'enregistrer"
+        }
+      />
+
+      {/* Nature de l'appel, à la main : la détection automatique s'est déjà
+          trompée en prenant la présentation du commercial pour celle du
+          client. Elle ne pré-remplit donc rien. */}
+      <div className="rounded-2xl border border-border bg-card p-3">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">Nature de l'appel</p>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { cle: 'client' as const, label: 'Client', icone: null },
+              { cle: 'artisan' as const, label: 'Artisan qui cherche du travail', icone: HardHat },
+              { cle: 'demarchage' as const, label: 'Démarchage commercial', icone: Megaphone },
+            ]
+          ).map(({ cle, label, icone: Icone }) => (
+            <button
+              key={cle}
+              type="button"
+              onClick={() => setNature(cle)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                nature === cle
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground hover:bg-accent',
+              )}
+            >
+              {Icone && <Icone className="size-3.5" />}
+              {label}
+            </button>
+          ))}
+        </div>
+        {nature !== 'client' && (
+          <p className="mt-2 text-xs text-muted-foreground">
             {artisan
-              ? `${lead?.artisan_metier ? lead.artisan_metier + '. ' : ''}Enregistré hors pipeline : il ne remontera dans aucune liste de prospects à rappeler.`
-              : 'Cochez si votre interlocuteur propose ses services au lieu de demander des travaux.'}
-          </span>
-        </span>
-      </button>
+              ? `${lead?.artisan_metier ? lead.artisan_metier + '. ' : ''}Enregistré hors pipeline : il ne remontera dans aucune liste de prospects, mais reste consultable si vous cherchez un artisan dans ce secteur.`
+              : "Enregistré hors pipeline : sert uniquement à reconnaître ce numéro s'il rappelle."}
+          </p>
+        )}
+      </div>
 
       {doublons.length > 0 && (
         <div className="rounded-2xl border border-[#DC2626]/30 bg-[#DC2626]/5 p-3">
@@ -280,17 +297,20 @@ export function ValidationLead({
             <RotateCcw className="size-4" />
             Recommencer
           </Button>
-          {artisan ? (
+          {nature !== 'client' ? (
             // Un artisan n'a pas de chantier : les contrôles de lead (nom du
             // client, adresse) n'ont pas lieu de bloquer l'enregistrement.
             <Button
               size="lg"
-              className="flex-1 bg-[#0891B2] hover:bg-[#0E7490]"
+              className={cn(
+                'flex-1',
+                artisan ? 'bg-[#0891B2] hover:bg-[#0E7490]' : 'bg-[#78716C] hover:bg-[#57534E]',
+              )}
               disabled={enregistre}
-              onClick={() => void enregistrer('artisan_demarche')}
+              onClick={() => void enregistrer(artisan ? 'artisan_demarche' : 'demarchage')}
             >
-              <HardHat className="size-4" />
-              Classer comme artisan
+              {artisan ? <HardHat className="size-4" /> : <Megaphone className="size-4" />}
+              {artisan ? 'Classer comme artisan' : 'Classer comme démarchage'}
             </Button>
           ) : (
             <Button
@@ -305,8 +325,8 @@ export function ValidationLead({
           )}
         </div>
         <p className="mx-auto mt-1.5 max-w-2xl text-center text-xs text-muted-foreground">
-          {artisan
-            ? "Enregistré hors pipeline : il ne sera jamais rappelé comme prospect."
+          {nature !== 'client'
+            ? 'Enregistré hors pipeline : il ne sera jamais rappelé comme prospect.'
             : "Le lead sera créé sans artisan. Vous l'attribuerez ensuite."}
         </p>
       </div>

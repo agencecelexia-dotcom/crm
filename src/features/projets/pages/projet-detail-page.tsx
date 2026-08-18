@@ -151,6 +151,14 @@ export function ProjetDetailPage() {
             </p>
           )}
 
+          {projet.statut === 'demarchage' && (
+            <p className="rounded-xl border border-[#78716C]/25 bg-[#78716C]/5 p-2.5 text-xs text-[#57534E]">
+              Sollicitation commerciale, pas un client : agence web, assurance, énergie…
+              La fiche est hors pipeline et ne remontera dans aucune liste de prospects.
+              Elle sert à reconnaître ce numéro s'il rappelle.
+            </p>
+          )}
+
           {projet.statut === 'perdu' && (
             <p className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/5 p-2.5 text-xs text-[#DC2626]">
               Perdu par l'artisan : le chantier reste vivant, tu peux le réassigner à quelqu'un

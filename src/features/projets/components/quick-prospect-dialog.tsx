@@ -140,6 +140,7 @@ export function QuickProspectDialog() {
                 <SelectItem value="artisan_demarche">
                   {STATUTS.artisan_demarche.label}
                 </SelectItem>
+                <SelectItem value="demarchage">{STATUTS.demarchage.label}</SelectItem>
               </SelectContent>
             </Select>
           </div>
