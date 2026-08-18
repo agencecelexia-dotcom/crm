@@ -78,6 +78,11 @@ export function AppelPage() {
       // L'état antérieur est transmis dans les DEUX modes : sans lui, chaque
       // passe repart de zéro et un champ capté à la minute 2 peut disparaître
       // à la minute 3.
+      //
+      // Ce sont les extractions PRÉCÉDENTES qui sont transmises, jamais la
+      // saisie du commercial : Claude doit continuer à écouter le nom même
+      // quand il est déjà tapé, sinon il n'y a plus de seconde source à
+      // recouper et le contrôle croisé disparaît.
       body: { transcription: texte, mode, donnees: leadRef.current ?? undefined },
     })
     if (error) throw error
@@ -122,7 +127,6 @@ export function AppelPage() {
     arreter()
     if (texteComplet.length < 30) {
       // Appel sans transcription exploitable : la saisie manuelle suffit.
-      if (Object.keys(saisies).length) setLead(fusionner(lead, saisies))
       setTermine(true)
       return
     }
@@ -131,10 +135,14 @@ export function AppelPage() {
       // Dernière extraction sur la transcription complète : les dernières
       // minutes de l'appel n'ont pas forcément été analysées.
       const finale = await extraire(texteComplet, 'extraction')
-      // La saisie manuelle reste prioritaire, y compris sur l'extraction
-      // finale : c'est la source la plus sûre dont on dispose.
-      const complet = fusionner(finale.lead as LeadExtrait, saisies)
-      setLead(complet)
+      const brut = finale.lead as LeadExtrait
+      // `lead` ne contient QUE de l'extraction : y injecter la saisie
+      // manuelle la ferait passer pour une observation de l'IA à la passe
+      // suivante, et supprimerait la seconde source du recoupement.
+      setLead(brut)
+      // La saisie manuelle reste prioritaire pour la suite : c'est la source
+      // la plus sûre dont on dispose.
+      const complet = fusionner(brut, saisies)
 
       const rapport = await supabase.functions.invoke('extraire-lead', {
         body: { transcription: texteComplet, mode: 'rapport', donnees: complet },
@@ -146,7 +154,7 @@ export function AppelPage() {
       setExtraitEnCours(false)
       setTermine(true)
     }
-  }, [arreter, texteComplet, extraire, saisies, lead])
+  }, [arreter, texteComplet, extraire, saisies])
 
   const recommencer = useCallback(() => {
     reinitialiser()
@@ -179,7 +187,7 @@ export function AppelPage() {
   if (termine) {
     return (
       <ValidationLead
-        lead={lead}
+        lead={fusionner(lead, saisies)}
         description={description}
         transcription={transcription}
         onRecommencer={recommencer}

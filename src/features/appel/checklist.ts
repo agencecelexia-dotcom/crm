@@ -46,9 +46,15 @@ export interface LigneChecklist {
   cle: keyof LeadExtrait
   /** Vrai si la valeur vient du clavier, pas de l'extraction. */
   manuel: boolean
-  /** Ce que l'IA proposait, quand il diverge de la saisie manuelle : c'est le
-   *  signal de double vérification le plus utile — deux sources qui ne disent
-   *  pas la même chose méritent un coup d'œil. */
+  /** Ce que l'écoute a capté, TOUJOURS renseigné même quand le commercial a
+   *  saisi le champ lui-même. Les deux sources restent visibles côte à côte :
+   *  c'est le principe du recoupement — on ne croise pas deux informations si
+   *  l'une disparaît dès que l'autre existe. */
+  valeurIa: string
+  /** Confiance de l'écoute sur ce champ, pour nuancer l'affichage. */
+  confianceIa: number
+  /** Renseigné seulement quand les deux sources DIVERGENT : c'est le signal
+   *  qui mérite un coup d'œil pendant que le client est en ligne. */
   suggestionIa: string | null
   /** Libellé court, colonne de gauche. */
   label: string
@@ -127,6 +133,8 @@ export function construireChecklist(
       valeur,
       essentiel: d.essentiel,
       manuel,
+      valeurIa: auto,
+      confianceIa: score,
       // Divergence entre les deux sources : on ne la masque pas.
       suggestionIa: manuel && auto && !equivalent(auto, manuelle) ? auto : null,
     }

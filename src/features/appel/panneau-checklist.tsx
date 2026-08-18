@@ -211,14 +211,27 @@ function ChampSaisie({
         )}
       </div>
 
-      {ligne.suggestionIa && (
+      {/* Ce que l'écoute a capté, affiché EN PERMANENCE dès que le champ est
+          saisi à la main. Deux sources ne se recoupent que si elles restent
+          visibles ensemble : masquer l'une dès que l'autre existe supprime le
+          contrôle qu'on cherchait à obtenir. */}
+      {ligne.manuel && ligne.valeurIa && (
         <button
           type="button"
-          onClick={() => onSaisir(ligne.cle, ligne.suggestionIa!)}
-          className="ml-[5.5rem] mt-0.5 flex items-center gap-1 text-left text-xs text-[#B45309] hover:underline sm:ml-[6.5rem]"
+          onClick={() => onSaisir(ligne.cle, ligne.valeurIa)}
+          title="Reprendre la valeur entendue"
+          className={cn(
+            'ml-[5.5rem] mt-0.5 flex items-center gap-1 text-left text-xs hover:underline sm:ml-[6.5rem]',
+            ligne.suggestionIa ? 'text-[#B45309]' : 'text-[#16A34A]',
+          )}
         >
-          <AlertTriangle className="size-3 shrink-0" />
-          l'IA entend «&nbsp;{ligne.suggestionIa}&nbsp;»
+          {ligne.suggestionIa ? (
+            <AlertTriangle className="size-3 shrink-0" />
+          ) : (
+            <Check className="size-3 shrink-0" />
+          )}
+          IA&nbsp;: «&nbsp;{ligne.valeurIa}&nbsp;»
+          {ligne.suggestionIa ? ' — diffère' : ' — concorde'}
         </button>
       )}
     </div>
