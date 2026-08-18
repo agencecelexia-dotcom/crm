@@ -279,18 +279,18 @@ export function AppelPage() {
         </div>
       )}
 
-      {/* Ce n'est pas un client : autant l'apprendre pendant l'appel plutôt
-          qu'après avoir posé dix questions inutiles. */}
+      {/* Simple observation, jamais une décision : la détection s'est trompée
+          en prenant la présentation du commercial pour celle du client. Le
+          classement se fait à la main, sur l'écran de validation. */}
       {lead?.nature_appel === 'artisan_cherche_travail' && (
-        <div className="rounded-2xl border border-[#0891B2]/40 bg-[#0891B2]/5 p-3">
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-[#0E7490]">
-            <HardHat className="size-4" />
-            Ce n'est pas un client
-          </p>
-          <p className="mt-0.5 text-xs text-[#155E75]">
-            Un artisan qui cherche du travail{lead.artisan_metier ? ` — ${lead.artisan_metier}` : ''}.
-            Inutile de dérouler la checklist. Enregistrez-le pour ne pas le rappeler comme
-            prospect ; c'est peut-être un artisan à recruter.
+        <div className="rounded-2xl border border-border bg-muted/40 p-2.5">
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <HardHat className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              Il semble que votre interlocuteur cherche du travail
+              {lead.artisan_metier ? ` (${lead.artisan_metier})` : ''}. À vous de juger — vous
+              pourrez le classer à la fin de l'appel.
+            </span>
           </p>
         </div>
       )}

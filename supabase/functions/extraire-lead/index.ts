@@ -93,11 +93,14 @@ const OUTIL_EXTRACTION = {
         type: 'string',
         enum: ['client', 'artisan_cherche_travail', 'demarchage', 'indetermine'],
         description:
-          "Qui est au bout du fil. 'client' = un particulier qui veut faire réaliser des "
-          + "travaux (le cas normal). 'artisan_cherche_travail' = un professionnel du "
-          + "bâtiment qui propose ses services ou cherche des chantiers — il parle de SON "
-          + "entreprise, de SES disponibilités, demande s'il y a du travail. 'demarchage' = "
-          + "vente de tout autre produit ou service. Dans le doute, 'indetermine'.",
+          "Qui est au bout du fil, c'est-à-dire l'INTERLOCUTEUR — jamais le commercial de "
+          + "Celexia qui se présente en ouverture. 'client' = quelqu'un qui décrit des "
+          + "travaux à faire chez lui : c'est le cas par défaut, et de très loin le plus "
+          + "fréquent. 'artisan_cherche_travail' = à réserver au cas NON AMBIGU où "
+          + "l'interlocuteur demande explicitement du travail ou des chantiers pour "
+          + "lui-même, et ne décrit aucun besoin de travaux le concernant. Si "
+          + "l'interlocuteur décrit le moindre problème sur son bien, c'est un CLIENT. "
+          + "Dans le doute, toujours 'indetermine' — jamais 'artisan_cherche_travail'.",
       },
       artisan_metier: {
         type: 'string',
@@ -141,7 +144,13 @@ RAISONNE COMME UN HUMAIN QUI ÉCOUTE :
 
 8. TU AS DÉJÀ EXTRAIT CET APPEL. Si un état antérieur t'est fourni, ne le jette pas : la nouvelle transcription est plus longue, pas différente. Conserve un champ déjà obtenu SAUF si le client s'est corrigé depuis. Un champ qui disparaît de ta réponse est une régression pour le commercial.
 
-IDENTIFIE QUI APPELLE. Tous les appels ne viennent pas de clients. Un artisan qui cherche du travail se reconnaît vite : il parle de son entreprise, de son métier, de ses disponibilités, demande s'il y a des chantiers à prendre. Ce n'est PAS un lead — renseigne nature_appel dès que tu en as le signe, sans attendre la fin. Le commercial doit pouvoir écourter.
+DEUX PERSONNES PARLENT, NE LES CONFONDS JAMAIS.
+
+Le COMMERCIAL de Celexia se présente en ouverture : « bonjour, Antoine, société Batryx Construction, on fait de la toiture ». C'est LUI qui parle de son entreprise, de son métier, de ce qu'il propose. Ces phrases ne décrivent PAS le client et ne doivent JAMAIS être extraites comme des informations sur lui.
+
+Le CLIENT est celui qui décrit un problème sur SON bien : « j'ai une lauze qui est tombée du toit », « il faudrait remettre », « c'est sur une partie de la toiture ». C'est de lui seul que viennent nom, téléphone, adresse et demande.
+
+Règle pratique : tout ce qui est dit AVANT que le client expose son besoin est de la présentation commerciale. Une entreprise citée en ouverture est celle de l'appelant, pas celle du client.
 
 RÈGLE ABSOLUE : n'invente jamais une valeur plausible. Un champ non abordé reste VIDE — le commercial doit voir ce qu'il lui reste à demander. Mieux vaut un champ vide qu'un champ faux.
 

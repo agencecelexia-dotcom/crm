@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import { METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
+import { dansLePipeline, METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
 import { useAffectationsCounts } from '../hooks/use-affectations'
@@ -120,6 +120,16 @@ export function ProjetsListPage() {
       arr.sort((a, b) => estim(b) - estim(a) || dateDesc(a, b))
     }
     // 'recent' : on garde l'ordre d'origine (déjà du plus récent au plus ancien)
+
+    // Les fiches hors pipeline (artisan démarché) passent TOUJOURS en dernier,
+    // quel que soit le tri. Ce ne sont pas des prospects : les laisser remonter
+    // avec les leads récents pollue la liste qu'on ouvre pour savoir qui
+    // rappeler. Elles restent visibles — donc retrouvables — mais en bas.
+    // Sauf si on a explicitement filtré sur ce statut, auquel cas c'est
+    // précisément ce qu'on cherche.
+    if (statut !== 'artisan_demarche') {
+      arr.sort((a, b) => Number(!dansLePipeline(a.statut)) - Number(!dansLePipeline(b.statut)))
+    }
     return arr
   }, [base, statut, tri, artisansSignes])
 
