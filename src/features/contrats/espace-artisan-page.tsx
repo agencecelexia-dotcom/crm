@@ -38,6 +38,7 @@ import { KanbanChantiers } from './kanban-chantiers'
 import { DrawerChantier } from './drawer-chantier'
 import { ReleveCommissions } from './releve-commissions'
 import { correspond, dateReception, estClos, urgenceChantier } from './urgence-chantier'
+import { ApercuDernierSuivi } from './apercu-dernier-suivi'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
@@ -716,7 +717,7 @@ function ProjetItem({
     .join(', ')
 
   return (
-    <Card className="relative overflow-hidden py-0 shadow-card transition-shadow hover:shadow-card-hover">
+    <Card className="group relative overflow-hidden py-0 shadow-card transition-shadow hover:shadow-card-hover">
       <LisereStatut statut={projet.statut} />
       <EnteteChantier
         projet={projet}
@@ -724,6 +725,11 @@ function ProjetItem({
         ouvert={ouvert}
         onToggle={() => setOuvert((v) => !v)}
       />
+
+      {/* Dernier échange : répond à « où en étais-je avec celui-là ? » sans
+          avoir à ouvrir la fiche. Masqué quand la carte est dépliée, où le
+          fil complet est déjà visible. */}
+      {!ouvert && <ApercuDernierSuivi projet={projet} variante="inline" />}
 
       {ouvert && (
         <CorpsChantier
