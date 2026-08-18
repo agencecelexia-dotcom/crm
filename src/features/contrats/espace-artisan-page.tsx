@@ -37,7 +37,7 @@ import { CorpsChantier } from './corps-chantier'
 import { KanbanChantiers } from './kanban-chantiers'
 import { DrawerChantier } from './drawer-chantier'
 import { ReleveCommissions } from './releve-commissions'
-import { correspond, dateReception, GROUPES, urgenceChantier } from './urgence-chantier'
+import { correspond, dateReception, urgenceChantier } from './urgence-chantier'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
@@ -427,8 +427,14 @@ function ListeChantiers({
     ...statutsPresents.map((s) => ({ cle: s, label: statutInfo(s).label, n: compte(s) })),
   ]
 
-  // Tri par urgence décroissante : sans hiérarchie, l'artisan ne sait pas par
-  // quoi commencer — c'est le manque le plus coûteux relevé à l'audit.
+  // ORDRE CHRONOLOGIQUE, du plus récent au plus ancien : l'ordre de dépôt dans
+  // le pipe. Le tri par urgence testé avant déplaçait les dossiers d'un jour à
+  // l'autre selon des scores invisibles pour l'artisan, qui ne retrouvait plus
+  // ses chantiers là où il les avait laissés. Une liste qui bouge toute seule
+  // se relit entièrement à chaque fois.
+  //
+  // Seule exception : un chantier tranché (gagné ou perdu) n'a plus rien à
+  // faire en haut de pile, il descend.
   const liste = useMemo(
     () =>
       projets
@@ -442,13 +448,10 @@ function ListeChantiers({
                 : p.statut === filtre,
         )
         .filter((p) => correspond(p, recherche))
-        // À l'intérieur d'un groupe : urgence, puis le PLUS RÉCENT. Le tri
-        // par urgence seule renvoyait un chantier reçu aujourd'hui tout en
-        // bas, sous des dossiers plus anciens dont le score montait avec
-        // l'âge — le prospect à ne pas rater était le moins visible.
         .sort((a, b) => {
-          const ecart = (urgences.get(b.id)?.score ?? 0) - (urgences.get(a.id)?.score ?? 0)
-          if (ecart !== 0) return ecart
+          const closA = a.issue === 'gagne' || a.issue === 'perdu' ? 1 : 0
+          const closB = b.issue === 'gagne' || b.issue === 'perdu' ? 1 : 0
+          if (closA !== closB) return closA - closB
           return dateReception(b) - dateReception(a)
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- estUrgent dérive de `urgences`
@@ -535,36 +538,20 @@ function ListeChantiers({
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Groupé par nature d'action : un tri à plat laissait 20 RDV passés
-              monopoliser le haut de liste, et un chantier reçu le jour même
-              tombait en position 21 — invisible en pratique. */}
-          {GROUPES.map((g) => {
-            const items = liste.filter((p) => urgences.get(p.id)?.groupe === g.cle)
-            if (items.length === 0) return null
-            return (
-              <div key={g.cle}>
-                <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
-                  <h3 className="text-sm font-semibold">{g.label}</h3>
-                  <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
-                    {items.length}
-                  </span>
-                  {g.aide && <span className="text-xs text-muted-foreground">{g.aide}</span>}
-                </div>
-                <div className="space-y-3">
-                  {items.map((p) => (
-                    <ProjetItem
-                      key={p.id}
-                      projet={p}
-                      signe={signe}
-                      onChange={onChange}
-                      onCreerDevis={onCreerDevis}
-                    />
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+        // Liste simple, dans l'ordre où les chantiers ont été déposés. Le
+        // regroupement par nature d'action testé avant réordonnait tout : un
+        // chantier changeait de section selon son urgence calculée, et
+        // l'artisan ne le retrouvait plus où il l'avait laissé.
+        <div className="space-y-3">
+          {liste.map((p) => (
+            <ProjetItem
+              key={p.id}
+              projet={p}
+              signe={signe}
+              onChange={onChange}
+              onCreerDevis={onCreerDevis}
+            />
+          ))}
         </div>
       )}
 
