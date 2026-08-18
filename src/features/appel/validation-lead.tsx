@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, MapPin, RotateCcw, UserPlus } from 'lucide-react'
+import { AlertTriangle, Check, HardHat, MapPin, RotateCcw, UserPlus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,6 +63,11 @@ export function ValidationLead({
     void chercherDoublon(tel).then(setDoublons)
   }, [form.client_telephone])
 
+  // L'IA propose, le commercial dispose : elle peut manquer le cas — un
+  // artisan qui ne se présente qu'à la fin de l'appel, ou une transcription
+  // trop pauvre. Le classement doit donc rester modifiable à la main.
+  const [artisan, setArtisan] = useState(lead?.nature_appel === 'artisan_cherche_travail')
+
   const anomalies = verifierMecaniquement({
     client_telephone: form.client_telephone,
     client_code_postal: form.client_code_postal,
@@ -80,7 +85,9 @@ export function ValidationLead({
     setGps({ lat: a.latitude, lon: a.longitude })
   }
 
-  async function enregistrer() {
+  /** `statut` distingue un vrai lead d'un artisan démarché : ce dernier ne doit
+   *  jamais ressortir dans une liste de prospects à rappeler. */
+  async function enregistrer(statut: 'nouveau' | 'artisan_demarche' = 'nouveau') {
     setErreur(null)
     setEnregistre(true)
     try {
@@ -97,7 +104,7 @@ export function ValidationLead({
           longitude: gps?.lon ?? null,
           metier: form.metiers[0] ?? 'Rénovation',
           metiers: form.metiers.length ? form.metiers : ['Rénovation'],
-          statut: 'nouveau',
+          statut,
           description: form.description.trim() || null,
         })
         .select('id')
@@ -134,7 +141,39 @@ export function ValidationLead({
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 pb-28">
-      <PageHeader titre="Vérifier avant d'enregistrer" />
+      <PageHeader titre={artisan ? 'Artisan démarché' : "Vérifier avant d'enregistrer"} />
+
+      {/* Bascule manuelle : ne jamais dépendre de la seule détection auto. */}
+      <button
+        type="button"
+        onClick={() => setArtisan((a) => !a)}
+        className={cn(
+          'flex w-full items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors',
+          artisan
+            ? 'border-[#0891B2]/40 bg-[#0891B2]/5'
+            : 'border-border bg-card hover:bg-accent/40',
+        )}
+      >
+        <span
+          className={cn(
+            'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border',
+            artisan ? 'border-[#0891B2] bg-[#0891B2] text-white' : 'border-muted-foreground/40',
+          )}
+        >
+          {artisan && <Check className="size-3.5" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            <HardHat className={cn('size-4', artisan ? 'text-[#0E7490]' : 'text-muted-foreground')} />
+            Ce n'est pas un client — artisan qui cherche du travail
+          </span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            {artisan
+              ? `${lead?.artisan_metier ? lead.artisan_metier + '. ' : ''}Enregistré hors pipeline : il ne remontera dans aucune liste de prospects à rappeler.`
+              : 'Cochez si votre interlocuteur propose ses services au lieu de demander des travaux.'}
+          </span>
+        </span>
+      </button>
 
       {doublons.length > 0 && (
         <div className="rounded-2xl border border-[#DC2626]/30 bg-[#DC2626]/5 p-3">
@@ -238,18 +277,34 @@ export function ValidationLead({
             <RotateCcw className="size-4" />
             Recommencer
           </Button>
-          <Button
-            size="lg"
-            className="flex-1"
-            disabled={enregistre || bloquants.length > 0 || !form.client_nom.trim()}
-            onClick={() => void enregistrer()}
-          >
-            <UserPlus className="size-4" />
-            {bloquants.length > 0 ? 'Corrigez les erreurs' : 'Créer le lead'}
-          </Button>
+          {artisan ? (
+            // Un artisan n'a pas de chantier : les contrôles de lead (nom du
+            // client, adresse) n'ont pas lieu de bloquer l'enregistrement.
+            <Button
+              size="lg"
+              className="flex-1 bg-[#0891B2] hover:bg-[#0E7490]"
+              disabled={enregistre}
+              onClick={() => void enregistrer('artisan_demarche')}
+            >
+              <HardHat className="size-4" />
+              Classer comme artisan
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              className="flex-1"
+              disabled={enregistre || bloquants.length > 0 || !form.client_nom.trim()}
+              onClick={() => void enregistrer()}
+            >
+              <UserPlus className="size-4" />
+              {bloquants.length > 0 ? 'Corrigez les erreurs' : 'Créer le lead'}
+            </Button>
+          )}
         </div>
         <p className="mx-auto mt-1.5 max-w-2xl text-center text-xs text-muted-foreground">
-          Le lead sera créé sans artisan. Vous l'attribuerez ensuite.
+          {artisan
+            ? "Enregistré hors pipeline : il ne sera jamais rappelé comme prospect."
+            : "Le lead sera créé sans artisan. Vous l'attribuerez ensuite."}
         </p>
       </div>
     </div>

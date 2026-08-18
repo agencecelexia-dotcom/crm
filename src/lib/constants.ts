@@ -167,6 +167,10 @@ export const STATUTS: Record<
   termine: { label: 'Terminé', color: '#0F766E', textOnColor: '#FFFFFF' },
   perdu: { label: 'Perdu', color: '#EF4444', textOnColor: '#FFFFFF' },
   mort: { label: 'Mort', color: '#1F2937', textOnColor: '#FFFFFF' },
+  // Pas un client : un artisan qui cherche du travail. Distinct de « mort »,
+  // car il ne s'agit pas d'un lead perdu mais d'un fournisseur potentiel —
+  // à ne jamais rappeler comme prospect, éventuellement à recruter.
+  artisan_demarche: { label: 'Artisan démarché', color: '#0891B2', textOnColor: '#FFFFFF' },
 }
 
 /**
@@ -219,6 +223,7 @@ export const STATUTS_ORDRE: StatutProjet[] = [
   'termine',
   'perdu',
   'mort',
+  'artisan_demarche',
 ]
 
 /**
@@ -227,6 +232,21 @@ export const STATUTS_ORDRE: StatutProjet[] = [
  * `mort` = lead définitivement mort, déclaré par l'agence uniquement.
  */
 export const STATUTS_PERTE: StatutProjet[] = ['perdu', 'mort']
+
+/**
+ * Statuts hors pipeline commercial.
+ *
+ * `artisan_demarche` n'est PAS une perte — la fiche n'a jamais été un lead.
+ * L'exclure des compteurs de perte évite de dégrader artificiellement le taux
+ * de conversion ; l'exclure du pipeline évite de rappeler comme prospect
+ * quelqu'un qui cherchait du travail.
+ */
+export const STATUTS_HORS_PIPELINE: StatutProjet[] = ['artisan_demarche']
+
+/** Un projet compte-t-il dans le pipeline commercial ? */
+export function dansLePipeline(statut: string | null | undefined): boolean {
+  return !STATUTS_HORS_PIPELINE.includes(statut as StatutProjet)
+}
 
 /** Statuts de suivi déclarables par l'artisan (parcours après mise en relation). */
 export const SUIVI_STATUTS: Record<string, { label: string; color: string; emoji: string }> = {

@@ -89,6 +89,22 @@ const OUTIL_EXTRACTION = {
           + "Exemples : fibrociment posé avant 1997 = risque amiante ; sinistre = devis pour assureur ; "
           + "toiture ancienne non expertisée. N'invente rien : uniquement ce qui découle de l'appel.",
       },
+      nature_appel: {
+        type: 'string',
+        enum: ['client', 'artisan_cherche_travail', 'demarchage', 'indetermine'],
+        description:
+          "Qui est au bout du fil. 'client' = un particulier qui veut faire réaliser des "
+          + "travaux (le cas normal). 'artisan_cherche_travail' = un professionnel du "
+          + "bâtiment qui propose ses services ou cherche des chantiers — il parle de SON "
+          + "entreprise, de SES disponibilités, demande s'il y a du travail. 'demarchage' = "
+          + "vente de tout autre produit ou service. Dans le doute, 'indetermine'.",
+      },
+      artisan_metier: {
+        type: 'string',
+        description:
+          "Si nature_appel = artisan_cherche_travail : son métier et sa zone, pour un "
+          + "recrutement éventuel. Vide sinon.",
+      },
       confiance: {
         type: 'object',
         description:
@@ -124,6 +140,8 @@ RAISONNE COMME UN HUMAIN QUI ÉCOUTE :
 7. GÉOGRAPHIE FRANÇAISE. Un code postal et une ville doivent être cohérents. « syndrome de Cernon » à côté du 12490 est « Saint-Rome-de-Cernon ». Utilise ta connaissance des communes pour rétablir les noms écorchés, mais baisse la confiance si tu extrapoles.
 
 8. TU AS DÉJÀ EXTRAIT CET APPEL. Si un état antérieur t'est fourni, ne le jette pas : la nouvelle transcription est plus longue, pas différente. Conserve un champ déjà obtenu SAUF si le client s'est corrigé depuis. Un champ qui disparaît de ta réponse est une régression pour le commercial.
+
+IDENTIFIE QUI APPELLE. Tous les appels ne viennent pas de clients. Un artisan qui cherche du travail se reconnaît vite : il parle de son entreprise, de son métier, de ses disponibilités, demande s'il y a des chantiers à prendre. Ce n'est PAS un lead — renseigne nature_appel dès que tu en as le signe, sans attendre la fin. Le commercial doit pouvoir écourter.
 
 RÈGLE ABSOLUE : n'invente jamais une valeur plausible. Un champ non abordé reste VIDE — le commercial doit voir ce qu'il lui reste à demander. Mieux vaut un champ vide qu'un champ faux.
 

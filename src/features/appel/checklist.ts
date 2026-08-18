@@ -29,6 +29,10 @@ export interface LeadExtrait {
   disponibilite?: string
   contraintes?: string[]
   alertes?: string[]
+  /** Qui est au bout du fil : tous les appels ne viennent pas de clients. */
+  nature_appel?: 'client' | 'artisan_cherche_travail' | 'demarchage' | 'indetermine'
+  /** Métier et zone de l'artisan, quand il en est un — utile au recrutement. */
+  artisan_metier?: string
   confiance?: Record<string, number>
 }
 

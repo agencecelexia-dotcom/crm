@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, Mic, Square } from 'lucide-react'
+import { AlertTriangle, HardHat, Mic, Square } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
@@ -276,6 +276,28 @@ export function AppelPage() {
           <p className="mt-0.5 text-xs text-[#92400E]">
             Profitez d'avoir le client en ligne pour trancher.
           </p>
+        </div>
+      )}
+
+      {/* Ce n'est pas un client : autant l'apprendre pendant l'appel plutôt
+          qu'après avoir posé dix questions inutiles. */}
+      {lead?.nature_appel === 'artisan_cherche_travail' && (
+        <div className="rounded-2xl border border-[#0891B2]/40 bg-[#0891B2]/5 p-3">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-[#0E7490]">
+            <HardHat className="size-4" />
+            Ce n'est pas un client
+          </p>
+          <p className="mt-0.5 text-xs text-[#155E75]">
+            Un artisan qui cherche du travail{lead.artisan_metier ? ` — ${lead.artisan_metier}` : ''}.
+            Inutile de dérouler la checklist. Enregistrez-le pour ne pas le rappeler comme
+            prospect ; c'est peut-être un artisan à recruter.
+          </p>
+        </div>
+      )}
+
+      {lead?.nature_appel === 'demarchage' && (
+        <div className="rounded-2xl border border-border bg-muted/40 p-3">
+          <p className="text-sm font-medium">Démarchage commercial — ce n'est pas un lead.</p>
         </div>
       )}
 
