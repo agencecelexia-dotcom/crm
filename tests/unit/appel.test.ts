@@ -106,3 +106,39 @@ describe('double saisie : clavier + écoute', () => {
     expect(fusionner(null, { metiers: 'Toiture, Charpente' }).metiers).toEqual(['Toiture', 'Charpente'])
   })
 })
+
+describe('recoupement : les deux sources restent visibles', () => {
+  it("la valeur de l'IA reste exposée même quand le champ est saisi", () => {
+    const l = construireChecklist(
+      { client_nom: 'Aubigeon', confiance: { client_nom: 0.9 } },
+      { client_nom: 'Aubigeon' },
+    )
+    const nom = l.find((x) => x.cle === 'client_nom')!
+    expect(nom.valeurIa).toBe('Aubigeon')   // l'IA a bien noté, on la voit
+    expect(nom.suggestionIa).toBeNull()      // mais pas d'alerte : ça concorde
+  })
+
+  it('concordance et divergence se distinguent', () => {
+    const concorde = construireChecklist(
+      { client_nom: 'Aubigeon', confiance: { client_nom: 0.9 } },
+      { client_nom: 'Aubigeon' },
+    ).find((x) => x.cle === 'client_nom')!
+    const diverge = construireChecklist(
+      { client_nom: 'Obligeant', confiance: { client_nom: 0.5 } },
+      { client_nom: 'Aubigeon' },
+    ).find((x) => x.cle === 'client_nom')!
+
+    expect(concorde.valeurIa).toBe('Aubigeon')
+    expect(concorde.suggestionIa).toBeNull()
+    expect(diverge.valeurIa).toBe('Obligeant')
+    expect(diverge.suggestionIa).toBe('Obligeant')
+  })
+
+  it("la confiance de l'IA est transmise", () => {
+    const l = construireChecklist(
+      { client_telephone: '0613707752', confiance: { client_telephone: 0.4 } },
+      { client_telephone: '0613775266' },
+    ).find((x) => x.cle === 'client_telephone')!
+    expect(l.confianceIa).toBe(0.4)
+  })
+})
