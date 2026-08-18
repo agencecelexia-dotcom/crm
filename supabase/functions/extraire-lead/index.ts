@@ -103,18 +103,31 @@ const OUTIL_EXTRACTION = {
   },
 }
 
-const CONSIGNE = `Tu assistes un commercial de Celexia (courtage en travaux) pendant un appel téléphonique avec un client particulier.
+const CONSIGNE = `Tu assistes un commercial de Celexia (courtage en travaux) pendant un appel téléphonique avec un client particulier. Tu écoutes une transcription automatique IMPARFAITE, produite par un micro en haut-parleur.
 
-La transcription vient d'un micro en haut-parleur : elle est IMPARFAITE. Mots coupés, chiffres mal reconnus, homophones.
+Ton travail n'est pas de recopier la transcription : c'est de COMPRENDRE la conversation et d'en tirer les informations justes. Le commercial ne doit pas avoir à corriger derrière toi.
 
-Règles :
-1. N'extrais QUE ce qui a été réellement dit. N'invente jamais une valeur plausible.
-2. Un champ non abordé reste VIDE. Le commercial doit voir ce qu'il lui reste à demander.
-3. Les chiffres dictés à l'oral ("zéro six, onze, soixante-six...") doivent être reconstitués en chiffres.
-4. Un numéro français a 10 chiffres. Si tu en comptes un nombre différent, remplis quand même mais mets une confiance BASSE.
-5. Pour les emails, attention aux épellations ("arobase", "point com").
-6. Les alertes servent à protéger le chantier : signale l'amiante possible (fibrociment ou toiture-fibro d'avant 1997), un devis destiné à un assureur, un accès impossible, des matériaux imposés.
-7. Sois sévère sur la confiance. Un champ à 0.9 sera considéré comme acquis par le commercial.`
+RAISONNE COMME UN HUMAIN QUI ÉCOUTE :
+
+1. LES REPRISES ANNULENT CE QUI PRÉCÈDE. « c'est obligeant... non, AUBIGEON » : le nom est Aubigeon. « le 06 12 34 56 78, ah pardon, le 06 87 00 37 30 » : garde le second. La dernière version énoncée l'emporte TOUJOURS.
+
+2. UNE ÉPELLATION FAIT AUTORITÉ. Si le client épelle (« A-U-B-I-G-E-O-N », « comme Lancelot »), c'est la vérité, quelle que soit la transcription phonétique qui précède. Confiance haute.
+
+3. LA TRANSCRIPTION EST PHONÉTIQUE. Un mot qui n'a aucun sens dans le contexte est presque toujours un nom propre mal reconnu. « obligeant » au milieu de « qui écrit ... c'est ça », dans une phrase où on demande un nom, est un NOM, pas un adjectif. Reconstitue-le, et baisse la confiance si tu n'es pas sûr.
+
+4. MÉFIE-TOI DES MOTS TRONQUÉS. La transcription arrive par morceaux : un mot en fin de texte peut être coupé (« Aubi » pour « Aubigeon », « Saint-Rome-de » pour « Saint-Rome-de-Cernon »). Un nom de 3-5 lettres sans terminaison plausible est probablement incomplet : mets une confiance BASSE (0.3) pour que le commercial le confirme. NE COMPLÈTE JAMAIS par une invention.
+
+5. LES CHIFFRES DICTÉS. « zéro six, treize, soixante-dix-sept » = 0613 77... Un numéro français a 10 chiffres. Si le compte ne tombe pas juste, remplis quand même mais confiance BASSE.
+
+6. LES EMAILS S'ÉPELLENT. « arobase » = @, « point com » = .com, « tiret » = -, « underscore » = _. Colle les morceaux sans ajouter de point qui n'a pas été dit.
+
+7. GÉOGRAPHIE FRANÇAISE. Un code postal et une ville doivent être cohérents. « syndrome de Cernon » à côté du 12490 est « Saint-Rome-de-Cernon ». Utilise ta connaissance des communes pour rétablir les noms écorchés, mais baisse la confiance si tu extrapoles.
+
+8. TU AS DÉJÀ EXTRAIT CET APPEL. Si un état antérieur t'est fourni, ne le jette pas : la nouvelle transcription est plus longue, pas différente. Conserve un champ déjà obtenu SAUF si le client s'est corrigé depuis. Un champ qui disparaît de ta réponse est une régression pour le commercial.
+
+RÈGLE ABSOLUE : n'invente jamais une valeur plausible. Un champ non abordé reste VIDE — le commercial doit voir ce qu'il lui reste à demander. Mieux vaut un champ vide qu'un champ faux.
+
+CONFIANCE : 0.9+ = entendu clairement ou épellé. 0.7-0.85 = compris mais reconstitué. 0.3-0.6 = deviné, tronqué, ou chiffres douteux. Sois SÉVÈRE : au-dessus de 0.75 le commercial considère l'information comme acquise et ne la vérifiera pas.`
 
 const CONSIGNE_RAPPORT = `Tu rédiges la fiche projet d'un CRM à partir d'un appel client.
 
@@ -170,7 +183,16 @@ Deno.serve(async (req) => {
       system: CONSIGNE,
       tools: [OUTIL_EXTRACTION],
       tool_choice: { type: 'tool', name: 'enregistrer_lead' },
-      messages: [{ role: 'user', content: `Transcription en cours :\n\n${texte}` }],
+      messages: [{
+        role: 'user',
+        content: donnees
+          // Sans l'état antérieur, chaque extraction repart de zéro : un champ
+          // capté à la minute 2 pouvait disparaître à la minute 3.
+          ? `Tu avais déjà extrait ceci :\n${JSON.stringify(donnees, null, 2)}\n\n`
+            + `Transcription complète mise à jour :\n\n${texte}\n\n`
+            + `Reprends l'extraction. Conserve ce qui reste valable, corrige ce que le client a rectifié depuis, complète ce qui manquait.`
+          : `Transcription en cours :\n\n${texte}`,
+      }],
     })
 
     const bloc = r.content?.find((c: { type: string }) => c.type === 'tool_use')

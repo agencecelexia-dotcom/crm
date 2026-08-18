@@ -1,79 +1,69 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { supabase } from '@/lib/supabase/client'
 import type { EtatEcoute } from './use-ecoute-appel'
 
 /**
- * Transcription par Deepgram (nova-2, français), relayée par l'edge function.
+ * Transcription Deepgram en flux continu, relayée par l'edge function.
  *
  * Interface identique à `useEcouteAppel` (Web Speech) : la page bascule de
  * l'un à l'autre sans rien changer d'autre.
  *
- * Le gain décisif tient aux CHIFFRES. Sur un même énoncé, Web Speech a rendu
- * « 0613707752 » là où le numéro dicté était 06 13 77 52 66 ; Deepgram, avec
- * `smart_format`, restitue « 0 6, 13, 77, 52, 66 ». Or le téléphone est le
- * champ le plus coûteux à rater : un chiffre faux et le lead est perdu.
+ * Deux raisons de préférer le flux aux tranches indépendantes :
  *
- * L'audio part par tranches vers le serveur, qui détient la clé. Le navigateur
- * ne la voit jamais — un WebSocket direct l'aurait exigée dans le bundle.
+ *  • LES MOTS À CHEVAL. Découpé en fichiers de 8 s, « Aubigeon » prononcé à la
+ *    frontière ressortait « Aubi » — un nom tronqué que rien ne signalait. En
+ *    flux, Deepgram dispose du contexte et reconstitue le mot.
+ *
+ *  • LES CHIFFRES. `smart_format` restitue « zéro six, treize, soixante-dix-
+ *    sept » en 06 13 77, là où Web Speech écrit les mots — que l'extraction
+ *    reconstitue ensuite mal. Sur l'appel Lancelot, Web Speech donnait un
+ *    numéro faux, Deepgram le bon.
+ *
+ * La clé n'est jamais dans le bundle : le navigateur parle à l'edge function,
+ * qui détient la clé et relaie vers Deepgram.
  */
 
-/** Durée d'une tranche. Assez courte pour que la checklist suive la
- *  conversation, assez longue pour que Deepgram dispose de contexte : en
- *  dessous de ~5 s, la fin des phrases est tronquée et la ponctuation souffre. */
-const TRANCHE_MS = 8000
+const ECHANTILLONNAGE = 16_000
+/** Deepgram ferme un flux resté muet ~10 s. On maintient la connexion pendant
+ *  les silences de la conversation. */
+const KEEPALIVE_MS = 5000
 
 export function useEcouteDeepgram() {
   const [etat, setEtat] = useState<EtatEcoute>('arret')
   const [erreur, setErreur] = useState<string | null>(null)
   const [transcription, setTranscription] = useState('')
-  /** Deepgram travaille par tranche : pas de résultat intermédiaire. On
-   *  affiche l'état d'avancement à la place. */
   const [partiel, setPartiel] = useState('')
 
+  const ws = useRef<WebSocket | null>(null)
   const flux = useRef<MediaStream | null>(null)
-  const enregistreur = useRef<MediaRecorder | null>(null)
+  const ctx = useRef<AudioContext | null>(null)
+  const keepalive = useRef<number | null>(null)
   const veutEcouter = useRef(false)
 
-  const envoyer = useCallback(async (blob: Blob) => {
-    if (blob.size < 2000) return // silence : rien à transcrire
-    setPartiel('transcription…')
-    try {
-      // `invoke` plutôt qu'un `fetch` manuel : il pose l'URL, la clé et le
-      // jeton de session sans qu'on ait à les reconstruire — et donc sans
-      // risquer un en-tête d'authentification incomplet.
-      const { data: d, error } = await supabase.functions.invoke('transcrire-audio', {
-        body: blob,
-        headers: { 'x-audio-type': blob.type || 'audio/webm' },
-      })
-      if (error) throw error
-      if (!d?.ok) throw new Error(d?.error ?? 'transcription impossible')
-      if (d.texte) setTranscription((t) => (t ? `${t} ${d.texte}` : d.texte).trim())
-      setErreur(null)
-    } catch (e) {
-      setErreur(`Transcription : ${e instanceof Error ? e.message : String(e)}`)
-    } finally {
-      setPartiel('')
-    }
-  }, [])
-
   const tout = useCallback(() => {
-    if (enregistreur.current && enregistreur.current.state !== 'inactive') {
-      enregistreur.current.stop()
+    if (keepalive.current) clearInterval(keepalive.current)
+    keepalive.current = null
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      // Demande à Deepgram de restituer ce qu'il lui reste avant de fermer.
+      ws.current.send(JSON.stringify({ type: 'CloseStream' }))
     }
+    ws.current?.close()
+    void ctx.current?.close()
     flux.current?.getTracks().forEach((t) => t.stop())
-    enregistreur.current = null
+    ws.current = null
+    ctx.current = null
     flux.current = null
   }, [])
 
   const demarrer = useCallback(async () => {
     veutEcouter.current = true
     setErreur(null)
+
     try {
       const micro = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          // Le haut-parleur génère écho et réverbération : ces traitements du
+          // Le haut-parleur produit écho et réverbération : ces traitements du
           // navigateur améliorent nettement le signal transmis.
           echoCancellation: true,
           noiseSuppression: true,
@@ -82,26 +72,74 @@ export function useEcouteDeepgram() {
       })
       flux.current = micro
 
-      // Chaque tranche doit être un fichier autonome et décodable. Un
-      // MediaRecorder unique avec `timeslice` produit des fragments sans
-      // en-tête, illisibles isolément : on relance donc un enregistreur par
-      // tranche.
-      const boucle = () => {
-        if (!veutEcouter.current || !flux.current) return
-        const mr = new MediaRecorder(flux.current, { mimeType: typeSupporte() })
-        enregistreur.current = mr
-        const morceaux: Blob[] = []
-        mr.ondataavailable = (e) => e.data.size > 0 && morceaux.push(e.data)
-        mr.onstop = () => {
-          if (morceaux.length) void envoyer(new Blob(morceaux, { type: mr.mimeType }))
-          boucle()
+      const base = import.meta.env.VITE_SUPABASE_URL as string
+      const url = `${base.replace(/^http/, 'ws')}/functions/v1/transcrire-audio`
+      const socket = new WebSocket(url)
+      socket.binaryType = 'arraybuffer'
+      ws.current = socket
+
+      socket.onopen = () => {
+        const audio = new AudioContext({ sampleRate: ECHANTILLONNAGE })
+        ctx.current = audio
+        const source = audio.createMediaStreamSource(micro)
+        const proc = audio.createScriptProcessor(4096, 1, 1)
+
+        proc.onaudioprocess = (e) => {
+          if (socket.readyState !== WebSocket.OPEN) return
+          const f32 = e.inputBuffer.getChannelData(0)
+          // linear16 : float32 → PCM 16 bits signé, ce qu'attend Deepgram.
+          const pcm = new Int16Array(f32.length)
+          for (let i = 0; i < f32.length; i++) {
+            const v = Math.max(-1, Math.min(1, f32[i]))
+            pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff
+          }
+          socket.send(pcm.buffer)
         }
-        mr.start()
-        setTimeout(() => mr.state !== 'inactive' && mr.stop(), TRANCHE_MS)
+
+        source.connect(proc)
+        // Sans destination, ScriptProcessor ne reçoit aucun événement. Un gain
+        // nul évite de renvoyer la voix dans les haut-parleurs (larsen).
+        const muet = audio.createGain()
+        muet.gain.value = 0
+        proc.connect(muet)
+        muet.connect(audio.destination)
+
+        keepalive.current = window.setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'KeepAlive' }))
+          }
+        }, KEEPALIVE_MS)
+
+        setEtat('ecoute')
       }
 
-      boucle()
-      setEtat('ecoute')
+      socket.onmessage = (ev) => {
+        try {
+          const m = JSON.parse(ev.data as string)
+          if (m.erreur) {
+            setErreur(String(m.erreur))
+            return
+          }
+          const texte = m.channel?.alternatives?.[0]?.transcript as string | undefined
+          if (!texte) return
+          if (m.is_final) {
+            setTranscription((t) => (t ? `${t} ${texte}` : texte).trim())
+            setPartiel('')
+          } else {
+            setPartiel(texte)
+          }
+        } catch {
+          // Métadonnées Deepgram : sans intérêt ici.
+        }
+      }
+
+      socket.onerror = () => {
+        setErreur('Connexion de transcription interrompue.')
+        setEtat('erreur')
+      }
+      socket.onclose = () => {
+        if (veutEcouter.current) setEtat('arret')
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setErreur(
@@ -112,7 +150,7 @@ export function useEcouteDeepgram() {
       setEtat('erreur')
       tout()
     }
-  }, [envoyer, tout])
+  }, [tout])
 
   const arreter = useCallback(() => {
     veutEcouter.current = false
@@ -137,15 +175,9 @@ export function useEcouteDeepgram() {
     erreur,
     transcription,
     partiel,
-    texteComplet: transcription,
+    texteComplet: (transcription + ' ' + partiel).trim(),
     demarrer,
     arreter,
     reinitialiser,
   }
-}
-
-/** Safari n'accepte pas webm ; on retombe sur mp4, que Deepgram lit aussi. */
-function typeSupporte(): string {
-  const candidats = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
-  return candidats.find((t) => MediaRecorder.isTypeSupported(t)) ?? ''
 }

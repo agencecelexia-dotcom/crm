@@ -50,14 +50,24 @@ export function AppelPage() {
   const dernierEnvoi = useRef(0)
   const enVol = useRef(false)
 
+  // `lead` passe par une ref : l'inclure dans les dépendances recréerait la
+  // fonction à chaque extraction, et relancerait l'effet en boucle.
+  const leadRef = useRef<LeadExtrait | null>(null)
+  useEffect(() => {
+    leadRef.current = lead
+  }, [lead])
+
   const extraire = useCallback(async (texte: string, mode: 'extraction' | 'rapport') => {
     const { data, error } = await supabase.functions.invoke('extraire-lead', {
-      body: { transcription: texte, mode, donnees: mode === 'rapport' ? lead : undefined },
+      // L'état antérieur est transmis dans les DEUX modes : sans lui, chaque
+      // passe repart de zéro et un champ capté à la minute 2 peut disparaître
+      // à la minute 3.
+      body: { transcription: texte, mode, donnees: leadRef.current ?? undefined },
     })
     if (error) throw error
     if (!data?.ok) throw new Error(data?.error ?? 'extraction impossible')
     return data
-  }, [lead])
+  }, [])
 
   // Extraction périodique pendant l'écoute.
   useEffect(() => {

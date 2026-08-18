@@ -1,0 +1,22 @@
+project_id = "oymnthijjbwkatrhqzvi"
+
+# Relais WebSocket de transcription.
+#
+# `verify_jwt = false` est imposé par une limite du navigateur : l'API
+# WebSocket ne permet d'envoyer aucun en-tête, donc pas d'`Authorization`.
+# Ni le paramètre d'URL `?apikey=`, ni le sous-protocole ne sont acceptés par
+# la passerelle Supabase — vérifié, les deux renvoient 401.
+#
+# Le risque est mesuré : cette fonction ne lit ni n'écrit aucune donnée du CRM.
+# Elle relaie de l'audio vers Deepgram et rend du texte. Le secret réel — la
+# clé Deepgram — ne quitte jamais le serveur. L'exposition se limite à la
+# consommation du quota Deepgram, bornée par l'origine CORS.
+[functions.transcrire-audio]
+verify_jwt = false
+
+# Les autres fonctions gardent la vérification : elles touchent aux données.
+[functions.extraire-lead]
+verify_jwt = true
+
+[functions.upload-devis]
+verify_jwt = true
