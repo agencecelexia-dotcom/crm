@@ -1,15 +1,17 @@
-// Edge Function : transcription d'un extrait audio par Deepgram.
+// Edge Function : relais WebSocket entre le navigateur et Deepgram.
 //
-// Pourquoi un relais serveur plutôt qu'un WebSocket direct depuis le
-// navigateur : le streaming Deepgram exige que le client détienne une clé.
-// La solution propre serait un jeton éphémère (scope `usage:write`, TTL court),
-// mais la clé du compte n'a pas le scope `keys:write` nécessaire pour en
-// fabriquer. Envoyer la clé principale au navigateur reviendrait à la publier —
-// le bundle front est lisible par tous.
+// Le navigateur ouvre un WebSocket vers cette fonction, qui en ouvre un second
+// vers Deepgram et fait transiter l'audio dans un sens, les transcriptions dans
+// l'autre. La clé Deepgram reste côté serveur : un WebSocket direct l'aurait
+// exigée dans le bundle, donc publiée.
 //
-// On relaie donc l'audio par tranches. La latence est de quelques secondes au
-// lieu du temps réel strict, ce qui reste sous la cadence d'analyse de la
-// checklist (4 s) : l'écart est invisible à l'usage.
+// Pourquoi un flux continu plutôt que des tranches indépendantes : Deepgram
+// reconstitue les mots à cheval sur deux paquets et affine sa transcription
+// avec le contexte. Découpé en fichiers de 8 s, « Aubigeon » prononcé à la
+// frontière ressortait « Aubi » — un nom tronqué que rien ne signalait.
+//
+// Le mode POST reste accepté pour la transcription d'un fichier complet
+// (tests, et repli si le WebSocket échoue).
 
 const ORIGINES = [
   'http://localhost:5173',
@@ -21,58 +23,113 @@ function cors(origin: string | null) {
   const ok = origin && (ORIGINES.includes(origin) || /^https:\/\/[\w-]+\.vercel\.app$/.test(origin))
   return {
     'Access-Control-Allow-Origin': ok ? origin! : ORIGINES[0],
-    // `x-audio-type` porte le format réel du blob (webm sur Chrome, mp4 sur
-    // Safari). Sans lui dans cette liste, le préflight échoue et le navigateur
-    // renvoie un « Failed to fetch » opaque.
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-audio-type',
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type, x-audio-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Vary': 'Origin',
   }
 }
 
-/** Plafond de taille : une tranche de 10 s en webm pèse ~50 ko. Au-delà de
- *  5 Mo, c'est une erreur d'appel, pas un usage normal. */
 const TAILLE_MAX = 5 * 1024 * 1024
+
+/** Paramètres communs aux deux modes. */
+function params(streaming: boolean) {
+  const p = new URLSearchParams({
+    model: 'nova-2',
+    language: 'fr',
+    // Restitue les nombres en chiffres : décisif sur les numéros dictés.
+    smart_format: 'true',
+    punctuate: 'true',
+  })
+  if (streaming) {
+    p.set('interim_results', 'true')
+    // Deepgram réécrit ses résultats provisoires quand la suite les éclaire —
+    // c'est exactement ce qui rattrape un nom coupé en deux paquets.
+    p.set('encoding', 'linear16')
+    p.set('sample_rate', '16000')
+    p.set('endpointing', '300')
+  }
+  return p
+}
 
 Deno.serve(async (req) => {
   const CORS = cors(req.headers.get('origin'))
+  const cle = Deno.env.get('DEEPGRAM_API_KEY')
+
+  // ---- Mode streaming ----
+  if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+    if (!cle) return new Response('Deepgram non configuré', { status: 501 })
+
+    const { socket: client, response } = Deno.upgradeWebSocket(req)
+
+    const amont = new WebSocket(
+      `wss://api.deepgram.com/v1/listen?${params(true)}`,
+      ['token', cle],
+    )
+    amont.binaryType = 'arraybuffer'
+
+    // L'audio arrivé avant l'ouverture d'amont serait perdu : on le garde.
+    const attente: ArrayBuffer[] = []
+
+    amont.onopen = () => {
+      for (const a of attente) amont.send(a)
+      attente.length = 0
+    }
+    amont.onmessage = (e) => {
+      if (client.readyState === WebSocket.OPEN) client.send(e.data)
+    }
+    amont.onerror = () => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ erreur: 'connexion Deepgram interrompue' }))
+      }
+    }
+    amont.onclose = () => client.readyState === WebSocket.OPEN && client.close()
+
+    client.onmessage = (e) => {
+      const d = e.data
+      if (typeof d === 'string') {
+        // Message de contrôle du navigateur (KeepAlive, CloseStream).
+        if (amont.readyState === WebSocket.OPEN) amont.send(d)
+        return
+      }
+      if (amont.readyState === WebSocket.OPEN) amont.send(d)
+      else attente.push(d as ArrayBuffer)
+    }
+    client.onclose = () => amont.readyState === WebSocket.OPEN && amont.close()
+    client.onerror = () => amont.readyState === WebSocket.OPEN && amont.close()
+
+    return response
+  }
+
+  // ---- Mode fichier complet ----
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const cle = Deno.env.get('DEEPGRAM_API_KEY')
     if (!cle) return json({ ok: false, error: 'Deepgram non configuré' }, 501, CORS)
 
     const type = req.headers.get('x-audio-type') ?? 'audio/webm'
     const audio = new Uint8Array(await req.arrayBuffer())
-
     if (audio.byteLength === 0) return json({ ok: false, error: 'audio vide' }, 400, CORS)
     if (audio.byteLength > TAILLE_MAX) return json({ ok: false, error: 'audio trop volumineux' }, 413, CORS)
 
-    const params = new URLSearchParams({
-      model: 'nova-2',
-      language: 'fr',
-      // Restitue les nombres en chiffres — décisif pour les numéros de
-      // téléphone dictés à l'oral, qui sont la principale source d'erreur.
-      smart_format: 'true',
-      punctuate: 'true',
-    })
-
-    const res = await fetch(`https://api.deepgram.com/v1/listen?${params}`, {
+    const res = await fetch(`https://api.deepgram.com/v1/listen?${params(false)}`, {
       method: 'POST',
       headers: { Authorization: `Token ${cle}`, 'Content-Type': type },
       body: audio,
     })
-
     if (!res.ok) {
       console.error('deepgram listen', res.status, await res.text())
       return json({ ok: false, error: `Deepgram ${res.status}` }, 502, CORS)
     }
 
     const d = await res.json()
-    const texte = d?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? ''
-    return json({ ok: true, texte }, 200, CORS)
+    return json(
+      { ok: true, texte: d?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '' },
+      200,
+      CORS,
+    )
   } catch (e) {
-    console.error('jeton-deepgram', e)
+    console.error('transcrire-audio', e)
     return json({ ok: false, error: String(e instanceof Error ? e.message : e) }, 500, CORS)
   }
 })
