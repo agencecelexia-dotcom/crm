@@ -17,6 +17,7 @@ import { CommissionsPage } from '@/features/commissions/commissions-page'
 import { TachesPage } from '@/features/taches/taches-page'
 import { CouverturePage } from '@/features/couverture/couverture-page'
 import { NotesPage } from '@/features/notes/notes-page'
+import { AppelPage } from '@/features/appel/appel-page'
 import { ProjetsListPage } from '@/features/projets/pages/projets-list-page'
 import { CorbeillePage } from '@/features/projets/pages/corbeille-page'
 import { ProjetNewPage } from '@/features/projets/pages/projet-new-page'
@@ -79,6 +80,7 @@ export default function App() {
                 <Route path="/commissions" element={<CommissionsPage />} />
                 <Route path="/notes" element={<NotesPage />} />
 
+                <Route path="/appel" element={<AppelPage />} />
                 <Route path="/projets" element={<ProjetsListPage />} />
                 <Route path="/projets/corbeille" element={<CorbeillePage />} />
                 <Route path="/projets/new" element={<ProjetNewPage />} />
