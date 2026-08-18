@@ -16,6 +16,14 @@ export type StatutProjet =
   | 'perdu'
   /** Lead définitivement mort (client parti ailleurs) — réservé à l'agence. */
   | 'mort'
+  /**
+   * Ce n'est pas un client : un artisan qui cherche du travail.
+   *
+   * Distinct de « mort », qui désigne un lead perdu. Celui-ci n'a jamais été
+   * un lead — mais c'est un fournisseur potentiel, utile là où aucun artisan
+   * n'est encore couvert. À ne jamais rappeler comme prospect.
+   */
+  | 'artisan_demarche'
 
 /** Une zone d'intervention = une ville (géocodée) + un rayon (km). */
 export interface ZoneCouverte {
