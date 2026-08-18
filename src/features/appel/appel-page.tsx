@@ -4,9 +4,11 @@ import { AlertTriangle, Mic, Square } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
+import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { construireChecklist, verifierMecaniquement, type LeadExtrait } from './checklist'
 import { ecouteDisponible, useEcouteAppel } from './use-ecoute-appel'
+import { useEcouteDeepgram } from './use-ecoute-deepgram'
 import { PanneauChecklist } from './panneau-checklist'
 import { ValidationLead } from './validation-lead'
 
@@ -16,10 +18,27 @@ const PERIODE_EXTRACTION_MS = 4000
 /** En dessous, la transcription n'a pas assez changé pour valoir un appel. */
 const DELTA_MINIMAL = 40
 
+/** Moteur de transcription. Les deux restent disponibles : Web Speech est
+ *  gratuit et suffit souvent, Deepgram est meilleur sur les chiffres dictés au
+ *  haut-parleur. Le choix se compare en conditions réelles, pas en théorie. */
+type Moteur = 'navigateur' | 'deepgram'
+const CLE_MOTEUR = 'crm.appel.moteur'
+
 export function AppelPage() {
   const navigate = useNavigate()
+  const [moteur, setMoteur] = useState<Moteur>(
+    () => (localStorage.getItem(CLE_MOTEUR) as Moteur) ?? 'deepgram',
+  )
+
+  // Les deux hooks sont montés en permanence : les règles des hooks
+  // interdisent un appel conditionnel. Seul celui qui est sélectionné est
+  // démarré, l'autre reste inerte (aucun micro ouvert tant qu'on ne
+  // l'appelle pas).
+  const navigateur = useEcouteAppel()
+  const deepgram = useEcouteDeepgram()
+  const actif = moteur === 'deepgram' ? deepgram : navigateur
   const { etat, erreur, transcription, partiel, texteComplet, demarrer, arreter, reinitialiser } =
-    useEcouteAppel()
+    actif
 
   const [lead, setLead] = useState<LeadExtrait | null>(null)
   const [extraitEnCours, setExtraitEnCours] = useState(false)
@@ -100,7 +119,7 @@ export function AppelPage() {
     dernierEnvoi.current = 0
   }, [reinitialiser])
 
-  if (!ecouteDisponible()) {
+  if (moteur === 'navigateur' && !ecouteDisponible()) {
     return (
       <div className="mx-auto max-w-2xl p-4">
         <PageHeader titre="Prise d'appel" />
@@ -136,6 +155,32 @@ export function AppelPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 pb-28">
       <PageHeader titre="Prise d'appel" />
+
+      {/* Comparateur de moteurs : masqué en cours d'appel, on ne change pas
+          de transcripteur au milieu d'une conversation. */}
+      {etat !== 'ecoute' && !transcription && (
+        <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card p-2">
+          <span className="pl-1 text-xs text-muted-foreground">Transcription :</span>
+          {(['deepgram', 'navigateur'] as Moteur[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setMoteur(m)
+                localStorage.setItem(CLE_MOTEUR, m)
+              }}
+              className={cn(
+                'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                moteur === m
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent',
+              )}
+            >
+              {m === 'deepgram' ? 'Deepgram' : 'Navigateur (gratuit)'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Le consentement n'est pas une formalité : enregistrer la voix d'un
           particulier sans son accord est illégal. Trois secondes en ouverture. */}
