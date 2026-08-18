@@ -178,6 +178,17 @@ export function dateReception(p: ProjetEspace): number {
 }
 
 /**
+ * Chantier tranché : gagné ou perdu, il ne demande plus de travail.
+ *
+ * Sert au tri (les clos descendent en bas) ET au séparateur visuel. Une seule
+ * définition pour les deux, sinon la barre finirait par tomber au mauvais
+ * endroit le jour où l'une des deux règles change.
+ */
+export function estClos(p: ProjetEspace): boolean {
+  return p.issue === 'gagne' || p.issue === 'perdu'
+}
+
+/**
  * Un chantier neuf mérite d'être signalé, même sans urgence : c'est une
  * opportunité fraîche, pas un dossier en retard.
  */

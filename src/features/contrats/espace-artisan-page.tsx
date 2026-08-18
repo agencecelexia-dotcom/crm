@@ -37,7 +37,7 @@ import { CorpsChantier } from './corps-chantier'
 import { KanbanChantiers } from './kanban-chantiers'
 import { DrawerChantier } from './drawer-chantier'
 import { ReleveCommissions } from './releve-commissions'
-import { correspond, dateReception, urgenceChantier } from './urgence-chantier'
+import { correspond, dateReception, estClos, urgenceChantier } from './urgence-chantier'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
@@ -449,9 +449,8 @@ function ListeChantiers({
         )
         .filter((p) => correspond(p, recherche))
         .sort((a, b) => {
-          const closA = a.issue === 'gagne' || a.issue === 'perdu' ? 1 : 0
-          const closB = b.issue === 'gagne' || b.issue === 'perdu' ? 1 : 0
-          if (closA !== closB) return closA - closB
+          const ecart = Number(estClos(a)) - Number(estClos(b))
+          if (ecart !== 0) return ecart
           return dateReception(b) - dateReception(a)
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- estUrgent dérive de `urgences`
@@ -543,15 +542,35 @@ function ListeChantiers({
         // chantier changeait de section selon son urgence calculée, et
         // l'artisan ne le retrouvait plus où il l'avait laissé.
         <div className="space-y-3">
-          {liste.map((p) => (
-            <ProjetItem
-              key={p.id}
-              projet={p}
-              signe={signe}
-              onChange={onChange}
-              onCreerDevis={onCreerDevis}
-            />
-          ))}
+          {liste.map((p, i) => {
+            // Trait de séparation au premier chantier tranché. Le tri place
+            // déjà les dossiers clos en bas ; la barre rend la frontière
+            // visible, entre ce qui demande du travail et ce qui est acquis.
+            // La bascule se fonde sur `issue`, pas sur le libellé « devis
+            // signé » : un chantier signé mais pas encore terminé est déjà
+            // gagné, et un chantier perdu appartient au même bloc.
+            const clos = estClos(p)
+            const premierClos = clos && (i === 0 || !estClos(liste[i - 1]))
+            return (
+              <div key={p.id} className={premierClos ? 'space-y-3 pt-3' : undefined}>
+                {premierClos && (
+                  <div className="flex items-center gap-3 pb-1">
+                    <span className="h-px flex-1 bg-border" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Chantiers terminés
+                    </span>
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                )}
+                <ProjetItem
+                  projet={p}
+                  signe={signe}
+                  onChange={onChange}
+                  onCreerDevis={onCreerDevis}
+                />
+              </div>
+            )
+          })}
         </div>
       )}
 
