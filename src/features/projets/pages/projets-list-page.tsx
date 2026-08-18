@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
-import { Mic } from 'lucide-react'
+import { Mic, RotateCcw } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { StatutBadge } from '@/components/statut-badge'
 import { Button } from '@/components/ui/button'
@@ -139,6 +139,17 @@ export function ProjetsListPage() {
         titre="Projets"
         action={
           <div className="flex items-center gap-2">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              title="Chantiers rendus ou perdus par un artisan, à réattribuer"
+            >
+              <Link to="/projets/a-reattribuer">
+                <RotateCcw className="size-4" />
+                <span className="hidden sm:inline">À réattribuer</span>
+              </Link>
+            </Button>
             <Button asChild variant="outline" size="sm" title="Prendre un appel avec assistance">
               <Link to="/appel">
                 <Mic className="size-4" />

@@ -18,6 +18,7 @@ import { TachesPage } from '@/features/taches/taches-page'
 import { CouverturePage } from '@/features/couverture/couverture-page'
 import { NotesPage } from '@/features/notes/notes-page'
 import { AppelPage } from '@/features/appel/appel-page'
+import { AReattribuerPage } from '@/features/projets/pages/a-reattribuer-page'
 import { ProjetsListPage } from '@/features/projets/pages/projets-list-page'
 import { CorbeillePage } from '@/features/projets/pages/corbeille-page'
 import { ProjetNewPage } from '@/features/projets/pages/projet-new-page'
@@ -82,6 +83,7 @@ export default function App() {
 
                 <Route path="/appel" element={<AppelPage />} />
                 <Route path="/projets" element={<ProjetsListPage />} />
+                <Route path="/projets/a-reattribuer" element={<AReattribuerPage />} />
                 <Route path="/projets/corbeille" element={<CorbeillePage />} />
                 <Route path="/projets/new" element={<ProjetNewPage />} />
                 <Route path="/projets/:id" element={<ProjetDetailPage />} />
