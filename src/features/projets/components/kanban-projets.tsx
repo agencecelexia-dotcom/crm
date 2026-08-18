@@ -2,7 +2,7 @@ import { useState, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { BadgeCheck, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
+import { dansLePipeline, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { usePatchProjet } from '../hooks/use-projets'
 import { useAffectationsCounts } from '../hooks/use-affectations'
 import { BadgePerduPar } from './badge-perdu-par'
@@ -32,6 +32,10 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
     <div className="flex gap-3 overflow-x-auto pb-4">
       {STATUTS_ORDRE.map((s) => {
         const items = projets.filter((p) => p.statut === s)
+        // Les colonnes hors pipeline (artisan démarché) n'apparaissent que si
+        // elles contiennent quelque chose : une colonne vide en bout de
+        // pipeline n'apporte rien et allonge le défilement horizontal.
+        if (!dansLePipeline(s) && items.length === 0) return null
         return (
           <div
             key={s}

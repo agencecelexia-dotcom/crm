@@ -63,10 +63,13 @@ export function ValidationLead({
     void chercherDoublon(tel).then(setDoublons)
   }, [form.client_telephone])
 
-  // L'IA propose, le commercial dispose : elle peut manquer le cas — un
-  // artisan qui ne se présente qu'à la fin de l'appel, ou une transcription
-  // trop pauvre. Le classement doit donc rester modifiable à la main.
-  const [artisan, setArtisan] = useState(lead?.nature_appel === 'artisan_cherche_travail')
+  // Le tag n'est JAMAIS posé automatiquement. La détection s'est trompée sur
+  // un cas courant : le commercial se présente en ouverture (« Antoine,
+  // société Batryx, on fait de la toiture ») et l'IA prenait cette phrase
+  // pour l'interlocuteur. Une fiche mal taguée sort du pipeline sans qu'on
+  // s'en aperçoive — le coût d'un faux positif est bien plus élevé que celui
+  // d'une case à cocher.
+  const [artisan, setArtisan] = useState(false)
 
   const anomalies = verifierMecaniquement({
     client_telephone: form.client_telephone,
