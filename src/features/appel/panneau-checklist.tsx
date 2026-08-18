@@ -1,26 +1,17 @@
-import { AlertTriangle, Check, CircleDashed, Keyboard, Loader2, X } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { AlertTriangle, Check, CircleDashed, Keyboard, Loader2 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import {
-  nbRestant,
-  trierPourAppel,
-  type Anomalie,
-  type LeadExtrait,
-  type LigneChecklist,
-} from './checklist'
+import { nbRestant, type Anomalie, type LeadExtrait, type LigneChecklist } from './checklist'
 
 /**
- * La checklist affichée pendant l'appel.
+ * Checklist de l'appel, en deux zones distinctes.
  *
- * Contrainte de lecture : le commercial y jette des coups d'œil tout en
- * parlant. Ce qui reste à demander est donc EN HAUT, en rouge, formulé comme
- * une question prête à poser — pas comme un nom de champ à remplir.
- *
- * Chaque ligne est aussi une zone de saisie. Le commercial peut taper pendant
- * qu'il écoute : sa frappe fait autorité et l'extraction ne l'écrase jamais.
- * Quand les deux sources divergent, la proposition de l'IA reste affichée
- * dessous — c'est le bénéfice réel de la double saisie : deux versions d'un
- * numéro de téléphone, ça se vérifie avant de raccrocher, pas après.
+ * L'ordre des lignes est FIXE. Une première version les retriait par urgence à
+ * chaque extraction : le champ qu'on était en train de remplir se déplaçait
+ * sous le curseur toutes les quelques secondes, ce qui rendait la saisie
+ * clavier impraticable. Une liste stable se lit d'un coup d'œil ; une liste
+ * qui bouge oblige à la relire entièrement.
  */
 export function PanneauChecklist({
   lignes,
@@ -31,40 +22,68 @@ export function PanneauChecklist({
   lignes: LigneChecklist[]
   anomalies: Anomalie[]
   extraitEnCours: boolean
-  /** Frappe du commercial. Une valeur vide rend la main à l'extraction. */
   onSaisir: (cle: keyof LeadExtrait, valeur: string) => void
 }) {
-  const triees = trierPourAppel(lignes)
   const restant = nbRestant(lignes)
+  // Les champs qu'on saisit à la main pendant l'appel : identité et contact.
+  // Le reste (demande, surface, délai…) se capte bien à l'oral et n'a pas
+  // besoin d'être tapé.
+  const CLES_CONTACT: (keyof LeadExtrait)[] = [
+    'client_nom',
+    'client_telephone',
+    'client_email',
+    'client_adresse',
+    'client_code_postal',
+    'client_ville',
+  ]
+
+  const contact = CLES_CONTACT.map((c) => lignes.find((l) => l.cle === c)).filter(
+    (l): l is LigneChecklist => l != null,
+  )
+  const ecoute = lignes.filter((l) => !CLES_CONTACT.includes(l.cle))
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-card shadow-card">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <p className="text-sm font-semibold">Informations à recueillir</p>
-        {extraitEnCours ? (
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
-            analyse…
+    <div className="space-y-3">
+      {/* ------- Zone 1 : ce que je note ------- */}
+      <div className="rounded-2xl border border-[#7C3AED]/30 bg-card shadow-card">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+          <Keyboard className="size-4 text-[#7C3AED]" />
+          <p className="text-sm font-semibold">Ce que je note</p>
+          <span className="ml-auto text-xs text-muted-foreground">
+            prioritaire sur l'écoute
           </span>
-        ) : (
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
-              restant === 0
-                ? 'bg-[#22C55E]/15 text-[#16A34A]'
-                : 'bg-[#F59E0B]/15 text-[#B45309]',
-            )}
-          >
-            {restant === 0 ? 'complet' : `${restant} à demander`}
-          </span>
-        )}
+        </div>
+        <div className="space-y-1.5 p-3">
+          {contact.map((l) => (
+            <ChampSaisie key={l.cle} ligne={l} onSaisir={onSaisir} />
+          ))}
+        </div>
       </div>
 
-      <ul className="divide-y divide-border/60">
-        {triees.map((l) => (
-          <li key={l.cle} className="px-3 py-2">
-            <div className="flex items-center gap-2.5">
-              <span className="shrink-0" title={etatLabel(l)}>
+      {/* ------- Zone 2 : ce que l'IA entend ------- */}
+      <div className="rounded-2xl border border-border/70 bg-card shadow-card">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+          <p className="text-sm font-semibold">Ce que l'IA entend</p>
+          {extraitEnCours ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              analyse…
+            </span>
+          ) : (
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
+                restant === 0 ? 'bg-[#22C55E]/15 text-[#16A34A]' : 'bg-[#F59E0B]/15 text-[#B45309]',
+              )}
+            >
+              {restant === 0 ? 'complet' : `${restant} à demander`}
+            </span>
+          )}
+        </div>
+        <ul className="divide-y divide-border/60">
+          {ecoute.map((l) => (
+            <li key={l.cle} className="flex items-start gap-2.5 px-4 py-2">
+              <span className="mt-0.5 shrink-0">
                 {l.etat === 'saisi' ? (
                   <Keyboard className="size-4 text-[#7C3AED]" />
                 ) : l.etat === 'obtenu' ? (
@@ -73,102 +92,135 @@ export function PanneauChecklist({
                   <AlertTriangle className="size-4 text-[#B45309]" />
                 ) : (
                   <CircleDashed
-                    className={cn('size-4', l.essentiel ? 'text-[#DC2626]' : 'text-muted-foreground')}
+                    className={cn(
+                      'size-4',
+                      l.essentiel ? 'text-[#DC2626]' : 'text-muted-foreground',
+                    )}
                   />
                 )}
               </span>
-
-              <label
-                htmlFor={`ch-${l.cle}`}
-                className={cn(
-                  'w-24 shrink-0 truncate text-xs sm:w-28',
-                  l.etat === 'manquant' && l.essentiel
-                    ? 'font-medium text-[#DC2626]'
-                    : 'text-muted-foreground',
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted-foreground">{l.label}</p>
+                {l.valeur ? (
+                  <p
+                    className={cn(
+                      'text-sm',
+                      l.etat === 'a_confirmer' ? 'text-[#B45309]' : 'font-medium',
+                    )}
+                  >
+                    {l.valeur}
+                    {l.etat === 'a_confirmer' && (
+                      <span className="ml-1.5 text-xs font-normal">— à confirmer</span>
+                    )}
+                  </p>
+                ) : (
+                  <p
+                    className={cn(
+                      'text-sm',
+                      l.essentiel ? 'text-[#DC2626]' : 'text-muted-foreground',
+                    )}
+                  >
+                    {l.question}
+                  </p>
                 )}
-              >
-                {l.label}
-              </label>
-
-              <input
-                id={`ch-${l.cle}`}
-                value={l.valeur}
-                onChange={(e) => onSaisir(l.cle, e.target.value)}
-                placeholder={l.etat === 'manquant' ? l.question : ''}
-                autoComplete="off"
-                className={cn(
-                  'min-w-0 flex-1 rounded-lg border bg-transparent px-2 py-1 text-sm',
-                  'focus:outline-none focus:ring-2 focus:ring-ring',
-                  'placeholder:text-xs',
-                  l.etat === 'saisi' && 'border-[#7C3AED]/40 bg-[#7C3AED]/5 font-medium',
-                  l.etat === 'obtenu' && 'border-transparent font-medium',
-                  l.etat === 'a_confirmer' && 'border-[#B45309]/40 bg-[#F59E0B]/5 text-[#B45309]',
-                  l.etat === 'manquant' &&
-                    (l.essentiel
-                      ? 'border-[#DC2626]/30 placeholder:text-[#DC2626]/70'
-                      : 'border-border placeholder:text-muted-foreground'),
-                )}
-              />
-
-              {/* Rendre la main à l'extraction sans avoir à tout effacer. */}
-              {l.manuel && (
-                <button
-                  type="button"
-                  onClick={() => onSaisir(l.cle, '')}
-                  title="Effacer et laisser l'IA remplir"
-                  aria-label="Effacer et laisser l'IA remplir"
-                  className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Divergence entre la frappe et l'écoute : le point exact où une
-                double vérification a de la valeur. */}
-            {l.suggestionIa && (
-              <button
-                type="button"
-                onClick={() => onSaisir(l.cle, l.suggestionIa!)}
-                className="mt-1 ml-[3.1rem] flex items-center gap-1 text-left text-xs text-[#B45309] hover:underline sm:ml-[3.9rem]"
-              >
-                <AlertTriangle className="size-3 shrink-0" />
-                l'IA a entendu «&nbsp;{l.suggestionIa}&nbsp;» — cliquer pour reprendre
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {anomalies.length > 0 && (
-        <div className="border-t border-border px-4 py-3">
-          {anomalies.map((a, i) => (
-            <p
-              key={i}
-              className={cn(
-                'flex items-start gap-1.5 text-xs',
-                a.gravite === 'bloquant' ? 'text-[#DC2626]' : 'text-[#B45309]',
-              )}
-            >
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              {a.message}
-            </p>
+              </div>
+            </li>
           ))}
-        </div>
-      )}
+        </ul>
+
+        {anomalies.length > 0 && (
+          <div className="border-t border-border px-4 py-2.5">
+            {anomalies.map((a, i) => (
+              <p
+                key={i}
+                className={cn(
+                  'flex items-start gap-1.5 text-xs',
+                  a.gravite === 'bloquant' ? 'text-[#DC2626]' : 'text-[#B45309]',
+                )}
+              >
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                {a.message}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-function etatLabel(l: LigneChecklist): string {
-  switch (l.etat) {
-    case 'saisi':
-      return 'Saisi au clavier — prioritaire sur l’écoute'
-    case 'obtenu':
-      return 'Capté par l’écoute'
-    case 'a_confirmer':
-      return 'Capté, mais peu sûr — à confirmer'
-    default:
-      return 'À demander'
-  }
+/**
+ * Champ de saisie manuelle.
+ *
+ * Le champ n'est PAS piloté par la valeur extraite tant qu'il a le focus :
+ * un `value` réécrit par l'extraction déplaçait le curseur et effaçait la
+ * frappe en cours. On ne se synchronise sur l'écoute que hors focus.
+ */
+function ChampSaisie({
+  ligne,
+  onSaisir,
+}: {
+  ligne: LigneChecklist
+  onSaisir: (cle: keyof LeadExtrait, valeur: string) => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || document.activeElement === el) return
+    if (el.value !== ligne.valeur) el.value = ligne.valeur
+  }, [ligne.valeur])
+
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <label
+          htmlFor={`s-${ligne.cle}`}
+          className="w-20 shrink-0 text-xs text-muted-foreground sm:w-24"
+        >
+          {ligne.label}
+        </label>
+        <input
+          ref={ref}
+          id={`s-${ligne.cle}`}
+          defaultValue={ligne.valeur}
+          onChange={(e) => onSaisir(ligne.cle, e.target.value)}
+          placeholder={ligne.question}
+          autoComplete="off"
+          inputMode={
+            ligne.cle === 'client_telephone' || ligne.cle === 'client_code_postal'
+              ? 'numeric'
+              : ligne.cle === 'client_email'
+                ? 'email'
+                : 'text'
+          }
+          className={cn(
+            'min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-sm',
+            'focus:outline-none focus:ring-2 focus:ring-ring',
+            'placeholder:text-xs placeholder:text-muted-foreground/70',
+            ligne.manuel
+              ? 'border-[#7C3AED]/40 bg-[#7C3AED]/5 font-medium'
+              : ligne.valeur
+                ? 'border-[#22C55E]/30 bg-[#22C55E]/5'
+                : 'border-border bg-transparent',
+          )}
+        />
+        {/* Coche verte : l'écoute a confirmé ce champ. */}
+        {!ligne.manuel && ligne.valeur && (
+          <Check className="size-4 shrink-0 text-[#16A34A]" aria-label="capté par l'écoute" />
+        )}
+      </div>
+
+      {ligne.suggestionIa && (
+        <button
+          type="button"
+          onClick={() => onSaisir(ligne.cle, ligne.suggestionIa!)}
+          className="ml-[5.5rem] mt-0.5 flex items-center gap-1 text-left text-xs text-[#B45309] hover:underline sm:ml-[6.5rem]"
+        >
+          <AlertTriangle className="size-3 shrink-0" />
+          l'IA entend «&nbsp;{ligne.suggestionIa}&nbsp;»
+        </button>
+      )}
+    </div>
+  )
 }

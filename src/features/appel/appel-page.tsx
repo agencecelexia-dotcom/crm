@@ -19,11 +19,17 @@ import { useEcouteDeepgram } from './use-ecoute-deepgram'
 import { PanneauChecklist } from './panneau-checklist'
 import { ValidationLead } from './validation-lead'
 
-/** Intervalle entre deux extractions. Assez court pour que la checklist suive
- *  la conversation, assez long pour ne pas appeler le modèle à chaque mot. */
-const PERIODE_EXTRACTION_MS = 4000
-/** En dessous, la transcription n'a pas assez changé pour valoir un appel. */
-const DELTA_MINIMAL = 40
+/** Intervalle entre deux extractions.
+ *
+ *  4 s au départ : l'écran se réécrivait en permanence, ce qui le rendait
+ *  illisible pendant qu'on parle et impossible à remplir au clavier. 7 s
+ *  laisse le temps de lire une ligne et d'en taper une autre, sans décrocher
+ *  du rythme de la conversation. */
+const PERIODE_EXTRACTION_MS = 7000
+/** En dessous, la transcription n'a pas assez changé pour valoir un appel.
+ *  Relevé de 40 à 120 caractères : une phrase entière plutôt que quelques
+ *  mots, donc moins de passes pour un même résultat. */
+const DELTA_MINIMAL = 120
 
 /** Moteur de transcription. Les deux restent disponibles : Web Speech est
  *  gratuit et suffit souvent, Deepgram est meilleur sur les chiffres dictés au
@@ -79,11 +85,19 @@ export function AppelPage() {
     return data
   }, [])
 
+  // La transcription passe par une ref : `texteComplet` change à chaque
+  // syllabe reconnue, et le mettre en dépendance recréait l'intervalle des
+  // dizaines de fois par minute.
+  const texteRef = useRef('')
+  useEffect(() => {
+    texteRef.current = texteComplet
+  }, [texteComplet])
+
   // Extraction périodique pendant l'écoute.
   useEffect(() => {
     if (etat !== 'ecoute') return
     const timer = setInterval(() => {
-      const texte = texteComplet
+      const texte = texteRef.current
       if (enVol.current) return
       if (texte.length - dernierEnvoi.current < DELTA_MINIMAL) return
 
@@ -102,7 +116,7 @@ export function AppelPage() {
         })
     }, PERIODE_EXTRACTION_MS)
     return () => clearInterval(timer)
-  }, [etat, texteComplet, extraire])
+  }, [etat, extraire])
 
   const terminer = useCallback(async () => {
     arreter()
