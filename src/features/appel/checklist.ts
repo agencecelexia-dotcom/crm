@@ -32,10 +32,24 @@ export interface LeadExtrait {
   confiance?: Record<string, number>
 }
 
-export type EtatChamp = 'obtenu' | 'a_confirmer' | 'manquant'
+export type EtatChamp = 'obtenu' | 'a_confirmer' | 'manquant' | 'saisi'
+
+/** Champs saisis à la main par le commercial pendant l'appel.
+ *
+ *  Ils PRIMENT sur l'extraction et ne sont jamais écrasés : sans cette règle,
+ *  le commercial corrigerait un champ et le verrait revenir à la version
+ *  automatique quelques secondes plus tard — il se battrait contre l'outil au
+ *  lieu de parler à son client. */
+export type Saisies = Partial<Record<keyof LeadExtrait, string>>
 
 export interface LigneChecklist {
   cle: keyof LeadExtrait
+  /** Vrai si la valeur vient du clavier, pas de l'extraction. */
+  manuel: boolean
+  /** Ce que l'IA proposait, quand il diverge de la saisie manuelle : c'est le
+   *  signal de double vérification le plus utile — deux sources qui ne disent
+   *  pas la même chose méritent un coup d'œil. */
+  suggestionIa: string | null
   /** Libellé court, colonne de gauche. */
   label: string
   /** Formulé comme une question à poser au client. */
@@ -85,29 +99,77 @@ function texte(v: unknown): string {
   return String(v).trim()
 }
 
-export function construireChecklist(lead: LeadExtrait | null): LigneChecklist[] {
+export function construireChecklist(
+  lead: LeadExtrait | null,
+  saisies: Saisies = {},
+): LigneChecklist[] {
   const l = lead ?? {}
   return DEFINITIONS.filter((d) => !d.pertinent || d.pertinent(l)).map((d) => {
-    const valeur = texte(l[d.cle])
-    const score = l.confiance?.[d.cle] ?? (valeur ? 1 : 0)
-    const etat: EtatChamp = !valeur
-      ? 'manquant'
-      : score >= SEUIL_CONFIANCE
-        ? 'obtenu'
-        : 'a_confirmer'
-    return { cle: d.cle, label: d.label, question: d.question, etat, valeur, essentiel: d.essentiel }
+    const auto = texte(l[d.cle])
+    const manuelle = (saisies[d.cle] ?? '').trim()
+    const manuel = manuelle.length > 0
+    const valeur = manuel ? manuelle : auto
+    const score = l.confiance?.[d.cle] ?? (auto ? 1 : 0)
+
+    const etat: EtatChamp = manuel
+      ? 'saisi'
+      : !valeur
+        ? 'manquant'
+        : score >= SEUIL_CONFIANCE
+          ? 'obtenu'
+          : 'a_confirmer'
+
+    return {
+      cle: d.cle,
+      label: d.label,
+      question: d.question,
+      etat,
+      valeur,
+      essentiel: d.essentiel,
+      manuel,
+      // Divergence entre les deux sources : on ne la masque pas.
+      suggestionIa: manuel && auto && !equivalent(auto, manuelle) ? auto : null,
+    }
   })
+}
+
+/** Comparaison indulgente : ni la casse, ni les accents, ni les espaces ne
+ *  constituent une divergence digne d'être signalée. Un téléphone saisi
+ *  « 06 12 34 56 78 » et extrait « 0612345678 » est la même valeur. */
+function equivalent(a: string, b: string): boolean {
+  const n = (x: string) =>
+    x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s.\-_]/g, '')
+  return n(a) === n(b)
+}
+
+/** Valeurs finales : la saisie manuelle prime, l'extraction complète. */
+export function fusionner(lead: LeadExtrait | null, saisies: Saisies): LeadExtrait {
+  const f: LeadExtrait = { ...(lead ?? {}) }
+  for (const [cle, v] of Object.entries(saisies)) {
+    const val = (v ?? '').trim()
+    if (!val) continue
+    if (cle === 'metiers') f.metiers = val.split(',').map((m) => m.trim()).filter(Boolean)
+    else (f as Record<string, unknown>)[cle] = val
+  }
+  return f
 }
 
 /** Ce qu'il reste à demander, essentiels d'abord — l'ordre d'affichage. */
 export function trierPourAppel(lignes: LigneChecklist[]): LigneChecklist[] {
+  // Un champ saisi à la main est réglé : il descend avec les champs obtenus.
   const rang = (l: LigneChecklist) =>
     l.etat === 'manquant' ? (l.essentiel ? 0 : 1) : l.etat === 'a_confirmer' ? 2 : 3
   return [...lignes].sort((a, b) => rang(a) - rang(b))
 }
 
 export function nbRestant(lignes: LigneChecklist[]): number {
-  return lignes.filter((l) => l.essentiel && l.etat !== 'obtenu').length
+  return lignes.filter((l) => l.essentiel && l.etat !== 'obtenu' && l.etat !== 'saisi').length
+}
+
+/** Champs où saisie manuelle et extraction divergent : à vérifier avant
+ *  d'enregistrer. C'est le bénéfice direct de la double saisie. */
+export function divergences(lignes: LigneChecklist[]): LigneChecklist[] {
+  return lignes.filter((l) => l.suggestionIa != null)
 }
 
 /**

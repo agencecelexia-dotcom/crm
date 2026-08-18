@@ -6,7 +6,14 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
-import { construireChecklist, verifierMecaniquement, type LeadExtrait } from './checklist'
+import {
+  construireChecklist,
+  divergences,
+  fusionner,
+  verifierMecaniquement,
+  type LeadExtrait,
+  type Saisies,
+} from './checklist'
 import { ecouteDisponible, useEcouteAppel } from './use-ecoute-appel'
 import { useEcouteDeepgram } from './use-ecoute-deepgram'
 import { PanneauChecklist } from './panneau-checklist'
@@ -45,6 +52,9 @@ export function AppelPage() {
   const [erreurExtraction, setErreurExtraction] = useState<string | null>(null)
   const [termine, setTermine] = useState(false)
   const [description, setDescription] = useState('')
+  /** Frappe du commercial pendant l'appel. Prime sur l'extraction, qui ne
+   *  l'écrase jamais — sinon il corrigerait un champ pour le voir revenir. */
+  const [saisies, setSaisies] = useState<Saisies>({})
 
   // Longueur de texte déjà envoyée, pour ne pas relancer inutilement.
   const dernierEnvoi = useRef(0)
@@ -97,6 +107,8 @@ export function AppelPage() {
   const terminer = useCallback(async () => {
     arreter()
     if (texteComplet.length < 30) {
+      // Appel sans transcription exploitable : la saisie manuelle suffit.
+      if (Object.keys(saisies).length) setLead(fusionner(lead, saisies))
       setTermine(true)
       return
     }
@@ -105,7 +117,9 @@ export function AppelPage() {
       // Dernière extraction sur la transcription complète : les dernières
       // minutes de l'appel n'ont pas forcément été analysées.
       const finale = await extraire(texteComplet, 'extraction')
-      const complet = finale.lead as LeadExtrait
+      // La saisie manuelle reste prioritaire, y compris sur l'extraction
+      // finale : c'est la source la plus sûre dont on dispose.
+      const complet = fusionner(finale.lead as LeadExtrait, saisies)
       setLead(complet)
 
       const rapport = await supabase.functions.invoke('extraire-lead', {
@@ -118,13 +132,14 @@ export function AppelPage() {
       setExtraitEnCours(false)
       setTermine(true)
     }
-  }, [arreter, texteComplet, extraire])
+  }, [arreter, texteComplet, extraire, saisies, lead])
 
   const recommencer = useCallback(() => {
     reinitialiser()
     setLead(null)
     setDescription('')
     setTermine(false)
+    setSaisies({})
     setErreurExtraction(null)
     dernierEnvoi.current = 0
   }, [reinitialiser])
@@ -159,8 +174,9 @@ export function AppelPage() {
     )
   }
 
-  const lignes = construireChecklist(lead)
-  const anomalies = lead ? verifierMecaniquement(lead) : []
+  const lignes = construireChecklist(lead, saisies)
+  const anomalies = verifierMecaniquement(fusionner(lead, saisies))
+  const ecarts = divergences(lignes)
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 pb-28">
@@ -213,7 +229,33 @@ export function AppelPage() {
         </div>
       )}
 
-      <PanneauChecklist lignes={lignes} anomalies={anomalies} extraitEnCours={extraitEnCours} />
+      <PanneauChecklist
+        lignes={lignes}
+        anomalies={anomalies}
+        extraitEnCours={extraitEnCours}
+        onSaisir={(cle, v) =>
+          setSaisies((s) => {
+            const n = { ...s }
+            // Vider un champ rend la main à l'extraction plutôt que de figer
+            // une valeur vide.
+            if (v.trim()) n[cle] = v
+            else delete n[cle]
+            return n
+          })
+        }
+      />
+
+      {ecarts.length > 0 && (
+        <div className="rounded-2xl border border-[#B45309]/30 bg-[#F59E0B]/5 p-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-[#B45309]">
+            <AlertTriangle className="size-3.5" />
+            {ecarts.length} écart{ecarts.length > 1 ? 's' : ''} entre votre saisie et l'écoute
+          </p>
+          <p className="mt-0.5 text-xs text-[#92400E]">
+            Profitez d'avoir le client en ligne pour trancher.
+          </p>
+        </div>
+      )}
 
       {(lead?.alertes?.length ?? 0) > 0 && (
         <div className="rounded-2xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-3">
