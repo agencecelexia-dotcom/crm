@@ -39,18 +39,15 @@ export function useEcouteDeepgram() {
     if (blob.size < 2000) return // silence : rien à transcrire
     setPartiel('transcription…')
     try {
-      const { data: session } = await supabase.auth.getSession()
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcrire-audio`
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'x-audio-type': blob.type || 'audio/webm',
-        },
+      // `invoke` plutôt qu'un `fetch` manuel : il pose l'URL, la clé et le
+      // jeton de session sans qu'on ait à les reconstruire — et donc sans
+      // risquer un en-tête d'authentification incomplet.
+      const { data: d, error } = await supabase.functions.invoke('transcrire-audio', {
         body: blob,
+        headers: { 'x-audio-type': blob.type || 'audio/webm' },
       })
-      const d = await r.json()
-      if (!d.ok) throw new Error(d.error ?? 'transcription impossible')
+      if (error) throw error
+      if (!d?.ok) throw new Error(d?.error ?? 'transcription impossible')
       if (d.texte) setTranscription((t) => (t ? `${t} ${d.texte}` : d.texte).trim())
       setErreur(null)
     } catch (e) {
