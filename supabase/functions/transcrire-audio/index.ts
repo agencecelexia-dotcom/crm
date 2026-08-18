@@ -32,10 +32,15 @@ function cors(origin: string | null) {
 
 const TAILLE_MAX = 5 * 1024 * 1024
 
-/** Paramètres communs aux deux modes. */
-function params(streaming: boolean) {
+/** Paramètres communs aux deux modes.
+ *
+ *  `sr` vient du navigateur : chaque micro a sa fréquence native (48 kHz le
+ *  plus souvent). La déclarer faussement décale tout le signal. */
+function params(streaming: boolean, sr?: string | null) {
   const p = new URLSearchParams({
-    model: 'nova-2',
+    // nova-3 comprend nettement mieux une voix lointaine et compressée —
+    // exactement le cas d'un haut-parleur de téléphone.
+    model: 'nova-3',
     language: 'fr',
     // Restitue les nombres en chiffres : décisif sur les numéros dictés.
     smart_format: 'true',
@@ -46,8 +51,11 @@ function params(streaming: boolean) {
     // Deepgram réécrit ses résultats provisoires quand la suite les éclaire —
     // c'est exactement ce qui rattrape un nom coupé en deux paquets.
     p.set('encoding', 'linear16')
-    p.set('sample_rate', '16000')
+    p.set('sample_rate', sr && /^\d{4,6}$/.test(sr) ? sr : '48000')
     p.set('endpointing', '300')
+    // Un appel a deux voix : les séparer aide le modèle à ne pas mélanger la
+    // question du commercial et la réponse du client.
+    p.set('diarize', 'true')
   }
   return p
 }
@@ -62,8 +70,9 @@ Deno.serve(async (req) => {
 
     const { socket: client, response } = Deno.upgradeWebSocket(req)
 
+    const sr = new URL(req.url).searchParams.get('sr')
     const amont = new WebSocket(
-      `wss://api.deepgram.com/v1/listen?${params(true)}`,
+      `wss://api.deepgram.com/v1/listen?${params(true, sr)}`,
       ['token', cle],
     )
     amont.binaryType = 'arraybuffer'

@@ -154,6 +154,8 @@ export function useEcouteAppel() {
     erreur,
     transcription,
     partiel,
+    /** Web Speech ne donne pas accès au signal : pas de vumètre possible. */
+    niveau: 0,
     /** Transcription + segment en cours, pour l'extraction. */
     texteComplet: (transcription + ' ' + partiel).trim(),
     demarrer,
