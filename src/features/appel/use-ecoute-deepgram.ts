@@ -23,7 +23,12 @@ import type { EtatEcoute } from './use-ecoute-appel'
  * qui détient la clé et relaie vers Deepgram.
  */
 
-const ECHANTILLONNAGE = 16_000
+/** Aucun rééchantillonnage côté navigateur : on envoie le flux à SA fréquence
+ *  native (48 kHz en général) et on la déclare à Deepgram. Forcer un
+ *  AudioContext à 16 kHz oblige le navigateur à rééchantillonner à la volée,
+ *  ce qu'il fait sans filtre anti-repliement correct — la voix ressort
+ *  métallique et les consonnes se brouillent. Deepgram rééchantillonne bien
+ *  mieux que nous. */
 /** Deepgram ferme un flux resté muet ~10 s. On maintient la connexion pendant
  *  les silences de la conversation. */
 const KEEPALIVE_MS = 5000
@@ -33,6 +38,10 @@ export function useEcouteDeepgram() {
   const [erreur, setErreur] = useState<string | null>(null)
   const [transcription, setTranscription] = useState('')
   const [partiel, setPartiel] = useState('')
+  /** Niveau sonore capté, 0 à 1. Sans ce retour, impossible de distinguer
+   *  « le micro n'entend rien » de « la transcription ne marche pas » — on
+   *  regarde un écran vide sans savoir lequel des deux corriger. */
+  const [niveau, setNiveau] = useState(0)
 
   const ws = useRef<WebSocket | null>(null)
   const flux = useRef<MediaStream | null>(null)
@@ -60,33 +69,58 @@ export function useEcouteDeepgram() {
     setErreur(null)
 
     try {
+      // TOUS les traitements du navigateur sont DÉSACTIVÉS, et c'est décisif.
+      //
+      // `echoCancellation` est conçu pour supprimer ce qui sort des
+      // haut-parleurs afin d'éviter le larsen en visioconférence. Or ici, ce
+      // qui sort du haut-parleur EST le signal utile : la voix du client.
+      // Activé, le navigateur l'annulait activement — c'est la cause première
+      // des transcriptions vides.
+      //
+      // `noiseSuppression` est réglé pour une voix proche du micro ; sur une
+      // voix lointaine et déjà compressée par le réseau téléphonique, il la
+      // prend pour du bruit et la rabote.
+      //
+      // `autoGainControl` pompe entre les silences et la parole, ce qui écrase
+      // les débuts de phrase — précisément là où se trouvent les noms.
       const micro = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          // Le haut-parleur produit écho et réverbération : ces traitements du
-          // navigateur améliorent nettement le signal transmis.
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
       })
       flux.current = micro
 
+      // L'AudioContext est créé AVANT le socket : sa fréquence réelle doit
+      // être annoncée à Deepgram. Annoncer 16 kHz pour un flux à 48 kHz décale
+      // tout et produit du charabia.
+      const audio = new AudioContext()
+      ctx.current = audio
+
       const base = import.meta.env.VITE_SUPABASE_URL as string
-      const url = `${base.replace(/^http/, 'ws')}/functions/v1/transcrire-audio`
+      const url = `${base.replace(/^http/, 'ws')}/functions/v1/transcrire-audio?sr=${audio.sampleRate}`
       const socket = new WebSocket(url)
       socket.binaryType = 'arraybuffer'
       ws.current = socket
 
       socket.onopen = () => {
-        const audio = new AudioContext({ sampleRate: ECHANTILLONNAGE })
-        ctx.current = audio
         const source = audio.createMediaStreamSource(micro)
         const proc = audio.createScriptProcessor(4096, 1, 1)
 
+        let compteur = 0
         proc.onaudioprocess = (e) => {
           if (socket.readyState !== WebSocket.OPEN) return
           const f32 = e.inputBuffer.getChannelData(0)
+
+          // Niveau efficace (RMS), rafraîchi ~3 fois par seconde.
+          if (++compteur % 4 === 0) {
+            let somme = 0
+            for (let i = 0; i < f32.length; i++) somme += f32[i] * f32[i]
+            const rms = Math.sqrt(somme / f32.length)
+            setNiveau(Math.min(1, rms * 8))
+          }
           // linear16 : float32 → PCM 16 bits signé, ce qu'attend Deepgram.
           const pcm = new Int16Array(f32.length)
           for (let i = 0; i < f32.length; i++) {
@@ -157,6 +191,7 @@ export function useEcouteDeepgram() {
     tout()
     setEtat('arret')
     setPartiel('')
+    setNiveau(0)
   }, [tout])
 
   const reinitialiser = useCallback(() => {
@@ -175,6 +210,7 @@ export function useEcouteDeepgram() {
     erreur,
     transcription,
     partiel,
+    niveau,
     texteComplet: (transcription + ' ' + partiel).trim(),
     demarrer,
     arreter,

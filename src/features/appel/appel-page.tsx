@@ -50,7 +50,7 @@ export function AppelPage() {
   const navigateur = useEcouteAppel()
   const deepgram = useEcouteDeepgram()
   const actif = moteur === 'deepgram' ? deepgram : navigateur
-  const { etat, erreur, transcription, partiel, texteComplet, demarrer, arreter, reinitialiser } =
+  const { etat, erreur, transcription, partiel, niveau, texteComplet, demarrer, arreter, reinitialiser } =
     actif
 
   const [lead, setLead] = useState<LeadExtrait | null>(null)
@@ -244,6 +244,19 @@ export function AppelPage() {
           {erreur}
         </div>
       )}
+
+      {/* Le micro est ouvert mais n'entend rien : c'est presque toujours le
+          haut-parleur trop bas ou le téléphone trop loin. Le dire tout de
+          suite évite de dérouler tout un appel pour rien. */}
+      {etat === 'ecoute' && moteur === 'deepgram' && niveau < 0.04 && transcription === '' && (
+        <div className="rounded-xl border border-[#F59E0B]/40 bg-[#F59E0B]/5 p-3 text-xs text-[#92400E]">
+          <p className="font-medium">Le micro ne capte presque rien.</p>
+          <p className="mt-0.5">
+            Activez le haut-parleur du téléphone, montez le volume au maximum et rapprochez-le
+            à moins de 30 cm de cet appareil.
+          </p>
+        </div>
+      )}
       {erreurExtraction && (
         <div className="rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-3 text-xs text-[#92400E]">
           Analyse indisponible : {erreurExtraction}. L'écoute continue, la transcription est
@@ -336,9 +349,23 @@ export function AppelPage() {
             </Button>
           ) : (
             <>
-              <span className="flex items-center gap-2 px-2 text-sm font-medium text-[#DC2626]">
+              {/* Vumètre : montre que le micro capte réellement. Sans lui, un
+                  écran vide ne dit pas si c'est le micro ou la transcription
+                  qui est en cause. */}
+              <span className="flex shrink-0 items-center gap-1.5 px-1">
                 <span className="size-2.5 animate-pulse rounded-full bg-[#DC2626]" />
-                écoute
+                <span className="flex h-6 items-end gap-[2px]" aria-label="niveau sonore">
+                  {[0.08, 0.2, 0.35, 0.5, 0.68].map((seuil) => (
+                    <span
+                      key={seuil}
+                      className={cn(
+                        'w-1 rounded-full transition-all duration-100',
+                        niveau >= seuil ? 'bg-[#16A34A]' : 'bg-muted',
+                      )}
+                      style={{ height: `${8 + seuil * 16}px` }}
+                    />
+                  ))}
+                </span>
               </span>
               <Button size="lg" variant="outline" className="flex-1" onClick={arreter}>
                 Pause
