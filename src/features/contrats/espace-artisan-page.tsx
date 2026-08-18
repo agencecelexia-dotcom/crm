@@ -191,6 +191,7 @@ export function EspaceArtisanPage() {
         <div className="mx-auto max-w-2xl">
           <ChantiersPerdus
             projets={projetsPerdus}
+            signe={signe}
             onRetour={() => setVuePerdus(false)}
             onChange={() => void refetch()}
           />

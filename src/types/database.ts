@@ -256,8 +256,11 @@ export type StatutSuivi =
   | 'termine'
   | 'perdu'
 export interface Suivi {
+  /** Identifiant du suivi. Renvoyé par la base, il manquait ici. */
+  id?: string
   auteur: 'artisan' | 'agence'
-  type: 'statut' | 'note'
+  /** `appel` existe en base (bouton d'appel de l'espace artisan) et manquait. */
+  type: 'statut' | 'note' | 'appel'
   statut: StatutSuivi | null
   message: string | null
   created_at: string
@@ -545,6 +548,23 @@ export interface ProjetPerdu {
   derniere_raison: string | null
   /** Nom du client, absent de cette vue auparavant. */
   client_nom?: string | null
+  client_telephone?: string | null
+  client_code_postal?: string | null
+  /**
+   * Historique complet, ajouté en 0094.
+   *
+   * Un résumé d'une ligne ne permet pas de décider d'une réattribution : il
+   * faut savoir jusqu'où le dossier est allé, s'il a été chiffré et pourquoi
+   * il s'est arrêté.
+   */
+  recu_le?: string | null
+  etape?: string | null
+  date_rdv?: string | null
+  montant_devis_signe?: number | null
+  devis_url?: string | null
+  devis_signe_url?: string | null
+  devis_depose?: boolean
+  suivis?: Suivi[]
   /** Motif normalisé (migration 0079). */
   motif_perte?: string | null
 }
