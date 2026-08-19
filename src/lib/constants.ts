@@ -171,6 +171,10 @@ export const STATUTS: Record<
   // car il ne s'agit pas d'un lead perdu mais d'un fournisseur potentiel —
   // à ne jamais rappeler comme prospect, éventuellement à recruter.
   artisan_demarche: { label: 'Artisan démarché', color: '#0891B2', textOnColor: '#FFFFFF' },
+  // Sollicitation commerciale : agence web, référencement, assurance, énergie.
+  // Distinct d'« artisan démarché », qui reste un fournisseur potentiel — un
+  // vendeur de sites web n'a aucune valeur future pour le pipe.
+  demarchage: { label: 'Démarchage', color: '#78716C', textOnColor: '#FFFFFF' },
 }
 
 /**
@@ -224,6 +228,7 @@ export const STATUTS_ORDRE: StatutProjet[] = [
   'perdu',
   'mort',
   'artisan_demarche',
+  'demarchage',
 ]
 
 /**
@@ -241,7 +246,7 @@ export const STATUTS_PERTE: StatutProjet[] = ['perdu', 'mort']
  * de conversion ; l'exclure du pipeline évite de rappeler comme prospect
  * quelqu'un qui cherchait du travail.
  */
-export const STATUTS_HORS_PIPELINE: StatutProjet[] = ['artisan_demarche']
+export const STATUTS_HORS_PIPELINE: StatutProjet[] = ['artisan_demarche', 'demarchage']
 
 /** Un projet compte-t-il dans le pipeline commercial ? */
 export function dansLePipeline(statut: string | null | undefined): boolean {

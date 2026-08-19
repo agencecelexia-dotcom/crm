@@ -47,3 +47,8 @@ Contrat-apporteur-affaires-Celexia.docx
 pdf/
 "pdf "/
 *.pdf
+
+# Artefacts locaux du CLI Supabase : versions des services et infos de liaison
+# du projet, régénérés à chaque `supabase link`. Propres à un poste, ils n'ont
+# rien à faire dans le dépôt.
+supabase/.temp/

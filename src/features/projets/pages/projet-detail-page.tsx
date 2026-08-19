@@ -151,6 +151,14 @@ export function ProjetDetailPage() {
             </p>
           )}
 
+          {projet.statut === 'demarchage' && (
+            <p className="rounded-xl border border-[#78716C]/25 bg-[#78716C]/5 p-2.5 text-xs text-[#57534E]">
+              Sollicitation commerciale, pas un client : agence web, assurance, énergie…
+              La fiche est hors pipeline et ne remontera dans aucune liste de prospects.
+              Elle sert à reconnaître ce numéro s'il rappelle.
+            </p>
+          )}
+
           {projet.statut === 'perdu' && (
             <p className="rounded-xl border border-[#EF4444]/25 bg-[#EF4444]/5 p-2.5 text-xs text-[#DC2626]">
               Perdu par l'artisan : le chantier reste vivant, tu peux le réassigner à quelqu'un
@@ -251,7 +259,7 @@ export function ProjetDetailPage() {
       {/* Documents */}
       <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
         <CardHeader>
-          <CardTitre>Documents (PDF)</CardTitre>
+          <CardTitre>Documents</CardTitre>
         </CardHeader>
         <CardContent className="space-y-2">
           {/* Contrat d'engagement = signé en ligne par l'artisan (table contrats) */}
@@ -271,11 +279,12 @@ export function ProjetDetailPage() {
             cheminActuel={projet.devis_signe_url}
           />
 
-          {/* Pièces libres : autant de PDF que nécessaire, sans écrasement.
-              Séparées des 3 emplacements ci-dessus, qui pilotent le statut. */}
+          {/* Pièces libres : autant de fichiers que nécessaire, tous formats,
+              sans écrasement. Séparées des 3 emplacements ci-dessus, qui
+              pilotent le statut. Chacune se partage ou non avec l'artisan. */}
           <div className="pt-2">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Autres documents
+              Pièces jointes
             </p>
             <PiecesJointes projetId={projet.id} />
           </div>

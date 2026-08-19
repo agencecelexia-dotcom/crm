@@ -1,0 +1,97 @@
+{
+  "name": "LSA → CRM Celexia",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-lsa",
+      "name": "Toutes les 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fenêtre glissante de 2 jours : assez large pour rattraper une panne\n// n8n d'une nuit, assez étroite pour que la réponse reste légère.\n// Les leads déjà vus sont écartés côté base (idempotence sur leadId).\nconst fin = new Date()\nconst debut = new Date(Date.now() - 2 * 24 * 3600 * 1000)\nreturn [{ json: {\n  'startDate.year': debut.getFullYear(),\n  'startDate.month': debut.getMonth() + 1,\n  'startDate.day': debut.getDate(),\n  'endDate.year': fin.getFullYear(),\n  'endDate.month': fin.getMonth() + 1,\n  'endDate.day': fin.getDate(),\n} }]"
+      },
+      "id": "periode",
+      "name": "Période interrogée",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://localservices.googleapis.com/v1/detailedLeadReports:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "startDate.year", "value": "={{ $json['startDate.year'] }}" },
+            { "name": "startDate.month", "value": "={{ $json['startDate.month'] }}" },
+            { "name": "startDate.day", "value": "={{ $json['startDate.day'] }}" },
+            { "name": "endDate.year", "value": "={{ $json['endDate.year'] }}" },
+            { "name": "endDate.month", "value": "={{ $json['endDate.month'] }}" },
+            { "name": "endDate.day", "value": "={{ $json['endDate.day'] }}" },
+            { "name": "pageSize", "value": "100" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "api-lsa",
+      "name": "API Local Services",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ⚠️ Remplacer par le contenu de lsa-api-vers-crm.code.js"
+      },
+      "id": "transformer",
+      "name": "Leads → format CRM",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://oymnthijjbwkatrhqzvi.supabase.co/rest/v1/rpc/ingerer_lead_externe",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "supabase",
+      "name": "Créer le lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 0]
+    }
+  ],
+  "connections": {
+    "Toutes les 5 min": { "main": [[{ "node": "Période interrogée", "type": "main", "index": 0 }]] },
+    "Période interrogée": { "main": [[{ "node": "API Local Services", "type": "main", "index": 0 }]] },
+    "API Local Services": { "main": [[{ "node": "Leads → format CRM", "type": "main", "index": 0 }]] },
+    "Leads → format CRM": { "main": [[{ "node": "Créer le lead", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

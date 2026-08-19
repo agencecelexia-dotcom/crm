@@ -24,6 +24,14 @@ export type StatutProjet =
    * n'est encore couvert. À ne jamais rappeler comme prospect.
    */
   | 'artisan_demarche'
+  /**
+   * Sollicitation commerciale : agence web, référencement, assurance, énergie.
+   *
+   * Ni un client, ni un fournisseur potentiel. Contrairement à
+   * « artisan_demarche », la fiche n'a aucune valeur future — elle sert
+   * uniquement à ne pas rappeler ce numéro et à le reconnaître s'il insiste.
+   */
+  | 'demarchage'
 
 /** Une zone d'intervention = une ville (géocodée) + un rayon (km). */
 export interface ZoneCouverte {
@@ -515,6 +523,25 @@ export interface ProjetDocument {
   projet_id: string
   nom: string
   chemin: string
+  taille_octets: number | null
+  /** Type MIME d'origine. Null sur les pièces déposées avant 0098 (toutes PDF). */
+  type_mime: string | null
+  /** Si vrai, la pièce est transmise à l'artisan affecté (défaut à la création). */
+  visible_artisan: boolean
+  created_at: string
+}
+
+/**
+ * Pièce jointe telle que la voit l'ARTISAN (RPC `documents_projet_par_token`).
+ *
+ * Volontairement amputée de `chemin` : le chemin de stockage ne sort jamais du
+ * serveur. Pour consulter, on échange (token, id) contre une URL signée d'une
+ * heure auprès de l'edge function `document-signe`.
+ */
+export interface DocumentPartage {
+  id: string
+  nom: string
+  type_mime: string | null
   taille_octets: number | null
   created_at: string
 }

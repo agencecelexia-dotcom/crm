@@ -39,6 +39,12 @@ export function useAjouterDocuments(projetId: string) {
           nom: file.name,
           chemin: await uploaderPieceProjet(projetId, file),
           taille_octets: file.size,
+          // Peut être vide sur certains navigateurs mobiles (.heic, .mov pris
+          // depuis l'appareil photo) ; l'affichage retombe alors sur l'extension.
+          type_mime: file.type || null,
+          // Partagé par défaut : le cas courant est justement de transmettre
+          // ces pièces à l'artisan. L'agence peut retirer le partage ensuite.
+          visible_artisan: true,
         })),
       )
       const { error } = await supabase.from('projet_documents').insert(lignes)
@@ -53,6 +59,40 @@ export function useAjouterDocuments(projetId: string) {
       toast.error("Ajout impossible", {
         description: e instanceof Error ? e.message : undefined,
       }),
+  })
+}
+
+/**
+ * Bascule le partage d'une pièce avec l'artisan.
+ *
+ * Mise à jour optimiste : c'est une case à cocher, et attendre l'aller-retour
+ * réseau pour la voir bouger donnerait l'impression d'un clic perdu.
+ */
+export function useBasculerPartage(projetId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, visible }: { id: string; visible: boolean }) => {
+      const { error } = await supabase
+        .from('projet_documents')
+        .update({ visible_artisan: visible })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async ({ id, visible }) => {
+      await qc.cancelQueries({ queryKey: cle(projetId) })
+      const avant = qc.getQueryData<ProjetDocument[]>(cle(projetId))
+      qc.setQueryData<ProjetDocument[]>(cle(projetId), (docs) =>
+        docs?.map((d) => (d.id === id ? { ...d, visible_artisan: visible } : d)),
+      )
+      return { avant }
+    },
+    onError: (e, _v, ctx) => {
+      if (ctx?.avant) qc.setQueryData(cle(projetId), ctx.avant)
+      toast.error('Partage non modifié', {
+        description: e instanceof Error ? e.message : undefined,
+      })
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: cle(projetId) }),
   })
 }
 
