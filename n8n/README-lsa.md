@@ -1,76 +1,101 @@
 # Leads Google LSA → CRM
 
-Chaque lead reçu sur Google Local Services Ads crée automatiquement une fiche
-dans le pipe. Plus besoin de recopier les numéros à la main.
+Chaque lead Local Services crée automatiquement une fiche dans le pipe, avec
+le numéro de téléphone. Plus de ressaisie.
 
-## Pourquoi passer par l'email
+## Pourquoi l'API et pas l'email
 
-Google LSA **n'émet aucun webhook**. Deux voies existent :
+L'email de notification LSA **ne contient aucun numéro** :
 
-| | Latence | Mise en place |
-|---|---|---|
-| Email de notification | ~1 min | rien à demander à Google |
-| API `localservices.googleapis.com` | 5-15 min (interrogation) | projet Google Cloud, OAuth, accès à faire valider par Google |
+> « Un client potentiel vous a appelé le 19/08/2026 à 09:52. Voir les détails »
 
-L'email est retenu : il fonctionne aujourd'hui, sans validation préalable.
-L'API reste possible plus tard si la fiabilité de l'email ne suffit pas — le
-point d'entrée côté CRM ne changera pas.
+Rien d'exploitable. Le numéro n'existe que dans le tableau du site LSA — et
+dans l'API, qui expose ce même tableau.
 
-## Le workflow à créer dans n8n
+Vérifié sur le document de découverte de `localservices.googleapis.com` :
+`detailedLeadReports.search` renvoie `phoneLead.consumerPhoneNumber` et
+`messageLead.consumerPhoneNumber`, plus `leadId`, `geo`, `leadCategory`,
+`leadPrice`, `chargeStatus`.
 
-Trois nœuds, sur l'instance `n8n.srv1241880.hstgr.cloud`.
+Contrairement à l'API Google Ads, celle-ci **ne demande aucun developer token
+ni validation Google** : un simple OAuth sur ton propre compte suffit.
 
-### 1. Gmail Trigger
+---
 
-- Credential : « Gmail account » (déjà configurée pour les notifications)
-- **Filtre `Q`** : `from:(no-reply@localservices.google.com) is:unread`
-  → à ajuster après avoir vérifié l'expéditeur réel de tes emails LSA
-- Interrogation : toutes les minutes
+## Étape 1 — Google Cloud (~20 min, une seule fois)
 
-### 2. Code
+1. **console.cloud.google.com** → créer un projet, ex. « CRM Celexia »
+2. **APIs & Services → Library** → chercher « Local Services API » → **Enable**
+3. **APIs & Services → OAuth consent screen**
+   - Type : **External**
+   - Renseigner nom d'app et email de contact
+   - **Scopes** : ajouter `https://www.googleapis.com/auth/adwords`
+   - **Test users** : ajouter `agence.celexia@gmail.com`
+     → inutile de publier l'app : en mode test, tes propres comptes marchent
+4. **APIs & Services → Credentials → Create → OAuth client ID**
+   - Type : **Web application**
+   - **Authorized redirect URI** :
+     `https://n8n.srv1241880.hstgr.cloud/rest/oauth2-credential/callback`
+   - Noter le **Client ID** et le **Client Secret**
 
-Coller le contenu de `lsa-vers-crm.code.js`.
+## Étape 2 — Credential n8n (~5 min)
 
-Il extrait par **motifs** — un numéro français, un code postal — plutôt qu'en
-suivant une structure HTML. Google remanie régulièrement ces emails ; un
-analyseur calé sur leur mise en page casserait à la première refonte.
-
-Testé sur trois formats, dont un dégradé sans étiquettes : le téléphone
-ressort dans les trois cas.
-
-### 3. HTTP Request
+Dans n8n → **Credentials → New → Google OAuth2 API**
 
 | Champ | Valeur |
 |---|---|
-| Méthode | `POST` |
-| URL | `https://oymnthijjbwkatrhqzvi.supabase.co/rest/v1/rpc/ingerer_lead_externe` |
-| Body | JSON, `{{ $json }}` |
+| Client ID | celui de l'étape 1 |
+| Client Secret | celui de l'étape 1 |
+| Scope | `https://www.googleapis.com/auth/adwords` |
 
-En-têtes :
+Cliquer **Connect my account**, se connecter avec le compte Google qui gère
+le compte LSA (numéro client `139-304-5750`).
+
+## Étape 3 — Le workflow (~10 min)
+
+Importer `lsa-api-workflow.json` (n8n → Workflows → Import from File), puis :
+
+1. **Nœud « API Local Services »** → choisir la credential de l'étape 2
+2. **Nœud « Leads → format CRM »** → coller le contenu de
+   `lsa-api-vers-crm.code.js` (le fichier importé ne contient qu'un
+   marqueur)
+3. **Nœud « Créer le lead »** → remplacer `{{ $env.SUPABASE_SERVICE_KEY }}`
+   par la clé `service_role` (Supabase → Project Settings → API), ou
+   définir cette variable d'environnement dans n8n
+
+Activer le workflow.
+
+---
+
+## Comment ça tourne
 
 ```
-apikey:        <clé service_role>
-Authorization: Bearer <clé service_role>
-Content-Type:  application/json
+Toutes les 5 min
+  ↓  fenêtre glissante de 2 jours
+API detailedLeadReports.search
+  ↓  leadId, consumerPhoneNumber, geo, leadCategory
+Transformation → format CRM
+  ↓
+ingerer_lead_externe  (déjà en place côté base)
+  ↓
+Fiche « nouveau », sans artisan
 ```
 
-La clé `service_role` se trouve dans Supabase → Project Settings → API.
-Elle contourne toute la sécurité RLS : à ne jamais mettre ailleurs que dans
-les credentials n8n.
+**La fenêtre de 2 jours est volontaire** : elle rattrape une panne n8n d'une
+nuit sans intervention. Les leads déjà connus sont écartés par la base, pas
+par n8n.
 
-## Ce qui protège des doublons
+## Ce qui empêche les doublons
 
-`ingerer_lead_externe` refuse silencieusement de créer deux fois le même lead :
+Interroger toutes les 5 minutes rejoue forcément les mêmes leads. Trois
+protections dans `ingerer_lead_externe`, testées :
 
-1. **Référence identique** — même `source_ref`, la fiche existante est
-   renvoyée. Un email rejoué ou un workflow relancé ne crée rien.
-2. **Même numéro sous 30 jours** — repli quand Google ne fournit pas
-   d'identifiant. Au-delà de 30 jours, un client qui recontacte est traité
-   comme une nouvelle demande, ce qui est le comportement voulu.
-3. **Ni téléphone ni nom** — la fiche serait inexploitable, la fonction
-   répond `ni_telephone_ni_nom` sans rien créer.
+1. **`leadId` déjà vu** → renvoie la fiche existante, ne crée rien
+2. **Même numéro sous 30 jours** → idem. Testé sur un vrai lead du 19/08 :
+   le numéro existait déjà dans le CRM, aucune fiche créée
+3. **Sans numéro** → écarté avant même d'atteindre la base
 
-La réponse indique toujours ce qui s'est passé :
+La réponse dit toujours ce qui s'est passé :
 
 ```json
 {"ok": true, "projet_id": "…", "cree": true}
@@ -79,18 +104,20 @@ La réponse indique toujours ce qui s'est passé :
 
 ## Ce que devient le lead
 
-Statut **« nouveau »**, **sans artisan**. Il entre dans le flux normal de
-qualification — l'attribution reste une décision humaine, comme pour
-l'assistant d'appel.
+Statut **« nouveau »**, **sans artisan** — l'attribution reste une décision
+humaine, comme pour l'assistant d'appel.
 
-La colonne `source` vaut `lsa` : de quoi mesurer, plus tard, ce que Local
-Services rapporte réellement comparé aux autres canaux.
+`source = 'lsa'` permettra de mesurer ce que Local Services rapporte comparé
+aux autres canaux. `leadPrice` et `chargeStatus` sont conservés dans la
+description : de quoi rapprocher un jour le coût d'acquisition du chiffre
+réellement signé.
 
-## Vérifier que ça marche
+**LSA ne transmet pas la nature des travaux** — seulement une catégorie large
+(`roofer`, `siding`…). La description le signale : « À QUALIFIER ».
 
-Après le premier lead :
+## Vérifier
 
 ```sql
-select client_nom, client_telephone, client_ville, source_ref, created_at
-  from projets where source = 'lsa' order by created_at desc limit 5;
+select client_nom, client_telephone, client_ville, metier, source_ref, created_at
+  from projets where source = 'lsa' order by created_at desc limit 10;
 ```
