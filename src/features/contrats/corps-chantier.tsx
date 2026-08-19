@@ -13,6 +13,7 @@ import { formatTel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
 import { DocumentsPartages } from './documents-partages'
+import { VignettePiece } from '@/components/vignette-piece'
 import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
 import { RetraitChantierDialog } from './retrait-chantier-dialog'
@@ -91,19 +92,12 @@ export function CorpsChantier({
                 {/* Coordonnées client (éditables sauf le téléphone) */}
                 <ClientBloc projet={projet} adresse={adresse} onChange={onChange} />
 
-                {/* Photos */}
+                {/* Photos, vidéos et devis PDF déposés par l'agence : de quoi
+                    chiffrer sans se déplacer. */}
                 {projet.photos?.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
                     {projet.photos.map((url) => (
-                      <a
-                        key={url}
-                        href={url}
-                        target="_blank"
-                        rel="noopener"
-                        className="aspect-square overflow-hidden rounded-xl border border-border transition-opacity hover:opacity-90"
-                      >
-                        <img src={url} alt="Photo chantier" className="size-full object-cover" />
-                      </a>
+                      <VignettePiece key={url} url={url} />
                     ))}
                   </div>
                 )}
