@@ -17,7 +17,10 @@ export async function uploaderPhoto(projetId: string, file: File): Promise<strin
   const chemin = `${projetId}/${Date.now()}-${rand}.${ext}`
   const { error } = await supabase.storage
     .from(BUCKET_PHOTOS)
-    .upload(chemin, file, { contentType: file.type || 'image/jpeg' })
+    // Repli neutre plutôt que `image/jpeg` : ce bucket accueille désormais
+    // aussi des vidéos et des PDF, qu'un type d'image ferait rendre comme
+    // une image cassée par le navigateur.
+    .upload(chemin, file, { contentType: file.type || 'application/octet-stream' })
   if (error) throw error
   return supabase.storage.from(BUCKET_PHOTOS).getPublicUrl(chemin).data.publicUrl
 }
