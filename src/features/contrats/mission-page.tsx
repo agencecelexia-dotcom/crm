@@ -17,6 +17,7 @@ import { formatEuros, formatTel } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
 import { finaliserContenu } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
+import { DocumentsPartagesCard } from './documents-partages'
 import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
 import type { Suivi } from '@/types/database'
@@ -359,6 +360,10 @@ function Dossier({
           </CardContent>
         </Card>
       )}
+
+      {/* Pièces partagées par l'agence : devis déjà établi, plans, vidéos.
+          Le composant ne rend rien s'il n'y a aucune pièce à montrer. */}
+      <DocumentsPartagesCard token={token} />
 
       {/* Suivi : l'artisan déclare où il en est + écrit ce qui s'est dit */}
       <SuiviArtisan token={token} suivis={mission.suivis ?? []} onChange={onChange} />

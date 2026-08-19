@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client'
+import { extensionDe } from '@/lib/fichiers'
 
 // ------------------------------------------------------------
 //  Helpers Supabase Storage — bucket privé "documents".
@@ -99,11 +100,21 @@ export async function uploaderDocument(
  * Le nom d'origine n'entre pas dans le chemin — il est conservé en base, dans
  * `projet_documents.nom` — ce qui évite toute question d'échappement et de
  * caractères exotiques dans une clé de stockage.
+ *
+ * L'extension d'origine est en revanche préservée : depuis 0098 la pièce peut
+ * être une vidéo ou une image, et forcer `.pdf` comme avant produirait un
+ * fichier que ni le navigateur ni le système d'exploitation ne sauraient
+ * ouvrir une fois téléchargé.
  */
 export async function uploaderPieceProjet(projetId: string, file: File): Promise<string> {
-  const chemin = `${projetId}/pieces/${crypto.randomUUID()}.pdf`
+  const ext = extensionDe(file.name)
+  const suffixe = ext ? `.${ext}` : ''
+  const chemin = `${projetId}/pieces/${crypto.randomUUID()}${suffixe}`
   const { error } = await supabase.storage.from(BUCKET).upload(chemin, file, {
-    contentType: file.type || 'application/pdf',
+    // `application/octet-stream` plutôt que `application/pdf` en repli : un
+    // type erroné ferait rendre la pièce comme un PDF cassé, un type neutre
+    // la fait proprement télécharger.
+    contentType: file.type || 'application/octet-stream',
   })
   if (error) throw error
   return chemin

@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase/client'
 import { formatTel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
+import { DocumentsPartages } from './documents-partages'
 import { SuiviArtisan } from './suivi-artisan'
 import { UploadDevis } from './upload-devis'
 import { RetraitChantierDialog } from './retrait-chantier-dialog'
@@ -61,6 +62,13 @@ export function CorpsChantier({
             )}
           </div>
         )}
+
+        {/* Pièces jointes partagées par l'agence : devis déjà établi, photos,
+            vidéos envoyées par le client. Volontairement HORS du mur « contrat
+            signé » — c'est précisément ce qui permet de juger si le chantier
+            vaut le déplacement, et rien là-dedans n'identifie le client (les
+            coordonnées, elles, restent verrouillées ci-dessous). */}
+        <DocumentsPartages token={projet.token} />
 
         {!signe ? (
           <div className="rounded-xl border border-dashed border-[#F59E0B]/40 bg-[#F59E0B]/5 p-5 text-center">
