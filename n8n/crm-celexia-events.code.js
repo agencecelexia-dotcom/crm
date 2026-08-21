@@ -136,6 +136,48 @@ if (d.event === 'envoyer_lien_mission') {
     <h1 style="margin:0 0 10px;font-size:18px;color:#111827;">Nouveau statut : ${esc(st)} 🔔</h1>
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;"><b>${esc(d.artisan || 'Un artisan')}</b> a mis à jour le projet <b>${esc(d.client_nom || '')}</b>${d.metier ? ' (' + esc(d.metier) + (d.client_ville ? ', ' + esc(d.client_ville) : '') + ')' : ''} en <b>${esc(st)}</b>.</p>
     ${d.lien ? btn(esc(d.lien), 'Ouvrir le projet →') : ''}`);
+} else if (d.event === 'chantier_perdu') {
+  // Un chantier rendu par l'artisan principal doit être repris VITE : un
+  // client qui attend trois jours a déjà rappelé un concurrent. Le mail part
+  // même quand personne n'a le CRM ouvert.
+  const MOTIFS = {
+    prix_trop_eleve: 'Prix trop élevé', budget_insuffisant: 'Budget insuffisant',
+    delai_incompatible: 'Délai incompatible', signe_concurrent: 'Signé chez un concurrent',
+    client_injoignable: 'Client injoignable', client_renonce: 'Le client renonce',
+    hors_zone: 'Hors zone', doublon: 'Doublon', hors_competence: 'Hors compétence',
+    non_eligible_aides: 'Non éligible aux aides', autre: 'Autre',
+  };
+  const motif = MOTIFS[d.motif] || d.motif || 'non précisé';
+  // Zéro artisan restant : le chantier n'est plus suivi par personne.
+  const orphelin = d.orphelin === true;
+
+  subject = (orphelin ? '🔴 À REPRENDRE — ' : '⚠️ Chantier rendu — ')
+          + (d.client_nom || 'Client')
+          + (d.client_ville ? ' (' + d.client_ville + ')' : '');
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:18px;color:${orphelin ? '#b91c1c' : '#b45309'};">
+      ${orphelin ? 'Chantier à reprendre 🔴' : 'Chantier rendu ⚠️'}
+    </h1>
+    <p style="margin:0 0 12px;color:#374151;font-size:15px;line-height:1.5;">
+      <b>${esc(d.artisan || 'Un artisan')}</b> a rendu le chantier de
+      <b>${esc(d.client_nom || '')}</b>${d.metier ? ' — ' + esc(d.metier) : ''}${d.client_ville ? ', ' + esc(d.client_ville) : ''}.
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 12px;">
+      <tr><td style="padding:4px 0;color:#6b7280;">Motif</td>
+          <td style="padding:4px 0;text-align:right;font-weight:600;">${esc(motif)}</td></tr>
+      ${d.raison ? `<tr><td style="padding:4px 0;color:#6b7280;">Précision</td>
+          <td style="padding:4px 0;text-align:right;">${esc(d.raison)}</td></tr>` : ''}
+      ${d.montant ? `<tr><td style="padding:4px 0;color:#6b7280;">Devis chiffré</td>
+          <td style="padding:4px 0;text-align:right;font-weight:600;">${esc(String(d.montant))} €</td></tr>` : ''}
+      ${d.recontacter_le ? `<tr><td style="padding:4px 0;color:#6b7280;">Recontacter le</td>
+          <td style="padding:4px 0;text-align:right;">${esc(d.recontacter_le)}</td></tr>` : ''}
+    </table>
+    <p style="margin:0 0 14px;padding:10px;border-radius:8px;background:${orphelin ? '#fef2f2' : '#fffbeb'};color:${orphelin ? '#991b1b' : '#92400e'};font-size:14px;">
+      ${orphelin
+        ? 'Plus aucun artisan ne suit ce chantier. À réattribuer sans attendre.'
+        : 'D\'autres artisans travaillent encore ce chantier.'}
+    </p>
+    ${d.lien ? btn(esc(d.lien), 'Ouvrir le chantier →') : ''}`);
 } else if (d.event === 'projet_assigne') {
   to = d.email; if (!to) return [];           // ➜ artisan, à l'attribution du chantier
   subject = '🎉 Nouveau chantier' + (d.client_ville ? ' à ' + esc(d.client_ville) : '') + ' pour vous';
