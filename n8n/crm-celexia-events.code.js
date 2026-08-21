@@ -136,6 +136,19 @@ if (d.event === 'envoyer_lien_mission') {
     <h1 style="margin:0 0 10px;font-size:18px;color:#111827;">Nouveau statut : ${esc(st)} 🔔</h1>
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;"><b>${esc(d.artisan || 'Un artisan')}</b> a mis à jour le projet <b>${esc(d.client_nom || '')}</b>${d.metier ? ' (' + esc(d.metier) + (d.client_ville ? ', ' + esc(d.client_ville) : '') + ')' : ''} en <b>${esc(st)}</b>.</p>
     ${d.lien ? btn(esc(d.lien), 'Ouvrir le projet →') : ''}`);
+} else if (d.event === 'invitation_commercial') {
+  to = d.email; if (!to) return [];          // ➜ le commercial invité
+  subject = 'Votre accès au CRM Celexia';
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:20px;color:#111827;">Bienvenue ${esc(d.nom || '')} 👋</h1>
+    <p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.5;">
+      Votre accès au CRM Celexia vient d'être créé. Vous avez reçu un second e-mail de
+      notre hébergeur pour choisir votre mot de passe — une fois fait, connectez-vous ici.
+    </p>
+    <p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.5;">
+      Vous y trouverez vos leads, les chantiers à reprendre et le suivi de vos gains.
+    </p>
+    ${d.lien ? btn(esc(d.lien), 'Accéder au CRM →') : ''}`);
 } else if (d.event === 'chantier_perdu') {
   // Un chantier rendu par l'artisan principal doit être repris VITE : un
   // client qui attend trois jours a déjà rappelé un concurrent. Le mail part
