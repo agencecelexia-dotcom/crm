@@ -253,6 +253,25 @@ export function dansLePipeline(statut: string | null | undefined): boolean {
   return !STATUTS_HORS_PIPELINE.includes(statut as StatutProjet)
 }
 
+/**
+ * Statuts qui descendent en bas de liste, quel que soit le tri.
+ *
+ * Distinct de `STATUTS_HORS_PIPELINE` : un lead « mort » reste une PERTE et
+ * compte dans les statistiques de conversion — il n'a simplement plus rien à
+ * faire en tête de liste quand on cherche qui rappeler. Un artisan démarché,
+ * lui, n'a jamais été un lead et ne compte nulle part.
+ */
+export const STATUTS_EN_BAS: StatutProjet[] = [
+  'mort',
+  'artisan_demarche',
+  'demarchage',
+]
+
+/** Vrai si le dossier doit être relégué en fin de liste. */
+export function relegueEnBas(statut: string | null | undefined): boolean {
+  return STATUTS_EN_BAS.includes(statut as StatutProjet)
+}
+
 /** Statuts de suivi déclarables par l'artisan (parcours après mise en relation). */
 export const SUIVI_STATUTS: Record<string, { label: string; color: string; emoji: string }> = {
   contacte: { label: 'Client contacté', color: '#3B82F6', emoji: '📞' },

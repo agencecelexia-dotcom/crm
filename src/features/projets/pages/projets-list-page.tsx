@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import { dansLePipeline, METIERS, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
+import { METIERS, relegueEnBas, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets } from '../hooks/use-projets'
 import { useAffectationsCounts } from '../hooks/use-affectations'
@@ -127,8 +127,11 @@ export function ProjetsListPage() {
     // rappeler. Elles restent visibles — donc retrouvables — mais en bas.
     // Sauf si on a explicitement filtré sur ce statut, auquel cas c'est
     // précisément ce qu'on cherche.
-    if (statut !== 'artisan_demarche') {
-      arr.sort((a, b) => Number(!dansLePipeline(a.statut)) - Number(!dansLePipeline(b.statut)))
+    // Sauf si on a filtré explicitement dessus : c'est alors ce qu'on cherche.
+    if (!relegueEnBas(statut)) {
+      // Morts, artisans démarchés et démarchage passent en dernier, quel que
+      // soit le tri : on ouvre cette liste pour savoir qui rappeler.
+      arr.sort((a, b) => Number(relegueEnBas(a.statut)) - Number(relegueEnBas(b.statut)))
     }
     return arr
   }, [base, statut, tri, artisansSignes])

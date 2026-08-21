@@ -3,6 +3,7 @@ import { AppProviders } from './providers'
 import { AppLayout } from './layout/app-layout'
 import { AuthProvider } from '@/lib/auth/auth-provider'
 import { ProtectedRoute } from '@/lib/auth/protected-route'
+import { RouteFondateur } from '@/lib/auth/route-fondateur'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PageIntrouvable } from '@/features/page-introuvable'
 
@@ -78,8 +79,6 @@ export default function App() {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/taches" element={<TachesPage />} />
                 <Route path="/carte" element={<CartePage />} />
-                <Route path="/commissions" element={<CommissionsPage />} />
-                <Route path="/notes" element={<NotesPage />} />
 
                 <Route path="/appel" element={<AppelPage />} />
                 <Route path="/projets" element={<ProjetsListPage />} />
@@ -89,7 +88,6 @@ export default function App() {
                 <Route path="/projets/:id" element={<ProjetDetailPage />} />
                 <Route path="/projets/:id/edit" element={<ProjetEditPage />} />
 
-                <Route path="/couverture" element={<CouverturePage />} />
                 <Route path="/artisans" element={<ArtisansListPage />} />
                 <Route path="/artisans/stats" element={<ArtisansStatsPage />} />
                 <Route path="/artisans/ecartes" element={<ArtisansEcartesPage />} />
@@ -99,7 +97,17 @@ export default function App() {
                 <Route path="/artisans/:id/edit" element={<ArtisanEditPage />} />
 
                 <Route path="/parametres/signature" element={<ParametresSignaturePage />} />
-                <Route path="/parametres/automatisations" element={<AutomatisationsPage />} />
+
+                {/* Réservé aux fondateurs : commissions, vivier de
+                    prospection, réglages d'automatisation. Un commercial qui
+                    force l'URL est renvoyé à l'accueil ; la RLS lui renverrait
+                    de toute façon une liste vide. */}
+                <Route element={<RouteFondateur />}>
+                  <Route path="/commissions" element={<CommissionsPage />} />
+                  <Route path="/notes" element={<NotesPage />} />
+                  <Route path="/couverture" element={<CouverturePage />} />
+                  <Route path="/parametres/automatisations" element={<AutomatisationsPage />} />
+                </Route>
               </Route>
             </Route>
 

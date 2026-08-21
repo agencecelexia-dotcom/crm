@@ -277,6 +277,33 @@ export interface Suivi {
 }
 
 /** Note rapide attachée à un projet (suivi interne agence). */
+/**
+ * Personne ayant accès au CRM (migration 0099).
+ *
+ * Le rôle décide du périmètre : un fondateur voit tout, un commercial ne voit
+ * que ses propres leads. Le cloisonnement est appliqué par la RLS, pas par le
+ * front — les droits ci-dessous ne servent qu'à adapter l'interface.
+ */
+export interface Membre {
+  id: string
+  user_id: string
+  role: 'fondateur' | 'commercial'
+  nom: string
+  email: string | null
+  actif: boolean
+  /** Part de la commission agence reversée, versée à l'encaissement. */
+  taux_retrocession: number
+  peut_creer_lead: boolean
+  peut_attribuer: boolean
+  peut_creer_artisan: boolean
+  peut_voir_commissions: boolean
+  invite_par: string | null
+  invite_at: string
+  active_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Note {
   id: string
   projet_id: string
