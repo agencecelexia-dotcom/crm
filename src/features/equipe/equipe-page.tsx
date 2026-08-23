@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -282,7 +283,13 @@ export function EquipePage() {
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-display text-base tracking-tight">{m.nom}</p>
+                  {/* Cliquable : ouvre son espace en lecture seule. */}
+                  <Link
+                    to={`/equipe/${m.id}`}
+                    className="font-display text-base tracking-tight underline-offset-4 hover:underline"
+                  >
+                    {m.nom}
+                  </Link>
                   <p className="text-sm text-muted-foreground">{m.email}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Part : <strong>{Math.round(m.taux_retrocession * 100)} %</strong> de la
