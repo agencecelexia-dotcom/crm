@@ -30,6 +30,7 @@ import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { ActionDuJour } from './action-du-jour'
 import { StatsGlobales } from './stats-globales'
+import { PanneauKpi } from './panneau-kpi'
 import { QualiteLeads } from './qualite-leads'
 
 export function DashboardPage() {
@@ -160,8 +161,13 @@ export function DashboardPage() {
 
       <ActionDuJour />
 
-      {/* Vue cumulée, calculée en SQL. Le reste de la page raisonne sur la
-          période sélectionnée ci-dessous. */}
+      {/* Indicateurs, source unique `kpi_agence()` (migration 0103).
+          Tout part de `affectations` : c'est le seul niveau qui sait quel
+          artisan a signé. L'ancienne vue mélangeait deux sources, d'où deux
+          chiffres différents sur le même écran. */}
+      <PanneauKpi />
+
+      {/* Vue cumulée historique, conservée le temps de la transition. */}
       <StatsGlobales />
 
       <QualiteLeads />

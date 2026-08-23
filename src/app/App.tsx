@@ -3,6 +3,9 @@ import { AppProviders } from './providers'
 import { AppLayout } from './layout/app-layout'
 import { AuthProvider } from '@/lib/auth/auth-provider'
 import { ProtectedRoute } from '@/lib/auth/protected-route'
+import { RouteFondateur } from '@/lib/auth/route-fondateur'
+import { AccueilSelonRole } from '@/features/accueil-selon-role'
+import { EquipePage } from '@/features/equipe/equipe-page'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PageIntrouvable } from '@/features/page-introuvable'
 
@@ -11,7 +14,6 @@ import { SignerPage } from '@/features/contrats/signer-page'
 import { MissionPage } from '@/features/contrats/mission-page'
 import { EspaceArtisanPage } from '@/features/contrats/espace-artisan-page'
 import { InscriptionArtisanPage } from '@/features/artisans/pages/inscription-artisan-page'
-import { DashboardPage } from '@/features/dashboard/dashboard-page'
 import { CartePage } from '@/features/carte/carte-page'
 import { CommissionsPage } from '@/features/commissions/commissions-page'
 import { TachesPage } from '@/features/taches/taches-page'
@@ -75,11 +77,11 @@ export default function App() {
             {/* Privé (nécessite une session) */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                <Route path="/" element={<DashboardPage />} />
+                {/* L'accueil dépend du rôle : le fondateur pilote l'agence,
+                    le commercial travaille ses leads. */}
+                <Route path="/" element={<AccueilSelonRole />} />
                 <Route path="/taches" element={<TachesPage />} />
                 <Route path="/carte" element={<CartePage />} />
-                <Route path="/commissions" element={<CommissionsPage />} />
-                <Route path="/notes" element={<NotesPage />} />
 
                 <Route path="/appel" element={<AppelPage />} />
                 <Route path="/projets" element={<ProjetsListPage />} />
@@ -89,7 +91,6 @@ export default function App() {
                 <Route path="/projets/:id" element={<ProjetDetailPage />} />
                 <Route path="/projets/:id/edit" element={<ProjetEditPage />} />
 
-                <Route path="/couverture" element={<CouverturePage />} />
                 <Route path="/artisans" element={<ArtisansListPage />} />
                 <Route path="/artisans/stats" element={<ArtisansStatsPage />} />
                 <Route path="/artisans/ecartes" element={<ArtisansEcartesPage />} />
@@ -99,7 +100,18 @@ export default function App() {
                 <Route path="/artisans/:id/edit" element={<ArtisanEditPage />} />
 
                 <Route path="/parametres/signature" element={<ParametresSignaturePage />} />
-                <Route path="/parametres/automatisations" element={<AutomatisationsPage />} />
+
+                {/* Réservé aux fondateurs : commissions, vivier de
+                    prospection, réglages d'automatisation. Un commercial qui
+                    force l'URL est renvoyé à l'accueil ; la RLS lui renverrait
+                    de toute façon une liste vide. */}
+                <Route element={<RouteFondateur />}>
+                  <Route path="/commissions" element={<CommissionsPage />} />
+                  <Route path="/notes" element={<NotesPage />} />
+                  <Route path="/couverture" element={<CouverturePage />} />
+                  <Route path="/parametres/automatisations" element={<AutomatisationsPage />} />
+                  <Route path="/equipe" element={<EquipePage />} />
+                </Route>
               </Route>
             </Route>
 

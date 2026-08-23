@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, FileText, RotateCcw, UserX } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, FileText, HandHelping, RotateCcw, UserX } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { formatDate, formatEuros } from '@/lib/format'
 import { MOTIF_LABEL } from '@/lib/motifs-perte'
 import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/lib/auth/use-auth'
 
 /**
  * Chantiers rendus ou perdus par un artisan, alors que le projet reste vivant.
@@ -45,6 +47,31 @@ interface AReattribuer {
   nature: 'retrait' | 'perdu' | 'masque'
   derniere_raison: string | null
   artisans_actifs: number
+  /** Commercial qui a pris le chantier en charge. Null = disponible. */
+  assigne_a: string | null
+  assigne_nom: string | null
+  /** Jours depuis la sortie du pipe. Au-delà d'un mois, le client a souvent
+   *  signé ailleurs — c'est le critère de tri le plus utile. */
+  jours_dattente: number | null
+}
+
+/**
+ * Fraîcheur d'un chantier rendu.
+ *
+ * Un dossier rendu hier vaut presque un lead neuf ; à trois semaines le client
+ * a commencé à chercher ailleurs ; au-delà d'un mois il a souvent signé. Le
+ * code couleur rend cette dégradation lisible sans avoir à lire les dates.
+ */
+function fraicheur(jours: number | null) {
+  const j = jours ?? 0
+  if (j < 7) return { cle: 'chaud', label: 'Récent', classe: 'border-[#16A34A]/40 bg-[#22C55E]/5',
+                      pastille: 'bg-[#22C55E]/15 text-[#16A34A]' }
+  if (j < 15) return { cle: 'tiede', label: 'À traiter', classe: 'border-border',
+                       pastille: 'bg-muted text-muted-foreground' }
+  if (j < 30) return { cle: 'refroidit', label: 'Refroidit', classe: 'border-[#F59E0B]/40 bg-[#F59E0B]/5',
+                       pastille: 'bg-[#F59E0B]/15 text-[#B45309]' }
+  return { cle: 'froid', label: 'Froid', classe: 'border-[#DC2626]/30 bg-[#DC2626]/5',
+           pastille: 'bg-[#DC2626]/15 text-[#DC2626]' }
 }
 
 const NATURE_LABEL: Record<AReattribuer['nature'], string> = {
@@ -61,10 +88,46 @@ const ETAPE_LABEL: Record<string, string> = {
   termine: 'terminé',
 }
 
-type Filtre = 'orphelins' | 'tous'
+type Filtre = 'orphelins' | 'libres' | 'tous'
 
 export function AReattribuerPage() {
   const [filtre, setFiltre] = useState<Filtre>('orphelins')
+  const qc = useQueryClient()
+  const { session } = useAuth()
+  const monUserId = session?.user.id ?? null
+
+  const prendre = useMutation({
+    mutationFn: async (projetId: string) => {
+      const { data, error } = await supabase.rpc('prendre_chantier', { p_projet_id: projetId })
+      const r = data as { ok?: boolean; error?: string; par?: string } | null
+      if (error) throw error
+      // Le refus n'est pas une panne : quelqu'un a été plus rapide.
+      if (!r?.ok) {
+        throw new Error(
+          r?.error === 'deja_pris'
+            ? `${r.par ?? 'Un collègue'} s'en occupe déjà.`
+            : 'Prise en charge impossible.',
+        )
+      }
+    },
+    onSuccess: () => {
+      toast.success('Chantier pris en charge')
+      void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Erreur'),
+  })
+
+  const rendre = useMutation({
+    mutationFn: async (projetId: string) => {
+      const { error } = await supabase.rpc('rendre_chantier', { p_projet_id: projetId })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success('Chantier rendu à l\'équipe')
+      void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+    },
+    onError: () => toast.error('Impossible de rendre ce chantier'),
+  })
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['a-reattribuer'],
@@ -79,13 +142,19 @@ export function AReattribuerPage() {
     const tout = data ?? []
     // Orphelins d'abord : ce sont eux qui se perdent vraiment, personne ne
     // s'en occupe. Puis les plus récemment sortis du pipe.
+    // Orphelins d'abord — personne ne s'en occupe. Puis les plus anciens :
+    // ce sont eux qui refroidissent, donc ceux qu'il faut traiter en premier.
     const tries = [...tout].sort(
-      (a, b) => a.artisans_actifs - b.artisans_actifs || b.sorti_le.localeCompare(a.sorti_le),
+      (a, b) =>
+        a.artisans_actifs - b.artisans_actifs ||
+        (b.jours_dattente ?? 0) - (a.jours_dattente ?? 0),
     )
+    if (filtre === 'libres') return tries.filter((p) => !p.assigne_a)
     return filtre === 'orphelins' ? tries.filter((p) => p.artisans_actifs === 0) : tries
   }, [data, filtre])
 
   const orphelins = (data ?? []).filter((p) => p.artisans_actifs === 0).length
+  const libres = (data ?? []).filter((p) => !p.assigne_a).length
 
   if (isLoading) return <Skeleton className="m-4 h-80 rounded-2xl" />
   if (isError) {
@@ -110,6 +179,7 @@ export function AReattribuerPage() {
         {(
           [
             { cle: 'orphelins' as const, label: 'Sans artisan', n: orphelins },
+            { cle: 'libres' as const, label: 'Non pris en charge', n: libres },
             { cle: 'tous' as const, label: 'Tous', n: (data ?? []).length },
           ] satisfies { cle: Filtre; label: string; n: number }[]
         ).map((f) => (
@@ -143,7 +213,7 @@ export function AReattribuerPage() {
               key={p.affectation_id}
               className={cn(
                 'rounded-2xl p-4 shadow-card transition-shadow hover:shadow-card-hover',
-                p.artisans_actifs === 0 ? 'border-[#F59E0B]/40' : 'border-border/70',
+                fraicheur(p.jours_dattente).classe,
               )}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -158,9 +228,23 @@ export function AReattribuerPage() {
                   </p>
 
                   <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 font-semibold',
+                        fraicheur(p.jours_dattente).pastille,
+                      )}
+                    >
+                      {fraicheur(p.jours_dattente).label}
+                      {p.jours_dattente != null && ` · ${p.jours_dattente} j`}
+                    </span>
                     <span className="rounded-full bg-muted px-2 py-0.5 font-medium">
                       {NATURE_LABEL[p.nature]}
                     </span>
+                    {p.assigne_nom && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
+                        Pris par {p.assigne_nom}
+                      </span>
+                    )}
                     {p.artisan_nom && (
                       <span className="text-muted-foreground">par {p.artisan_nom}</span>
                     )}
@@ -203,12 +287,32 @@ export function AReattribuerPage() {
                   )}
                 </div>
 
-                <Button asChild size="sm" variant="outline">
-                  <Link to={`/projets/${p.projet_id}`}>
-                    <AlertTriangle className="size-4" />
-                    Ouvrir la fiche
-                  </Link>
-                </Button>
+                <div className="flex shrink-0 flex-col gap-2">
+                  {/* Prendre en charge évite que deux personnes rappellent le
+                      même client — et que le client entende deux fois la même
+                      agence. */}
+                  {p.assigne_a === monUserId ? (
+                    <Button size="sm" variant="outline"
+                            onClick={() => rendre.mutate(p.projet_id)}
+                            disabled={rendre.isPending}>
+                      <HandHelping className="size-4" />
+                      Rendre à l'équipe
+                    </Button>
+                  ) : !p.assigne_a ? (
+                    <Button size="sm"
+                            onClick={() => prendre.mutate(p.projet_id)}
+                            disabled={prendre.isPending}>
+                      <HandHelping className="size-4" />
+                      Je m'en occupe
+                    </Button>
+                  ) : null}
+                  <Button asChild size="sm" variant="outline">
+                    <Link to={`/projets/${p.projet_id}`}>
+                      <AlertTriangle className="size-4" />
+                      Ouvrir la fiche
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
