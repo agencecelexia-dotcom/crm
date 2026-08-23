@@ -29,6 +29,7 @@ import { formatEuros, formatDate } from '@/lib/format'
 import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { ActionDuJour } from './action-du-jour'
+import { ATraiter } from './a-traiter'
 import { StatsGlobales } from './stats-globales'
 import { PanneauKpi } from './panneau-kpi'
 import { QualiteLeads } from './qualite-leads'
@@ -158,6 +159,10 @@ export function DashboardPage() {
   return (
     <div>
       <PageHeader titre="Tableau de bord" />
+
+      {/* Ce qui appelle une action, en tête : le reste de la page est du bilan,
+          utile mais qui ne dit pas quoi faire ce matin. */}
+      <ATraiter />
 
       <ActionDuJour />
 
