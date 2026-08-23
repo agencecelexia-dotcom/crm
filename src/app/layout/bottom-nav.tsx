@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, FolderKanban, Users, ListChecks, RotateCcw, Map } from 'lucide-react'
+import { Home, FolderKanban, Users, ListChecks, RotateCcw, Map, Briefcase } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/use-auth'
 
@@ -16,7 +16,8 @@ const ITEMS = [
   { to: '/taches', label: 'À faire', icon: ListChecks, end: false, fondateurSeul: true },
   { to: '/projets', label: 'Pipe', icon: FolderKanban, end: true },
   { to: '/projets/a-reattribuer', label: 'À reprendre', icon: RotateCcw, end: false, commercialSeul: true },
-  { to: '/artisans', label: 'Artisans', icon: Users, end: false },
+  { to: '/mon-pipe', label: 'Mon pipe', icon: Briefcase, end: false, commercialSeul: true },
+  { to: '/artisans', label: 'Artisans', icon: Users, end: false, fondateurSeul: true },
   { to: '/carte', label: 'Carte', icon: Map, end: false, fondateurSeul: true },
 ]
 

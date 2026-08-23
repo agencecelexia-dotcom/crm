@@ -23,7 +23,7 @@ import { useAuth } from '@/lib/auth/use-auth'
  * l'artisan qui a renoncé. 80 chantiers étaient dans ce cas, dont 55 sans
  * aucun artisan actif.
  *
- * Les orphelins sont affichés en premier : ce sont ceux que personne ne
+ * Les plus anciens sont affichés en premier : ce sont ceux que personne ne
  * travaille, donc ceux qui se perdent réellement.
  */
 interface AReattribuer {
@@ -88,10 +88,10 @@ const ETAPE_LABEL: Record<string, string> = {
   termine: 'terminé',
 }
 
-type Filtre = 'orphelins' | 'libres' | 'tous'
+type Filtre = 'libres' | 'tous'
 
 export function AReattribuerPage() {
-  const [filtre, setFiltre] = useState<Filtre>('orphelins')
+  const [filtre, setFiltre] = useState<Filtre>('libres')
   const qc = useQueryClient()
   const { session } = useAuth()
   const monUserId = session?.user.id ?? null
@@ -111,8 +111,14 @@ export function AReattribuerPage() {
       }
     },
     onSuccess: () => {
-      toast.success('Chantier pris en charge')
+      toast.success('Chantier pris en charge', {
+        description: 'Il est désormais dans votre pipe, réservé à vous seul.',
+      })
       void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+      // Sans cette invalidation, le chantier n'apparaîtrait dans « Mon pipe »
+      // qu'au prochain rechargement complet.
+      void qc.invalidateQueries({ queryKey: ['mon-pipe'] })
+      void qc.invalidateQueries({ queryKey: ['projets'] })
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Erreur'),
   })
@@ -125,6 +131,8 @@ export function AReattribuerPage() {
     onSuccess: () => {
       toast.success('Chantier rendu à l\'équipe')
       void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+      void qc.invalidateQueries({ queryKey: ['mon-pipe'] })
+      void qc.invalidateQueries({ queryKey: ['projets'] })
     },
     onError: () => toast.error('Impossible de rendre ce chantier'),
   })
@@ -144,16 +152,14 @@ export function AReattribuerPage() {
     // s'en occupe. Puis les plus récemment sortis du pipe.
     // Orphelins d'abord — personne ne s'en occupe. Puis les plus anciens :
     // ce sont eux qui refroidissent, donc ceux qu'il faut traiter en premier.
+    // Les plus anciens d'abord : depuis 0111, aucun chantier de cette liste
+    // n'a d'artisan actif, le tri sur `artisans_actifs` n'a plus d'objet.
     const tries = [...tout].sort(
-      (a, b) =>
-        a.artisans_actifs - b.artisans_actifs ||
-        (b.jours_dattente ?? 0) - (a.jours_dattente ?? 0),
+      (a, b) => (b.jours_dattente ?? 0) - (a.jours_dattente ?? 0),
     )
-    if (filtre === 'libres') return tries.filter((p) => !p.assigne_a)
-    return filtre === 'orphelins' ? tries.filter((p) => p.artisans_actifs === 0) : tries
+    return filtre === 'libres' ? tries.filter((p) => !p.assigne_a) : tries
   }, [data, filtre])
 
-  const orphelins = (data ?? []).filter((p) => p.artisans_actifs === 0).length
   const libres = (data ?? []).filter((p) => !p.assigne_a).length
 
   if (isLoading) return <Skeleton className="m-4 h-80 rounded-2xl" />
@@ -178,7 +184,6 @@ export function AReattribuerPage() {
       <div className="mb-4 flex flex-wrap gap-2">
         {(
           [
-            { cle: 'orphelins' as const, label: 'Sans artisan', n: orphelins },
             { cle: 'libres' as const, label: 'Non pris en charge', n: libres },
             { cle: 'tous' as const, label: 'Tous', n: (data ?? []).length },
           ] satisfies { cle: Filtre; label: string; n: number }[]

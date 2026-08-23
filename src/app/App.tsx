@@ -8,6 +8,7 @@ import { ProtectedRoute } from '@/lib/auth/protected-route'
 import { RouteFondateur } from '@/lib/auth/route-fondateur'
 import { AccueilSelonRole } from '@/features/accueil-selon-role'
 import { EquipePage } from '@/features/equipe/equipe-page'
+import { MonPipePage } from '@/features/commercial/mon-pipe-page'
 import { ReprisesPage } from '@/features/equipe/reprises-page'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PageIntrouvable } from '@/features/page-introuvable'
@@ -111,6 +112,9 @@ export default function App() {
                 <Route path="/appel" element={<AppelPage />} />
                 <Route path="/projets" element={<ProjetsListPage />} />
                 <Route path="/projets/a-reattribuer" element={<AReattribuerPage />} />
+                {/* Les chantiers repris par le commercial connecté : périmètre
+                    exclusif, invisible aux autres commerciaux (0116). */}
+                <Route path="/mon-pipe" element={<MonPipePage />} />
                 <Route path="/projets/corbeille" element={<CorbeillePage />} />
                 <Route path="/projets/new" element={<ProjetNewPage />} />
                 <Route path="/projets/:id" element={<ProjetDetailPage />} />
