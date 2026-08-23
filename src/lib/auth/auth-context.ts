@@ -12,8 +12,16 @@ import type { Membre } from '@/types/database'
  */
 export interface AuthContextType {
   session: Session | null
-  /** Fiche membre du compte connecté. `null` tant qu'elle n'est pas chargée. */
+  /** Fiche membre du compte connecté. `null` s'il n'en a pas. */
   membre: Membre | null
+  /**
+   * Vrai tant que la fiche n'a pas été cherchée.
+   *
+   * Indispensable : `membre === null` ne dit pas si la requête est en cours ou
+   * si elle a répondu « aucune fiche ». Confondre les deux fige l'écran de
+   * chargement pour un compte sans fiche membre.
+   */
+  membreEnCours: boolean
   /** Raccourci de lecture : évite `membre?.role === 'fondateur'` partout. */
   estFondateur: boolean
   isLoading: boolean

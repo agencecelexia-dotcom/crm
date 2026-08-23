@@ -15,12 +15,13 @@ import { useAuth } from './use-auth'
  * laisserait croire à un problème de session.
  */
 export function RouteFondateur() {
-  const { session, membre, estFondateur, isLoading } = useAuth()
+  const { session, membreEnCours, estFondateur, isLoading } = useAuth()
 
-  // La fiche membre arrive après la session. Sans cette attente, un fondateur
-  // serait renvoyé à l'accueil pendant la fraction de seconde où son rôle
-  // n'est pas encore connu.
-  if (isLoading || (session && membre === null)) {
+  // La fiche membre arrive après la session : sans cette attente, un fondateur
+  // serait renvoyé à l'accueil le temps que son rôle soit connu. On attend
+  // l'état EXPLICITE, pas `membre === null` — qui ne distingue pas « en cours »
+  // de « aucune fiche » et figeait l'écran indéfiniment.
+  if (isLoading || membreEnCours) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
