@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatDateHeure } from '@/lib/format'
 import { useReglages, useSetReglage, useRelances, destinataireRelance } from './use-automatisations'
+import { AUTOMATISATIONS, FAMILLES, type FamilleAutomatisation } from './catalogue'
 
 const TYPE_LABEL: Record<string, { label: string; color: string }> = {
   contrat: { label: 'Relance contrat', color: '#F59E0B' },
@@ -90,43 +91,70 @@ export function AutomatisationsPage() {
             </CardContent>
           </Card>
 
-          <Card
-            className={cn(
-              'mb-4 rounded-2xl border-border/70 shadow-card transition-opacity',
-              r.relances_pause && 'pointer-events-none opacity-50',
-            )}
-            aria-disabled={r.relances_pause}
-          >
-            <CardHeader>
-              <CardTitre>Relances actives</CardTitre>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Bascule
-                titre="Contrat non signé"
-                desc="Relance l'artisan assigné qui n'a pas signé, puis escalade (email + alerte « à appeler »)."
-                on={r.auto_contrat}
-                onChange={(v) => toggle('auto_contrat', v)}
-              />
-              <Bascule
-                titre="Inaction sur un chantier"
-                desc="Relance l'artisan dont le chantier est figé (assigné/contacté/RDV/en attente)."
-                on={r.auto_inaction}
-                onChange={(v) => toggle('auto_inaction', v)}
-              />
-              <Bascule
-                titre="Suivi post-RDV"
-                desc="Relance l'artisan 24 h après son rendez-vous s'il n'a pas mis à jour le suivi (« comment s'est passé le RDV, pensez au devis »)."
-                on={r.auto_post_rdv}
-                onChange={(v) => toggle('auto_post_rdv', v)}
-              />
-              <Bascule
-                titre="Leads non attribués"
-                desc="Digest quotidien à l'agence des projets « nouveau » sans artisan depuis +24 h."
-                on={r.auto_orphelin}
-                onChange={(v) => toggle('auto_orphelin', v)}
-              />
-            </CardContent>
-          </Card>
+          {/* Toutes les automatisations, groupées par famille. La liste vient
+              du catalogue : y ajouter une entrée suffit à la rendre pilotable
+              ici, sans toucher à cet écran. */}
+          {(Object.keys(FAMILLES) as FamilleAutomatisation[]).map((famille) => {
+            const lot = AUTOMATISATIONS.filter((a) => a.famille === famille)
+            if (lot.length === 0) return null
+            const info = FAMILLES[famille]
+            // Les relances dépendent en plus de l'interrupteur maître.
+            const suspendue = famille === 'relance' && r.relances_pause
+
+            return (
+              <Card
+                key={famille}
+                className={cn(
+                  'mb-4 rounded-2xl border-border/70 shadow-card transition-opacity',
+                  suspendue && 'pointer-events-none opacity-50',
+                )}
+                aria-disabled={suspendue}
+              >
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: info.couleur }}
+                      aria-hidden
+                    />
+                    <CardTitre>{info.titre}</CardTitre>
+                    <Badge variant="secondary" className="ml-auto text-xs font-normal">
+                      {lot.filter((a) => r.bascules[a.cle]).length}/{lot.length} actives
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{info.description}</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {lot.map((a) => (
+                    <div key={a.cle} className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {a.titre}
+                          {a.lectureSeule && (
+                            <span
+                              className="ml-2 align-middle text-[10px] font-normal uppercase tracking-wide text-muted-foreground"
+                              title="Cette automatisation tourne mais son interrupteur n'est pas encore câblé côté base."
+                            >
+                              non coupable
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{a.description}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground/70">
+                          Déclencheur : {a.declencheur}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={r.bascules[a.cle] ?? true}
+                        disabled={a.lectureSeule}
+                        onCheckedChange={(v) => toggle(a.cle, v)}
+                      />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )
+          })}
 
           <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
             <CardHeader>
@@ -181,28 +209,6 @@ export function AutomatisationsPage() {
           </Card>
         </>
       )}
-    </div>
-  )
-}
-
-function Bascule({
-  titre,
-  desc,
-  on,
-  onChange,
-}: {
-  titre: string
-  desc: string
-  on: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-sm font-medium">{titre}</p>
-        <p className="text-xs text-muted-foreground">{desc}</p>
-      </div>
-      <Switch checked={on} onCheckedChange={onChange} />
     </div>
   )
 }

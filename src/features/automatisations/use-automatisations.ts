@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
+import { AUTOMATISATIONS } from './catalogue'
 
 // Réglages des automatisations (table app_settings) + historique des relances.
 
@@ -19,6 +20,12 @@ export interface Reglages {
   post_rdv_relance_h: string
   heure_debut: string
   heure_fin: string
+  /**
+   * État de chaque automatisation du catalogue, y compris celles ajoutées
+   * après coup. Évite d'avoir à déclarer un champ par automatisation : le
+   * catalogue est la seule liste à tenir à jour.
+   */
+  bascules: Record<string, boolean>
 }
 
 const DEFAUTS: Reglages = {
@@ -34,6 +41,7 @@ const DEFAUTS: Reglages = {
   post_rdv_relance_h: '24',
   heure_debut: '8',
   heure_fin: '20',
+  bascules: {},
 }
 
 export function useReglages() {
@@ -57,6 +65,11 @@ export function useReglages() {
         post_rdv_relance_h: map.post_rdv_relance_h ?? DEFAUTS.post_rdv_relance_h,
         heure_debut: map.heure_debut ?? DEFAUTS.heure_debut,
         heure_fin: map.heure_fin ?? DEFAUTS.heure_fin,
+        // Absent = actif, comme `automatisation_active()` côté base : les deux
+        // doivent répondre pareil, sinon l'écran mentirait sur l'état réel.
+        bascules: Object.fromEntries(
+          AUTOMATISATIONS.map((a) => [a.cle, (map[a.cle] ?? 'on') !== 'off']),
+        ),
       }
     },
   })
