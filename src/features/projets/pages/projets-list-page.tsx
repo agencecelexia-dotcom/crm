@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useDroits } from '@/lib/auth/use-droits'
 import { cn } from '@/lib/utils'
 import { METIERS, relegueEnBas, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
@@ -32,6 +33,9 @@ import { KanbanProjets } from '../components/kanban-projets'
 export function ProjetsListPage() {
   const { data: projets, isLoading } = useProjets()
   const { data: repreneurs } = useRepreneurs()
+  // Masquer plutôt que laisser échouer : la RLS (0112) refuserait l'insertion,
+  // mais après que la personne a rempli tout le formulaire.
+  const { peutCreerLead } = useDroits()
   const { data: artisansSignes } = useArtisansSignes()
   const { data: affectationsCounts } = useAffectationsCounts()
   // Filtres conservés dans l'URL (?q=…&statut=…&metier=…&tri=…&vue=…) : ils
@@ -274,12 +278,14 @@ export function ProjetsListPage() {
           titre="Aucun projet"
           description="Crée un projet pendant l'appel pour démarrer le suivi."
           action={
-            <Button asChild>
-              <Link to="/projets/new">
-                <Plus className="size-4" />
-                Nouveau projet
-              </Link>
-            </Button>
+            peutCreerLead ? (
+              <Button asChild>
+                <Link to="/projets/new">
+                  <Plus className="size-4" />
+                  Nouveau projet
+                </Link>
+              </Button>
+            ) : undefined
           }
         />
       ) : (
