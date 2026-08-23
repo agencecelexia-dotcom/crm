@@ -84,7 +84,12 @@ export function EquipePage() {
       const { data, error } = await supabase.functions.invoke('inviter-membre', {
         body: { email: mail, nom: nom.trim(), taux: t / 100 },
       })
-      const r = data as { ok?: boolean; error?: string; lien_manuel?: string | null } | null
+      const r = data as {
+        ok?: boolean
+        error?: string
+        lien_manuel?: string | null
+        mail_envoye?: boolean
+      } | null
       if (error || !r?.ok) {
         const messages: Record<string, string> = {
           reserve_fondateur: 'Seul un fondateur peut inviter.',
@@ -97,16 +102,18 @@ export function EquipePage() {
         throw new Error((r?.error && messages[r.error]) || "L'invitation n'a pas pu être envoyée.")
       }
 
-      if (r.lien_manuel) {
-        // L'e-mail n'est pas parti : plutôt qu'un échec, on donne le lien à
-        // transmettre soi-même. Le compte, lui, est bien créé.
-        setLienManuel(r.lien_manuel)
-        toast.warning('Compte créé, mais l’e-mail n’est pas parti', {
-          description: 'Transmettez le lien affiché ci-dessous.',
+      // Le lien s'affiche TOUJOURS : l'e-mail Supabase est plafonné à 2 par
+      // heure sur le plan gratuit et échoue sans prévenir. Avoir le lien sous
+      // les yeux évite de dépendre d'un envoi qu'on ne contrôle pas.
+      setLienManuel(r.lien_manuel ?? null)
+      if (r.mail_envoye) {
+        toast.success(`Invitation envoyée à ${mail}`, {
+          description: 'Le lien est aussi affiché ci-dessous, au cas où.',
         })
       } else {
-        setLienManuel(null)
-        toast.success(`Invitation envoyée à ${mail}`)
+        toast.warning('Compte créé — l’e-mail n’est pas parti', {
+          description: 'Transmettez le lien affiché ci-dessous.',
+        })
       }
       setEmail('')
       setNom('')
@@ -164,8 +171,9 @@ export function EquipePage() {
             <div className="mt-3 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B]/10 p-3">
               <p className="text-sm font-medium">Lien à transmettre</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                L’e-mail n’a pas pu partir (quota d’envoi atteint). Le compte est bien créé :
-                envoyez ce lien à la personne, il vaut invitation.
+                Le compte est créé. Envoyez ce lien <strong>par SMS ou WhatsApp</strong> : il
+                permet de choisir un mot de passe. Ne le transmettez pas par e-mail, les
+                antivirus de messagerie l’ouvrent automatiquement et l’invalident.
               </p>
               <div className="mt-2 flex gap-2">
                 <Input readOnly value={lienManuel} className="h-9 font-mono text-xs" />
