@@ -96,7 +96,10 @@ Deno.serve(async (req) => {
         const { data: gen, error: eGen } = await admin.auth.admin.generateLink({
           type: 'invite',
           email: mail,
-          options: { redirectTo: `${base}/bienvenue` },
+          // `redirectTo` doit rester au premier niveau : placé dans `options`,
+          // il est ignoré et le lien retombe sur la racine du site, donc sur un
+          // écran de connexion au lieu du choix de mot de passe.
+          redirectTo: `${base}/bienvenue`,
         })
         if (eGen || !gen?.user) {
           console.error('inviteUserByEmail', eInvite, 'generateLink', eGen)
