@@ -1,19 +1,7 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { isSameMonth, parseISO, subMonths, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-} from 'recharts'
 import { FolderKanban, Users, Euro, Wallet, PhoneCall, Trophy, Clock, FileText, XCircle } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
@@ -30,6 +18,21 @@ import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
 import { ActionDuJour } from './action-du-jour'
 import { ATraiter } from './a-traiter'
+
+// recharts pèse 361 kB : chargé à la demande, il ne ralentit plus l'ouverture
+// du CRM pour ceux qui ne consultent jamais ces graphiques.
+const GraphiqueStatuts = lazy(() =>
+  import('./graphiques').then((m) => ({ default: m.GraphiqueStatuts })),
+)
+const GraphiqueCa = lazy(() =>
+  import('./graphiques').then((m) => ({ default: m.GraphiqueCa })),
+)
+
+/** Réserve la hauteur du graphique pendant son chargement, pour éviter que la
+ *  page ne saute au moment où il apparaît. */
+function GraphiqueEnAttente({ h }: { h: number }) {
+  return <Skeleton className="w-full rounded-xl" style={{ height: h }} />
+}
 import { StatsGlobales } from './stats-globales'
 import { PanneauKpi } from './panneau-kpi'
 import { QualiteLeads } from './qualite-leads'
@@ -376,25 +379,9 @@ export function DashboardPage() {
                 <CardTitre>Répartition par statut</CardTitre>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={stats.parStatut} margin={{ left: -20 }}>
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 10 }}
-                      interval={0}
-                      angle={-15}
-                      textAnchor="end"
-                      height={50}
-                    />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <Tooltip cursor={{ fill: 'transparent' }} />
-                    <Bar dataKey="count" name="Projets" radius={[4, 4, 0, 0]}>
-                      {stats.parStatut.map((s) => (
-                        <Cell key={s.statut} fill={s.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<GraphiqueEnAttente h={200} />}>
+                  <GraphiqueStatuts data={stats.parStatut} />
+                </Suspense>
               </CardContent>
             </Card>
 
@@ -433,27 +420,9 @@ export function DashboardPage() {
               <CardTitre>CA & commissions (6 mois)</CardTitre>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={moisData} margin={{ left: -8 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    width={44}
-                    tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : `${v}`)}
-                  />
-                  <Tooltip formatter={(value) => formatEuros(Number(value))} />
-                  <Line type="monotone" dataKey="ca" name="CA" stroke="#7C3AED" strokeWidth={2} dot={false} />
-                  <Line
-                    type="monotone"
-                    dataKey="commission"
-                    name="Commission"
-                    stroke="#22C55E"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<GraphiqueEnAttente h={220} />}>
+                <GraphiqueCa data={moisData} />
+              </Suspense>
             </CardContent>
           </Card>
 
