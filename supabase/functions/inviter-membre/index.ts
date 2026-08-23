@@ -72,45 +72,51 @@ Deno.serve(async (req) => {
     // réclamait un mot de passe qu'elle n'avait jamais défini.
     const base = (Deno.env.get('SITE_URL') ?? '').split(',')[0].trim()
       || 'https://crm-ci7k.vercel.app'
-    // Lien de secours, renvoyé à l'agence quand l'e-mail ne part pas.
+    // Le lien est TOUJOURS généré, et l'e-mail seulement tenté ensuite.
+    //
+    // L'ordre inverse rendait l'invitation dépendante d'un envoi qui échoue
+    // sans prévenir : le plan Supabase gratuit n'autorise que 2 e-mails par
+    // heure, et une fois le quota atteint l'invitation ne partait pas alors
+    // que le compte, lui, était créé. On inverse donc la logique — le lien
+    // existe d'abord, l'e-mail n'est qu'un confort.
     let lienManuel: string | null = null
+    let mailEnvoye = false
 
-    const { data: invite, error: eInvite } = await admin.auth.admin.inviteUserByEmail(mail, {
+    const { data: gen, error: eGen } = await admin.auth.admin.generateLink({
+      type: 'invite',
+      email: mail,
+      // `redirectTo` doit rester au premier niveau : dans `options`, il est
+      // ignoré et le lien retombe sur la racine du site.
       redirectTo: `${base}/bienvenue`,
     })
 
-    if (eInvite) {
-      // Réinviter une adresse connue est un cas normal — on récupère l'identifiant
-      // plutôt que de renvoyer une erreur incompréhensible.
+    if (eGen || !gen?.user) {
+      // Le compte existe peut-être déjà : on le retrouve et on lui fabrique un
+      // lien de réinitialisation, qui vaut invitation.
       const { data: liste } = await admin.auth.admin.listUsers()
       const existant = liste?.users?.find((x) => x.email?.toLowerCase() === mail)
-
-      if (existant) {
-        userId = existant.id
-      } else {
-        // L'envoi a échoué et le compte n'existe pas encore. Le cas courant est
-        // le quota d'e-mails : sans SMTP configuré, Supabase n'en autorise que
-        // deux par heure. `generateLink` crée le compte ET le lien sans passer
-        // par l'e-mail — l'agence transmet alors le lien elle-même plutôt que
-        // de rester bloquée.
-        const { data: gen, error: eGen } = await admin.auth.admin.generateLink({
-          type: 'invite',
-          email: mail,
-          // `redirectTo` doit rester au premier niveau : placé dans `options`,
-          // il est ignoré et le lien retombe sur la racine du site, donc sur un
-          // écran de connexion au lieu du choix de mot de passe.
-          redirectTo: `${base}/bienvenue`,
-        })
-        if (eGen || !gen?.user) {
-          console.error('inviteUserByEmail', eInvite, 'generateLink', eGen)
-          return json({ ok: false, error: 'invitation_impossible' }, 502, CORS)
-        }
-        userId = gen.user.id
-        lienManuel = gen.properties?.action_link ?? null
+      if (!existant) {
+        console.error('generateLink', eGen)
+        return json({ ok: false, error: 'invitation_impossible' }, 502, CORS)
       }
+      userId = existant.id
+
+      const { data: recup } = await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email: mail,
+        redirectTo: `${base}/bienvenue`,
+      })
+      lienManuel = recup?.properties?.action_link ?? null
     } else {
-      userId = invite.user.id
+      userId = gen.user.id
+      lienManuel = gen.properties?.action_link ?? null
     }
+
+    // L'e-mail est tenté en plus, jamais à la place. Son échec n'empêche rien.
+    const { error: eMail } = await admin.auth.admin.inviteUserByEmail(mail, {
+      redirectTo: `${base}/bienvenue`,
+    })
+    mailEnvoye = !eMail
 
     // 4. Enregistrer le membre et déclencher l'e-mail de bienvenue.
     // `p_invite_par` est indispensable : cet appel se fait en service_role, or
@@ -128,9 +134,13 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'enregistrement_impossible' }, 502, CORS)
     }
 
-    // `lien_manuel` n'est présent que si l'e-mail n'est pas parti : l'écran
-    // Équipe l'affiche alors pour transmission directe.
-    return json({ ...(res ?? { ok: true }), lien_manuel: lienManuel }, 200, CORS)
+    // Le lien est renvoyé DANS TOUS LES CAS : l'agence peut le transmettre
+    // elle-même, que l'e-mail soit parti ou non.
+    return json(
+      { ...(res ?? { ok: true }), lien_manuel: lienManuel, mail_envoye: mailEnvoye },
+      200,
+      CORS,
+    )
   } catch (e) {
     console.error('inviter-membre', e)
     return json({ ok: false, error: String(e instanceof Error ? e.message : e) }, 500, CORS)
