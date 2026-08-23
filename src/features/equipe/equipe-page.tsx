@@ -36,6 +36,8 @@ export function EquipePage() {
   const [nom, setNom] = useState('')
   const [taux, setTaux] = useState('10')
   const [envoi, setEnvoi] = useState(false)
+  // Lien de secours quand l'e-mail n'est pas parti (quota Supabase atteint).
+  const [lienManuel, setLienManuel] = useState<string | null>(null)
 
   const { data: membres, isLoading } = useQuery({
     queryKey: ['membres'],
@@ -82,7 +84,7 @@ export function EquipePage() {
       const { data, error } = await supabase.functions.invoke('inviter-membre', {
         body: { email: mail, nom: nom.trim(), taux: t / 100 },
       })
-      const r = data as { ok?: boolean; error?: string } | null
+      const r = data as { ok?: boolean; error?: string; lien_manuel?: string | null } | null
       if (error || !r?.ok) {
         const messages: Record<string, string> = {
           reserve_fondateur: 'Seul un fondateur peut inviter.',
@@ -95,7 +97,17 @@ export function EquipePage() {
         throw new Error((r?.error && messages[r.error]) || "L'invitation n'a pas pu être envoyée.")
       }
 
-      toast.success(`Invitation envoyée à ${mail}`)
+      if (r.lien_manuel) {
+        // L'e-mail n'est pas parti : plutôt qu'un échec, on donne le lien à
+        // transmettre soi-même. Le compte, lui, est bien créé.
+        setLienManuel(r.lien_manuel)
+        toast.warning('Compte créé, mais l’e-mail n’est pas parti', {
+          description: 'Transmettez le lien affiché ci-dessous.',
+        })
+      } else {
+        setLienManuel(null)
+        toast.success(`Invitation envoyée à ${mail}`)
+      }
       setEmail('')
       setNom('')
       void qc.invalidateQueries({ queryKey: ['membres'] })
@@ -148,6 +160,30 @@ export function EquipePage() {
               Inviter
             </Button>
           </div>
+          {lienManuel && (
+            <div className="mt-3 rounded-md border border-[#F59E0B]/40 bg-[#F59E0B]/10 p-3">
+              <p className="text-sm font-medium">Lien à transmettre</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                L’e-mail n’a pas pu partir (quota d’envoi atteint). Le compte est bien créé :
+                envoyez ce lien à la personne, il vaut invitation.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <Input readOnly value={lienManuel} className="h-9 font-mono text-xs" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 shrink-0"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(lienManuel)
+                    toast.success('Lien copié')
+                  }}
+                >
+                  Copier
+                </Button>
+              </div>
+            </div>
+          )}
+
           <p className="mt-2 text-xs text-muted-foreground">
             Il recevra un e-mail pour créer son mot de passe. Sa part est calculée sur la
             commission <strong>encaissée</strong> par l'agence, jamais à la signature.

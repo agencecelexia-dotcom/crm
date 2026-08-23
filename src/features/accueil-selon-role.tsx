@@ -1,3 +1,4 @@
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth/use-auth'
 import { DashboardPage } from '@/features/dashboard/dashboard-page'
 import { DashboardCommercial } from '@/features/commercial/dashboard-commercial'
@@ -12,5 +13,16 @@ import { DashboardCommercial } from '@/features/commercial/dashboard-commercial'
  */
 export function AccueilSelonRole() {
   const { estFondateur } = useAuth()
+  const { hash } = useLocation()
+
+  // Un lien de récupération peut retomber sur la racine plutôt que sur
+  // /bienvenue (redirection tronquée, ou lien déjà ouvert par un scanner de
+  // messagerie). Le type est alors dans le fragment d'URL : on redirige vers
+  // le choix du mot de passe, sinon la personne verrait un tableau de bord
+  // sans jamais pouvoir définir ses identifiants.
+  if (hash.includes('type=recovery') || hash.includes('type=invite')) {
+    return <Navigate to={`/bienvenue${hash}`} replace />
+  }
+
   return estFondateur ? <DashboardPage /> : <DashboardCommercial />
 }
