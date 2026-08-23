@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { AppProviders } from './providers'
 import { AppLayout } from './layout/app-layout'
 import { AuthProvider } from '@/lib/auth/auth-provider'
@@ -16,10 +18,10 @@ import { SignerPage } from '@/features/contrats/signer-page'
 import { MissionPage } from '@/features/contrats/mission-page'
 import { EspaceArtisanPage } from '@/features/contrats/espace-artisan-page'
 import { InscriptionArtisanPage } from '@/features/artisans/pages/inscription-artisan-page'
-import { CartePage } from '@/features/carte/carte-page'
+const CartePage = lazy(() => import('@/features/carte/carte-page').then((m) => ({ default: m.CartePage })))
 import { CommissionsPage } from '@/features/commissions/commissions-page'
 import { TachesPage } from '@/features/taches/taches-page'
-import { CouverturePage } from '@/features/couverture/couverture-page'
+const CouverturePage = lazy(() => import('@/features/couverture/couverture-page').then((m) => ({ default: m.CouverturePage })))
 import { NotesPage } from '@/features/notes/notes-page'
 import { AppelPage } from '@/features/appel/appel-page'
 import { AReattribuerPage } from '@/features/projets/pages/a-reattribuer-page'
@@ -29,14 +31,29 @@ import { ProjetNewPage } from '@/features/projets/pages/projet-new-page'
 import { ProjetEditPage } from '@/features/projets/pages/projet-edit-page'
 import { ProjetDetailPage } from '@/features/projets/pages/projet-detail-page'
 import { ArtisansListPage } from '@/features/artisans/pages/artisans-list-page'
-import { ArtisansStatsPage } from '@/features/artisans/pages/artisans-stats-page'
+const ArtisansStatsPage = lazy(() => import('@/features/artisans/pages/artisans-stats-page').then((m) => ({ default: m.ArtisansStatsPage })))
 import { ArtisansEcartesPage } from '@/features/artisans/pages/artisans-ecartes-page'
-import { ArtisansZonesPage } from '@/features/artisans/pages/artisans-zones-page'
+const ArtisansZonesPage = lazy(() => import('@/features/artisans/pages/artisans-zones-page').then((m) => ({ default: m.ArtisansZonesPage })))
 import { ArtisanNewPage } from '@/features/artisans/pages/artisan-new-page'
 import { ArtisanDetailPage } from '@/features/artisans/pages/artisan-detail-page'
 import { ArtisanEditPage } from '@/features/artisans/pages/artisan-edit-page'
 import { ParametresSignaturePage } from '@/features/parametres/signature-page'
 import { AutomatisationsPage } from '@/features/automatisations/automatisations-page'
+
+/**
+ * Attente d'un écran chargé à la demande.
+ *
+ * La carte (Leaflet) et les graphiques (recharts) pèsent ensemble plus de
+ * 500 kB. Les charger au démarrage ralentissait l'ouverture du CRM pour tout le
+ * monde, alors que ces écrans sont consultés ponctuellement.
+ */
+function EcranEnChargement() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <Loader2 className="size-6 animate-spin text-primary" />
+    </div>
+  )
+}
 
 // Point d'entrée applicatif : providers globaux + routage.
 export default function App() {
@@ -45,6 +62,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <ErrorBoundary>
+          <Suspense fallback={<EcranEnChargement />}>
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
@@ -129,6 +147,7 @@ export default function App() {
                 lien tronqué se retrouvait bloqué sans explication. */}
             <Route path="*" element={<PageIntrouvable />} />
           </Routes>
+          </Suspense>
           </ErrorBoundary>
         </BrowserRouter>
       </AuthProvider>

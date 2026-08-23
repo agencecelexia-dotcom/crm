@@ -20,7 +20,10 @@ export default defineConfig({
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-query': ['@tanstack/react-query'],
           'vendor-map': ['leaflet', 'react-leaflet'],
-          'vendor-charts': ['recharts'],
+          // `recharts` n'est PAS déclaré ici : un chunk nommé est préchargé
+          // par Vite, ce qui annulait le chargement à la demande des
+          // graphiques. Laissé au découpage automatique, il ne part qu'avec
+          // l'écran qui l'utilise.
           'vendor-pdf': ['pdfjs-dist'],
         },
       },

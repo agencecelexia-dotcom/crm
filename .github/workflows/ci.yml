@@ -38,19 +38,21 @@ jobs:
 
       - name: Budget de taille du bundle initial
         run: |
-          # Chunks chargés au premier rendu (les vendors pdf/jspdf sont différés
-          # par import() dynamique et n'en font pas partie).
-          TAILLE=$(cat dist/assets/index-*.js \
-                       dist/assets/vendor-react-*.js \
-                       dist/assets/vendor-supabase-*.js \
-                       dist/assets/vendor-query-*.js \
-                       dist/assets/vendor-map-*.js \
-                       dist/assets/vendor-charts-*.js 2>/dev/null | wc -c)
+          # Mesure ce que le navigateur télécharge RÉELLEMENT au premier
+          # rendu : les scripts et modulepreload listés dans index.html. Lister
+          # les chunks à la main était fragile — un chunk renommé ou supprimé
+          # faisait échouer `cat` en silence et le budget tombait à zéro.
+          FICHIERS=$(grep -o '/assets/[^"]*\.js' dist/index.html | sort -u)
+          TAILLE=0
+          for f in $FICHIERS; do
+            TAILLE=$((TAILLE + $(wc -c < "dist$f")))
+          done
           echo "Bundle initial : $((TAILLE / 1024)) kB"
-          # Seuil posé juste au-dessus de l'existant (~1 702 kB), à abaisser
-          # au fur et à mesure du découpage par routes (audit A6-01).
-          if [ "$TAILLE" -gt 1843200 ]; then
-            echo "::error::Bundle initial > 1800 kB — découper par routes avant d'ajouter du poids"
+          echo "$FICHIERS" | sed 's/^/  /'
+          # Seuil posé au-dessus de l'existant (~1 272 kB) après découpage de la
+          # carte, des graphiques et des écrans de statistiques.
+          if [ "$TAILLE" -gt 1433600 ]; then
+            echo "::error::Bundle initial > 1400 kB — découper par routes avant d'ajouter du poids"
             exit 1
           fi
 
