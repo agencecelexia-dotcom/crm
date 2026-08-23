@@ -72,6 +72,9 @@ Deno.serve(async (req) => {
     // réclamait un mot de passe qu'elle n'avait jamais défini.
     const base = (Deno.env.get('SITE_URL') ?? '').split(',')[0].trim()
       || 'https://crm-ci7k.vercel.app'
+    // Lien de secours, renvoyé à l'agence quand l'e-mail ne part pas.
+    let lienManuel: string | null = null
+
     const { data: invite, error: eInvite } = await admin.auth.admin.inviteUserByEmail(mail, {
       redirectTo: `${base}/bienvenue`,
     })
@@ -81,11 +84,27 @@ Deno.serve(async (req) => {
       // plutôt que de renvoyer une erreur incompréhensible.
       const { data: liste } = await admin.auth.admin.listUsers()
       const existant = liste?.users?.find((x) => x.email?.toLowerCase() === mail)
-      if (!existant) {
-        console.error('inviteUserByEmail', eInvite)
-        return json({ ok: false, error: 'invitation_impossible' }, 502, CORS)
+
+      if (existant) {
+        userId = existant.id
+      } else {
+        // L'envoi a échoué et le compte n'existe pas encore. Le cas courant est
+        // le quota d'e-mails : sans SMTP configuré, Supabase n'en autorise que
+        // deux par heure. `generateLink` crée le compte ET le lien sans passer
+        // par l'e-mail — l'agence transmet alors le lien elle-même plutôt que
+        // de rester bloquée.
+        const { data: gen, error: eGen } = await admin.auth.admin.generateLink({
+          type: 'invite',
+          email: mail,
+          options: { redirectTo: `${base}/bienvenue` },
+        })
+        if (eGen || !gen?.user) {
+          console.error('inviteUserByEmail', eInvite, 'generateLink', eGen)
+          return json({ ok: false, error: 'invitation_impossible' }, 502, CORS)
+        }
+        userId = gen.user.id
+        lienManuel = gen.properties?.action_link ?? null
       }
-      userId = existant.id
     } else {
       userId = invite.user.id
     }
@@ -106,7 +125,9 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: 'enregistrement_impossible' }, 502, CORS)
     }
 
-    return json(res ?? { ok: true }, 200, CORS)
+    // `lien_manuel` n'est présent que si l'e-mail n'est pas parti : l'écran
+    // Équipe l'affiche alors pour transmission directe.
+    return json({ ...(res ?? { ok: true }), lien_manuel: lienManuel }, 200, CORS)
   } catch (e) {
     console.error('inviter-membre', e)
     return json({ ok: false, error: String(e instanceof Error ? e.message : e) }, 500, CORS)
