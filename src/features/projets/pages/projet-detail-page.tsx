@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { Pencil, Trash2, Phone, Mail, MapPin, Map } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Pencil, Trash2, Phone, Mail, MapPin, Map, UserCheck } from 'lucide-react'
 
+import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/lib/auth/use-auth'
 import { PageHeader } from '@/components/page-header'
 import { StatutBadge } from '@/components/statut-badge'
 import { CardTitre } from '@/components/card-titre'
@@ -31,7 +34,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatTel } from '@/lib/format'
-import { useProjet, usePatchProjet, useDeleteProjet } from '../hooks/use-projets'
+import { useProjet, usePatchProjet, useDeleteProjet, useRepreneurs } from '../hooks/use-projets'
 import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { ProjetPhotos } from '../components/projet-photos'
@@ -53,6 +56,27 @@ export function ProjetDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data: projet, isLoading } = useProjet(id)
+  const { data: repreneurs } = useRepreneurs()
+  const { estFondateur, session } = useAuth()
+  const qc = useQueryClient()
+
+  // Rendre le chantier à l'équipe : le fondateur peut libérer n'importe quel
+  // dossier, un commercial seulement le sien (la fonction SQL le vérifie).
+  const rendre = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('rendre_chantier', { p_projet_id: id! })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success('Chantier rendu à l’équipe')
+      void qc.invalidateQueries({ queryKey: ['projets'] })
+      void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+    },
+    onError: (e) =>
+      toast.error('Impossible de rendre ce chantier', {
+        description: e instanceof Error ? e.message : undefined,
+      }),
+  })
   const patch = usePatchProjet()
   const remove = useDeleteProjet()
   const { data: affectationsCounts } = useAffectationsCounts()
@@ -116,6 +140,32 @@ export function ProjetDetailPage() {
           </Button>
         }
       />
+
+      {/* Qui a repris ce chantier. Affiché tout en haut : c'est l'information
+          qui évite qu'un deuxième commercial rappelle le même client. */}
+      {projet.assigne_a && (
+        <Card className="mb-4 rounded-2xl border-primary/30 bg-primary/5 p-3.5 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm">
+              <UserCheck className="size-4 shrink-0 text-primary" />
+              <span>
+                Repris par{' '}
+                <strong>{repreneurs?.[projet.assigne_a] ?? 'un membre de l’équipe'}</strong>
+              </span>
+            </p>
+            {(estFondateur || projet.assigne_a === session?.user.id) && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={rendre.isPending}
+                onClick={() => rendre.mutate()}
+              >
+                Rendre à l’équipe
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Statut */}
       <Card className="mb-4 rounded-2xl border-border/70 shadow-card">

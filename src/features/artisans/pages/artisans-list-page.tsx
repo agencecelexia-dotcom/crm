@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useDroits } from '@/lib/auth/use-droits'
 import { Link } from 'react-router-dom'
 import { Plus, Search, Users, ChevronRight, Phone, BadgeCheck, BarChart3, ShieldOff, MapPinned } from 'lucide-react'
 
@@ -26,6 +27,9 @@ import { LienInscriptionButton } from '../components/lien-inscription-button'
 export function ArtisansListPage() {
   const { data: artisans, isLoading } = useArtisans()
   const { data: signes } = useArtisansSignes()
+  // Masquer plutôt que laisser échouer : la RLS refuse déjà l'insertion, mais
+  // seulement après que la personne a rempli tout le formulaire.
+  const { peutCreerArtisan } = useDroits()
   const [recherche, setRecherche] = useState('')
   const [metier, setMetier] = useState<string>('tous')
   const [source, setSource] = useState<string>('tous')
@@ -89,12 +93,14 @@ export function ArtisansListPage() {
                 <ShieldOff className="size-5" />
               </Link>
             </Button>
-            <Button asChild size="sm" className="shadow-violet">
-              <Link to="/artisans/new">
-                <Plus className="size-4" />
-                Nouveau
-              </Link>
-            </Button>
+            {peutCreerArtisan && (
+              <Button asChild size="sm" className="shadow-violet">
+                <Link to="/artisans/new">
+                  <Plus className="size-4" />
+                  Nouveau
+                </Link>
+              </Button>
+            )}
           </div>
         }
       />
@@ -155,12 +161,14 @@ export function ArtisansListPage() {
           titre="Aucun artisan"
           description="Ajoute ton premier artisan pour commencer à enrichir la base."
           action={
-            <Button asChild>
-              <Link to="/artisans/new">
-                <Plus className="size-4" />
-                Nouvel artisan
-              </Link>
-            </Button>
+            peutCreerArtisan ? (
+              <Button asChild>
+                <Link to="/artisans/new">
+                  <Plus className="size-4" />
+                  Nouvel artisan
+                </Link>
+              </Button>
+            ) : undefined
           }
         />
       ) : (

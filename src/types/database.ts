@@ -190,6 +190,14 @@ export interface CouvertureZone {
 }
 
 /** Un projet = un appel client. */
+/**
+ * Les deux pipes de l'agence, plus l'état intermédiaire.
+ *
+ * `reprise` est la seule zone où un commercial est commissionné : ce sont les
+ * chantiers qu'aucun artisan ne travaille plus.
+ */
+export type OrigineChantier = 'neuf' | 'chez_artisan' | 'reprise'
+
 export interface Projet {
   id: string
   // Client
@@ -211,6 +219,16 @@ export interface Projet {
   artisan_id: string | null
   // Pipeline
   statut: StatutProjet
+  /**
+   * D'où vient le chantier, indépendamment de son avancement (migration 0111).
+   * Orthogonal à `statut` : celui-ci dit OÙ EN EST le dossier, `origine` dit
+   * D'OÙ IL VIENT. Un chantier rendu par un artisan repassait en `nouveau`,
+   * indistinguable d'un lead jamais traité — 61 des 76 « nouveaux » étaient en
+   * réalité des retours d'artisan.
+   */
+  origine: OrigineChantier
+  /** Membre qui a repris le chantier. Lu par la RLS et les RPC. */
+  assigne_a: string | null
   // Argent
   montant_devis: number | null
   montant_devis_signe: number | null
@@ -243,6 +261,10 @@ export type ProjetInput = Omit<
   Projet,
   | 'id'
   | 'commission'
+  // Calculée par la base (trigger d'origine) et posée par la reprise : ni l'une
+  // ni l'autre n'est saisie dans un formulaire.
+  | 'origine'
+  | 'assigne_a'
   | 'token'
   | 'perdu_at'
   | 'deleted_at'

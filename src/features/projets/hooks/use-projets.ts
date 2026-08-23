@@ -28,6 +28,27 @@ export function useProjets() {
   })
 }
 
+/**
+ * Nom du membre ayant repris chaque chantier, indexé par user_id.
+ *
+ * Requête séparée plutôt que jointure : `projets.assigne_a` pointe vers
+ * `auth.users`, table que PostgREST ne peut pas relier à `membres`. La liste
+ * des membres tient en quelques lignes, le coût est négligeable.
+ */
+export function useRepreneurs() {
+  return useQuery({
+    queryKey: ['repreneurs'],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async (): Promise<Record<string, string>> => {
+      const { data, error } = await supabase.from('membres').select('user_id, nom')
+      if (error) throw error
+      return Object.fromEntries(
+        (data ?? []).map((m) => [m.user_id as string, m.nom as string]),
+      )
+    },
+  })
+}
+
 /** Détail d'un projet par id (avec artisan). */
 export function useProjet(id: string | undefined) {
   return useQuery({
