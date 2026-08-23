@@ -15,9 +15,12 @@ import { useAuth } from './use-auth'
  * laisserait croire à un problème de session.
  */
 export function RouteFondateur() {
-  const { session, estFondateur, isLoading } = useAuth()
+  const { session, membre, estFondateur, isLoading } = useAuth()
 
-  if (isLoading) {
+  // La fiche membre arrive après la session. Sans cette attente, un fondateur
+  // serait renvoyé à l'accueil pendant la fraction de seconde où son rôle
+  // n'est pas encore connu.
+  if (isLoading || (session && membre === null)) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
