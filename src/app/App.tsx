@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/lib/auth/protected-route'
 import { RouteFondateur } from '@/lib/auth/route-fondateur'
 import { AccueilSelonRole } from '@/features/accueil-selon-role'
 import { EquipePage } from '@/features/equipe/equipe-page'
+import { ReprisesPage } from '@/features/equipe/reprises-page'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PageIntrouvable } from '@/features/page-introuvable'
 
@@ -117,6 +118,8 @@ export default function App() {
                   <Route path="/couverture" element={<CouverturePage />} />
                   <Route path="/parametres/automatisations" element={<AutomatisationsPage />} />
                   <Route path="/equipe" element={<EquipePage />} />
+                  {/* Suivi des chantiers repris par chaque commercial. */}
+                  <Route path="/reprises" element={<ReprisesPage />} />
                 </Route>
               </Route>
             </Route>

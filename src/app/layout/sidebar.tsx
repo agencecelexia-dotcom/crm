@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut,
-  BadgeEuro, ListChecks, Target, UserCog, type LucideIcon,
+  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, type LucideIcon,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { NotificationsBell } from '@/features/automatisations/notifications-bell'
@@ -33,7 +33,12 @@ const GROUPES: { titre: string; items: Item[] }[] = [
   {
     titre: 'Activité',
     items: [
-      { to: '/projets', label: 'Projets', icon: FolderKanban, end: false },
+      // Deux entrées distinctes, volontairement : le pipe en cours se consulte,
+      // les chantiers à réattribuer se travaillent. C'est sur les seconds que
+      // le commercial est commissionné — les confondre lui ferait perdre du
+      // temps sur des dossiers qui ne lui rapportent rien.
+      { to: '/projets', label: 'Pipe en cours', icon: FolderKanban, end: true },
+      { to: '/projets/a-reattribuer', label: 'À réattribuer', icon: RotateCcw, end: false },
       { to: '/artisans', label: 'Artisans', icon: Users, end: false },
       { to: '/carte', label: 'Carte', icon: Map, end: false },
       { to: '/couverture', label: 'Couverture', icon: Target, end: false, fondateurSeul: true },
@@ -46,6 +51,7 @@ const GROUPES: { titre: string; items: Item[] }[] = [
       { to: '/parametres/automatisations', label: 'Automatisations', icon: Zap, end: false, fondateurSeul: true },
       { to: '/parametres/signature', label: 'Ma signature', icon: PenTool, end: false },
       { to: '/equipe', label: 'Équipe', icon: UserCog, end: false, fondateurSeul: true },
+      { to: '/reprises', label: 'Reprises', icon: RotateCcw, end: false, fondateurSeul: true },
     ],
   },
 ]
