@@ -29,6 +29,10 @@ const LONGUEUR_MIN = 10
 export function DefinirMotDePassePage() {
   const naviguer = useNavigate()
   const [pret, setPret] = useState<boolean | null>(null)
+  // Adresse du compte concerné : sans elle, impossible de savoir DE QUI on
+  // définit le mot de passe. Un fondateur qui ouvre le lien d'un commercial
+  // doit voir immédiatement que ce n'est pas son propre compte.
+  const [emailCompte, setEmailCompte] = useState<string | null>(null)
   const [motDePasse, setMotDePasse] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [envoi, setEnvoi] = useState(false)
@@ -42,6 +46,7 @@ export function DefinirMotDePassePage() {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (!fini && session) {
         fini = true
+        setEmailCompte(session.user.email ?? null)
         setPret(true)
       }
     })
@@ -53,6 +58,7 @@ export function DefinirMotDePassePage() {
     supabase.auth.getSession().then(({ data }) => {
       if (!fini && data.session) {
         fini = true
+        setEmailCompte(data.session.user.email ?? null)
         setPret(true)
       }
     })
@@ -151,6 +157,19 @@ export function DefinirMotDePassePage() {
             </div>
           </div>
 
+          {/* L'adresse est affichée bien en vue : c'est la seule façon de
+              vérifier qu'on définit le mot de passe du BON compte. Sans elle,
+              un fondateur qui ouvre le lien d'un commercial changerait le sien
+              sans s'en rendre compte. */}
+          <div className="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3">
+            <p className="text-xs text-muted-foreground">Compte concerné</p>
+            <p className="mt-0.5 break-all font-medium">{emailCompte ?? '…'}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Le mot de passe choisi ici ne concerne que cette adresse. Si ce n’est pas la
+              vôtre, fermez cette page.
+            </p>
+          </div>
+
           <form onSubmit={valider} className="space-y-3">
             <div>
               <Label htmlFor="mdp">Mot de passe</Label>
@@ -180,7 +199,7 @@ export function DefinirMotDePassePage() {
 
             <Button type="submit" className="h-11 w-full" disabled={envoi}>
               {envoi ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
-              Enregistrer et accéder au CRM
+              Enregistrer le mot de passe de ce compte
             </Button>
           </form>
         </CardContent>
