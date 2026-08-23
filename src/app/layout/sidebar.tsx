@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut,
-  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, type LucideIcon,
+  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, type LucideIcon,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { NotificationsBell } from '@/features/automatisations/notifications-bell'
@@ -19,6 +19,9 @@ type Item = {
   /** Réservé aux fondateurs. Le masquage n'est qu'un confort de lecture : le
    *  vrai cloisonnement est appliqué par la RLS (migration 0100). */
   fondateurSeul?: boolean
+  /** Réservé aux commerciaux : un fondateur suit les reprises depuis l'écran
+   *  Reprises, qui les montre toutes plutôt que les siennes. */
+  commercialSeul?: boolean
 }
 
 const GROUPES: { titre: string; items: Item[] }[] = [
@@ -39,8 +42,11 @@ const GROUPES: { titre: string; items: Item[] }[] = [
       // les chantiers à réattribuer se travaillent. C'est sur les seconds que
       // le commercial est commissionné — les confondre lui ferait perdre du
       // temps sur des dossiers qui ne lui rapportent rien.
-      { to: '/projets', label: 'Pipe en cours', icon: FolderKanban, end: true },
+      { to: '/projets', label: 'Tout le pipe', icon: FolderKanban, end: true },
       { to: '/projets/a-reattribuer', label: 'À réattribuer', icon: RotateCcw, end: false },
+      // Ce que CE commercial a repris. Le fondateur suit les reprises depuis
+      // l'écran Reprises, qui les montre toutes.
+      { to: '/mon-pipe', label: 'Mon pipe', icon: Briefcase, end: false, commercialSeul: true },
       { to: '/artisans', label: 'Artisans', icon: Users, end: false },
       { to: '/carte', label: 'Carte', icon: Map, end: false },
       { to: '/couverture', label: 'Couverture', icon: Target, end: false, fondateurSeul: true },
@@ -65,7 +71,9 @@ export function Sidebar() {
   // que de laisser un titre orphelin.
   const groupes = GROUPES.map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.fondateurSeul || estFondateur),
+    items: g.items.filter((i) =>
+      estFondateur ? !i.commercialSeul : !i.fondateurSeul,
+    ),
   })).filter((g) => g.items.length > 0)
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border/70 bg-card md:flex">
