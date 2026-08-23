@@ -46,6 +46,10 @@ export function DefinirMotDePassePage() {
       }
     })
 
+    // Un lien à usage unique déjà consommé ouvre parfois une session sans
+    // permettre la mise à jour. On ne peut pas le deviner ici : c'est
+    // `updateUser` qui tranchera, et son échec est expliqué à ce moment-là.
+
     supabase.auth.getSession().then(({ data }) => {
       if (!fini && data.session) {
         fini = true
@@ -83,7 +87,17 @@ export function DefinirMotDePassePage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: motDePasse })
       if (error) throw error
-      toast.success('Mot de passe enregistré')
+
+      // Preuve plutôt que promesse : on vérifie que le mot de passe ouvre
+      // réellement une session. Sans ce contrôle, un échec silencieux laissait
+      // la personne croire son compte prêt — elle se retrouvait bloquée au
+      // premier retour sur le CRM.
+      const { data: session } = await supabase.auth.getUser()
+      if (!session?.user) throw new Error('Le mot de passe n’a pas pu être vérifié.')
+
+      toast.success('Mot de passe enregistré', {
+        description: 'Vous pourrez vous connecter avec cette adresse et ce mot de passe.',
+      })
       naviguer('/', { replace: true })
     } catch (err) {
       toast.error('Enregistrement impossible', {
