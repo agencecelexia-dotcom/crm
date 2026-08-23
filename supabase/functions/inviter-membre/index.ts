@@ -84,11 +84,15 @@ Deno.serve(async (req) => {
     }
 
     // 4. Enregistrer le membre et déclencher l'e-mail de bienvenue.
+    // `p_invite_par` est indispensable : cet appel se fait en service_role, or
+    // `auth.uid()` est alors NUL. Sans lui, le contrôle « êtes-vous fondateur »
+    // côté base échouait systématiquement, y compris pour un vrai fondateur.
     const { data: res, error: eRpc } = await admin.rpc('inviter_commercial', {
       p_user_id: userId,
       p_email: mail,
       p_nom: nomPropre,
       p_taux: part,
+      p_invite_par: u.user.id,
     })
     if (eRpc) {
       console.error('inviter_commercial', eRpc)
