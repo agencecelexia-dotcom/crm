@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, FolderKanban, Users, ListChecks, RotateCcw } from 'lucide-react'
+import { Home, FolderKanban, Users, ListChecks, RotateCcw, Map } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/use-auth'
 
@@ -11,19 +11,22 @@ import { useAuth } from '@/lib/auth/use-auth'
 // pilotage. La carte reste accessible depuis la barre latérale sur écran large.
 const ITEMS = [
   { to: '/', label: 'Accueil', icon: Home, end: true },
-  { to: '/taches', label: 'À faire', icon: ListChecks, end: false },
+  // « À faire » suit le pipe artisan : c'est du pilotage, pas le travail du
+  // commercial. Il ne le voit donc pas.
+  { to: '/taches', label: 'À faire', icon: ListChecks, end: false, fondateurSeul: true },
   { to: '/projets', label: 'Pipe', icon: FolderKanban, end: true },
-  { to: '/projets/a-reattribuer', label: 'À reprendre', icon: RotateCcw, end: false },
+  { to: '/projets/a-reattribuer', label: 'À reprendre', icon: RotateCcw, end: false, commercialSeul: true },
   { to: '/artisans', label: 'Artisans', icon: Users, end: false },
+  { to: '/carte', label: 'Carte', icon: Map, end: false, fondateurSeul: true },
 ]
 
 export function BottomNav() {
   const { estFondateur } = useAuth()
   // Un fondateur pilote : la carte lui sert plus que la pile de reprise, qu'il
   // suit depuis l'écran Reprises.
-  const items = estFondateur
-    ? ITEMS.filter((i) => i.to !== '/projets/a-reattribuer')
-    : ITEMS
+  const items = ITEMS.filter((i) =>
+    estFondateur ? !i.commercialSeul : !i.fondateurSeul,
+  )
 
   return (
     <nav
