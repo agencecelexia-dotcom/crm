@@ -43,7 +43,9 @@ export function DashboardCommercial() {
 
   return (
     <div>
-      <PageHeader titre={`Bonjour ${data.nom}`} />
+      {/* Le prénom peut manquer le temps que la fiche membre arrive, ou si
+          elle n'existe pas : « Bonjour null » serait pire qu'un simple bonjour. */}
+      <PageHeader titre={data.nom ? `Bonjour ${data.nom}` : 'Bonjour'} />
 
       {/* ---- Ce qu'il y a à faire maintenant ---- */}
       {aFaire > 0 ? (
