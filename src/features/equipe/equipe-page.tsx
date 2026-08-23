@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, ShieldCheck, UserPlus, Users } from 'lucide-react'
+import { Loader2, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,46 @@ export function EquipePage() {
       if (error) throw error
       return (data ?? []) as Membre[]
     },
+  })
+
+  const supprimer = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc('supprimer_commercial', { p_membre_id: id })
+      if (error) throw error
+      const r = data as {
+        ok?: boolean
+        error?: string
+        projets?: number
+        retrocessions?: number
+      }
+      if (!r?.ok) {
+        // Un commercial qui a travaillé n'est pas supprimable : ses projets et
+        // ses rétrocessions perdraient leur auteur. On explique quoi faire.
+        if (r?.error === 'a_de_lhistorique') {
+          const bouts = [
+            r.projets ? `${r.projets} chantier${r.projets > 1 ? 's' : ''}` : null,
+            r.retrocessions ? `${r.retrocessions} commission${r.retrocessions > 1 ? 's' : ''}` : null,
+          ].filter(Boolean)
+          throw new Error(
+            `Il a ${bouts.join(' et ')} à son nom. Désactivez-le plutôt : son accès est coupé et l’historique reste intact.`,
+          )
+        }
+        const messages: Record<string, string> = {
+          reserve_fondateur: 'Seul un fondateur peut supprimer un membre.',
+          fondateur_non_supprimable: 'Un fondateur ne peut pas être supprimé ici.',
+          introuvable: 'Ce membre n’existe plus.',
+        }
+        throw new Error(messages[r?.error ?? ''] ?? 'Suppression impossible.')
+      }
+    },
+    onSuccess: () => {
+      toast.success('Commercial supprimé')
+      void qc.invalidateQueries({ queryKey: ['membres'] })
+    },
+    onError: (e) =>
+      toast.error('Suppression impossible', {
+        description: e instanceof Error ? e.message : undefined,
+      }),
   })
 
   const patch = useMutation({
@@ -250,15 +290,37 @@ export function EquipePage() {
                     {!m.active_at && ' · invitation en attente'}
                   </p>
                 </div>
-                <label className="flex shrink-0 items-center gap-2 text-sm">
-                  <Switch
-                    checked={m.actif}
-                    onCheckedChange={(v) =>
-                      patch.mutate({ id: m.id, champ: 'actif', valeur: v })
-                    }
-                  />
-                  {m.actif ? 'Actif' : 'Désactivé'}
-                </label>
+                <div className="flex shrink-0 items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Switch
+                      checked={m.actif}
+                      onCheckedChange={(v) =>
+                        patch.mutate({ id: m.id, champ: 'actif', valeur: v })
+                      }
+                    />
+                    {m.actif ? 'Actif' : 'Désactivé'}
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:text-destructive"
+                    title="Supprimer ce commercial"
+                    disabled={supprimer.isPending}
+                    onClick={() => {
+                      // Confirmation explicite : la suppression retire aussi le
+                      // compte, il n'y a pas de retour en arrière.
+                      if (
+                        window.confirm(
+                          `Supprimer ${m.nom} ? Son compte sera retiré et il ne pourra plus se connecter.`,
+                        )
+                      ) {
+                        supprimer.mutate(m.id)
+                      }
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </div>
 
               {/* Les droits ne s'affichent que si le compte est actif : régler
