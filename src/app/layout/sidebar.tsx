@@ -26,7 +26,9 @@ const GROUPES: { titre: string; items: Item[] }[] = [
     titre: 'Pilotage',
     items: [
       { to: '/', label: 'Accueil', icon: Home, end: true },
-      { to: '/taches', label: 'À faire', icon: ListChecks, end: false },
+      // Réservé au fondateur : les tâches suivent le pipe artisan, dont le
+      // commercial n'a pas la charge. Son travail est la pile de reprise.
+      { to: '/taches', label: 'À faire', icon: ListChecks, end: false, fondateurSeul: true },
       { to: '/commissions', label: 'Commissions', icon: BadgeEuro, end: false, fondateurSeul: true },
     ],
   },

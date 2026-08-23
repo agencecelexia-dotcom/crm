@@ -4,6 +4,9 @@
 /** Statuts possibles d'un projet (pipeline). */
 export type StatutProjet =
   | 'nouveau'
+  /** Déjà passé chez un artisan qui l'a rendu ou perdu : à replacer. Ce n'est
+   *  PAS un lead entrant — c'est là que le commercial est commissionné. */
+  | 'a_reattribuer'
   | 'a_rappeler'
   | 'en_attente'
   | 'artisan_assigne'

@@ -188,13 +188,13 @@ export function ProjetsListPage() {
         </TabsList>
       </Tabs>
 
-      {/* Les deux pipes de l'agence. « À reprendre » est la zone de commission
-          du commercial : un chantier qu'aucun artisan ne travaille plus. */}
+      {/* Deux pipes, pas trois. « Tout le pipe » est la vue de travail
+          quotidienne ; « À reprendre » isole la zone de commission du
+          commercial — un chantier qu'aucun artisan ne travaille plus.
+          Découper davantage obligerait à changer d'onglet sans cesse. */}
       <Tabs value={pipe} onValueChange={setPipe} className="mb-3">
         <TabsList>
-          <TabsTrigger value="tous">Tous</TabsTrigger>
-          <TabsTrigger value="neuf">Neufs</TabsTrigger>
-          <TabsTrigger value="chez_artisan">Chez l'artisan</TabsTrigger>
+          <TabsTrigger value="tous">Tout le pipe</TabsTrigger>
           <TabsTrigger value="reprise">À reprendre</TabsTrigger>
         </TabsList>
       </Tabs>

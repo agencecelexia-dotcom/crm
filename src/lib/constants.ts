@@ -156,6 +156,11 @@ export const STATUTS: Record<
   StatutProjet,
   { label: string; color: string; textOnColor: string }
 > = {
+  a_reattribuer: {
+    label: 'À réattribuer',
+    color: '#F59E0B',
+    textOnColor: '#fff',
+  },
   nouveau: { label: 'Nouveau', color: '#64748B', textOnColor: '#FFFFFF' },
   a_rappeler: { label: 'À rappeler', color: '#F97316', textOnColor: '#FFFFFF' },
   en_attente: { label: 'En attente', color: '#06B6D4', textOnColor: '#FFFFFF' },
@@ -217,6 +222,9 @@ export function statutInfo(statut: string | null | undefined) {
 /** Ordre d'affichage des statuts dans le pipeline. */
 export const STATUTS_ORDRE: StatutProjet[] = [
   'nouveau',
+  // Juste après « nouveau » : c'est aussi un début de cycle, mais sur un
+  // dossier déjà passé chez un artisan.
+  'a_reattribuer',
   'a_rappeler',
   'en_attente',
   'artisan_assigne',
