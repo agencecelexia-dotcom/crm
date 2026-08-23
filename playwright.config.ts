@@ -3,6 +3,11 @@ import { defineConfig, devices } from '@playwright/test'
 // Tests e2e basiques. Lance automatiquement le serveur de dev Vite.
 export default defineConfig({
   testDir: './tests',
+  // Playwright ramassait aussi `tests/unit/*.test.ts`, qui sont des tests
+  // vitest : les deux frameworks ne partagent pas le même `describe`, d'où un
+  // plantage à la collecte. Les e2e portent l'extension `.spec.ts`, les
+  // unitaires `.test.ts` — la distinction suffit à les séparer.
+  testMatch: /.*\.spec\.ts$/,
   fullyParallel: true,
   // Empêche qu'un `test.only` oublié réduise silencieusement la CI à un test.
   forbidOnly: !!process.env.CI,
