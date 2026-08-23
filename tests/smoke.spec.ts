@@ -28,7 +28,20 @@ test('les pages publiques (token invalide) ne plantent pas', async ({ page }) =>
 
 test('la page de connexion valide les champs requis', async ({ page }) => {
   await page.goto('/login')
-  await page.getByRole('button', { name: 'Se connecter' }).click()
+
+  const bouton = page.getByRole('button', { name: 'Se connecter' })
+
+  // Sans configuration Supabase, la page affiche un avertissement et désactive
+  // volontairement le bouton. Cliquer serait alors impossible et le test
+  // échouerait sur un timeout de 30 s — ce qui a rendu la CI rouge en continu
+  // alors que l'application, elle, fonctionnait. On vérifie ce comportement
+  // plutôt que de le subir.
+  if (await bouton.isDisabled()) {
+    await expect(page.getByText(/Configuration Supabase manquante/)).toBeVisible()
+    return
+  }
+
+  await bouton.click()
   // zod affiche un message d'erreur sur l'email invalide/vide
   await expect(page.getByText('Email invalide')).toBeVisible()
 })

@@ -32,17 +32,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // --- Session : synchrone, sans aucun appel réseau dans le callback.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+    // `getSession()` peut ne JAMAIS se résoudre sur Chrome : il attend d'abord
+    // l'initialisation interne, qui rafraîchit le jeton par le réseau — sans
+    // aucun délai maximal — en tenant un verrou `navigator.locks`. Un onglet
+    // resté bloqué garde ce verrou et fige tous les suivants. Safari, qui
+    // n'implémente pas cette API, ne connaît pas le problème : c'est ce qui
+    // explique qu'un même compte fonctionne ici et pas là.
+    //
+    // On ne peut donc pas se contenter d'attendre : on borne l'attente.
+    let fini = false
+    const relacher = (s: Session | null) => {
+      if (fini) return
+      fini = true
+      setSession(s)
       setIsLoading(false)
-    })
+    }
+
+    const secours = setTimeout(() => {
+      if (fini) return
+      // Passé ce délai, la session locale est tenue pour inutilisable : mieux
+      // vaut un écran de connexion qu'un chargement sans fin.
+      console.warn('[auth] session illisible après 8 s — retour à la connexion')
+      // Purge du jeton local : c'est lui que l'initialisation n'arrive pas à
+      // rafraîchir. Le laisser en place rejouerait le blocage au rechargement
+      // suivant, et la personne resterait prisonnière de la boucle. Seules les
+      // clés d'auth sont retirées ; le reste du stockage n'est pas touché.
+      try {
+        for (const cle of Object.keys(localStorage)) {
+          if (cle.startsWith('sb-')) localStorage.removeItem(cle)
+        }
+      } catch {
+        // Stockage inaccessible (mode privé strict) : le retour à /login suffit.
+      }
+      relacher(null)
+    }, 8000)
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => relacher(data.session))
+      .catch(() => relacher(null))
+      .finally(() => clearTimeout(secours))
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // Une vraie réponse d'auth prime toujours sur le délai de secours.
+      fini = true
+      clearTimeout(secours)
       setSession(newSession)
       setIsLoading(false)
     })
 
-    return () => sub.subscription.unsubscribe()
+    return () => {
+      clearTimeout(secours)
+      sub.subscription.unsubscribe()
+    }
   }, [])
 
   // --- Fiche membre : effet séparé, déclenché par le changement de session.
