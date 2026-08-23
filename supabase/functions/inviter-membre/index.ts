@@ -67,7 +67,14 @@ Deno.serve(async (req) => {
 
     // 3. Créer le compte, ou retrouver celui qui existe déjà.
     let userId: string | null = null
-    const { data: invite, error: eInvite } = await admin.auth.admin.inviteUserByEmail(mail)
+    // `redirectTo` est indispensable : sans lui, Supabase renvoie sur son
+    // `site_url`, et la personne atterrissait sur un écran de connexion qui
+    // réclamait un mot de passe qu'elle n'avait jamais défini.
+    const base = (Deno.env.get('SITE_URL') ?? '').split(',')[0].trim()
+      || 'https://crm-ci7k.vercel.app'
+    const { data: invite, error: eInvite } = await admin.auth.admin.inviteUserByEmail(mail, {
+      redirectTo: `${base}/bienvenue`,
+    })
 
     if (eInvite) {
       // Réinviter une adresse connue est un cas normal — on récupère l'identifiant

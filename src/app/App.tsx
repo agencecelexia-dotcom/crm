@@ -10,6 +10,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { PageIntrouvable } from '@/features/page-introuvable'
 
 import { LoginPage } from '@/features/auth/login-page'
+import { DefinirMotDePassePage } from '@/features/auth/definir-mot-de-passe-page'
 import { SignerPage } from '@/features/contrats/signer-page'
 import { MissionPage } from '@/features/contrats/mission-page'
 import { EspaceArtisanPage } from '@/features/contrats/espace-artisan-page'
@@ -46,6 +47,11 @@ export default function App() {
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
+            {/* Arrivée depuis un e-mail d'invitation : la personne a un compte
+                mais pas encore de mot de passe. Publique par nécessité — le
+                jeton du lien fait foi, et l'inscription libre est fermée côté
+                Supabase, donc cette page ne peut pas servir à créer un compte. */}
+            <Route path="/bienvenue" element={<DefinirMotDePassePage />} />
             {/* Pages publiques (sans authentification).
                 Chacune a sa PROPRE frontière d'erreur : un plantage sur l'une
                 ne doit pas emporter les autres, et un artisan en train de
