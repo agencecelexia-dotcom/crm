@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
-import { Mic, RotateCcw } from 'lucide-react'
+import { Mic, RotateCcw, UserCheck } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { StatutBadge } from '@/components/statut-badge'
 import { Button } from '@/components/ui/button'
@@ -21,7 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { METIERS, relegueEnBas, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
-import { useProjets } from '../hooks/use-projets'
+import { useProjets, useRepreneurs } from '../hooks/use-projets'
 import { useAffectationsCounts } from '../hooks/use-affectations'
 import { BadgePerduPar } from '../components/badge-perdu-par'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
@@ -31,6 +31,7 @@ import { KanbanProjets } from '../components/kanban-projets'
 // Liste des projets : recherche + filtres statut / métier / ville.
 export function ProjetsListPage() {
   const { data: projets, isLoading } = useProjets()
+  const { data: repreneurs } = useRepreneurs()
   const { data: artisansSignes } = useArtisansSignes()
   const { data: affectationsCounts } = useAffectationsCounts()
   // Filtres conservés dans l'URL (?q=…&statut=…&metier=…&tri=…&vue=…) : ils
@@ -59,6 +60,11 @@ export function ProjetsListPage() {
   const setMetier = (v: string) => setParam('metier', v, 'tous')
   const setTri = (v: string) => setParam('tri', v, 'recent')
   const setVue = (v: string) => setParam('vue', v, 'liste')
+  // Le pipe d'origine : c'est LA distinction économique du CRM. Le commercial
+  // n'est commissionné que sur « reprise » ; confondre les deux lui ferait
+  // travailler des dossiers qui ne lui rapportent rien.
+  const pipe = params.get('pipe') ?? 'tous'
+  const setPipe = (v: string) => setParam('pipe', v, 'tous')
 
   // Filet de sécurité : on garde les derniers filtres en sessionStorage. Si on
   // revient sur une liste « nue » (flèche logiciel, menu, retour navigateur qui
@@ -83,6 +89,7 @@ export function ProjetsListPage() {
     const q = recherche.trim().toLowerCase()
     const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
     return projets.filter((p) => {
+      const matchPipe = pipe === 'tous' || p.origine === pipe
       const matchMetier = metier === 'tous' || p.metiers.includes(metier)
       const telDigits = (p.client_telephone ?? '').replace(/\D/g, '')
       const matchTel = qDigits.length >= 2 && telDigits.includes(qDigits)
@@ -92,9 +99,9 @@ export function ProjetsListPage() {
         [p.client_nom, p.client_ville, p.metiers.join(' '), p.artisan?.societe, p.artisan?.nom]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
-      return matchMetier && matchTexte
+      return matchPipe && matchMetier && matchTexte
     })
-  }, [projets, recherche, metier])
+  }, [projets, recherche, metier, pipe])
 
   // Vue liste : on applique aussi le filtre statut, puis le tri choisi.
   const resultats = useMemo(() => {
@@ -174,6 +181,17 @@ export function ProjetsListPage() {
         <TabsList>
           <TabsTrigger value="liste">Liste</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Les deux pipes de l'agence. « À reprendre » est la zone de commission
+          du commercial : un chantier qu'aucun artisan ne travaille plus. */}
+      <Tabs value={pipe} onValueChange={setPipe} className="mb-3">
+        <TabsList>
+          <TabsTrigger value="tous">Tous</TabsTrigger>
+          <TabsTrigger value="neuf">Neufs</TabsTrigger>
+          <TabsTrigger value="chez_artisan">Chez l'artisan</TabsTrigger>
+          <TabsTrigger value="reprise">À reprendre</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -276,6 +294,14 @@ export function ProjetsListPage() {
                       <StatutBadge statut={p.statut} />
                     </div>
                     <BadgePerduPar nb={affectationsCounts?.[p.id]?.perdus ?? 0} />
+                    {/* Qui a repris ce chantier. Sans cette pastille, deux
+                        commerciaux peuvent rappeler le même client. */}
+                    {p.assigne_a && repreneurs?.[p.assigne_a] && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        <UserCheck className="size-3" />
+                        {repreneurs[p.assigne_a]}
+                      </span>
+                    )}
                     {p.client_telephone && (
                       <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
                         <Phone className="size-3.5 shrink-0" />
