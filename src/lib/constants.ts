@@ -157,9 +157,12 @@ export const STATUTS: Record<
   { label: string; color: string; textOnColor: string }
 > = {
   a_reattribuer: {
+    // Rose magenta : aucune autre étape ne l'utilise. L'orange était partagé
+    // avec « Devis envoyé », ce qui rendait les deux impossibles à distinguer
+    // d'un coup d'œil dans une liste.
     label: 'À réattribuer',
-    color: '#F59E0B',
-    textOnColor: '#fff',
+    color: '#DB2777',
+    textOnColor: '#FFFFFF',
   },
   nouveau: { label: 'Nouveau', color: '#64748B', textOnColor: '#FFFFFF' },
   a_rappeler: { label: 'À rappeler', color: '#F97316', textOnColor: '#FFFFFF' },
