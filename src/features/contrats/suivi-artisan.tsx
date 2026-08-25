@@ -43,9 +43,13 @@ export function SuiviArtisan({
   const [perduMode, setPerduMode] = useState(false)
   const [perduRaison, setPerduRaison] = useState('')
 
-  // Étapes déjà franchies (d'après l'historique) + date du RDV éventuelle.
+  // Date du RDV éventuelle, lue dans l'historique des suivis.
   const nonLus = suivis.filter((s) => s.auteur === 'agence' && !s.lu_at).length
-  const franchies = new Set(suivis.filter((s) => s.statut).map((s) => s.statut as string))
+  // Rang de l'étape courante dans le parcours. C'est LUI qui décide de ce qui
+  // est franchi, et non l'historique des suivis : une étape cliquée par erreur
+  // puis corrigée y resterait pour toujours, laissant « devis signé » en vert
+  // alors que le chantier est redescendu à « devis envoyé ».
+  const rangCourant = PARCOURS.indexOf(statutActuel as (typeof PARCOURS)[number])
   const rdvInfo = [...suivis].reverse().find((s) => s.statut === 'rdv_pris' && s.message)?.message
 
   async function poster(statut?: string, message?: string, dateRdv?: string): Promise<boolean> {
@@ -126,7 +130,9 @@ export function SuiviArtisan({
             const conf = SUIVI_STATUTS[cle]
             const estRdv = cle === 'rdv_pris'
             const active = statutActuel === cle
-            const done = !active && franchies.has(cle)
+            // Franchi = strictement avant l'étape courante. Corriger une étape
+            // en arrière éteint donc bien les pastilles au-delà.
+            const done = !active && rangCourant > idx
             const dernier = idx === PARCOURS.length - 1
             const rempli = active || done
 
