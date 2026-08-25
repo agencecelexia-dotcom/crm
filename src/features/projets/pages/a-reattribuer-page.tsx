@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, FileText, HandHelping, RotateCcw, UserX } from 'lucide-react'
+import { AlertTriangle, FileText, HandHelping, RotateCcw, Trash2, UserX } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -93,7 +93,7 @@ type Filtre = 'libres' | 'tous'
 export function AReattribuerPage() {
   const [filtre, setFiltre] = useState<Filtre>('libres')
   const qc = useQueryClient()
-  const { session } = useAuth()
+  const { session, estFondateur } = useAuth()
   const monUserId = session?.user.id ?? null
 
   const prendre = useMutation({
@@ -121,6 +121,38 @@ export function AReattribuerPage() {
       void qc.invalidateQueries({ queryKey: ['projets'] })
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Erreur'),
+  })
+
+  // Nettoyer la pile : un client injoignable depuis des mois ou un dossier
+  // traité hors CRM n'a rien à y faire — il noie ceux qui méritent un appel.
+  const retirer = useMutation({
+    mutationFn: async ({ projetId, motif }: { projetId: string; motif: string }) => {
+      const { data, error } = await supabase.rpc('retirer_de_la_pile', {
+        p_projet_id: projetId,
+        p_motif: motif,
+      })
+      if (error) throw error
+      const r = data as { ok?: boolean; error?: string } | null
+      if (!r?.ok) {
+        const messages: Record<string, string> = {
+          reserve_fondateur: 'Seul un fondateur peut retirer un chantier de la pile.',
+          chantier_signe: 'Ce chantier est signé : passez par la fiche pour le clore.',
+          introuvable: 'Ce chantier n’existe plus.',
+        }
+        throw new Error(messages[r?.error ?? ''] ?? 'Retrait impossible.')
+      }
+    },
+    onSuccess: () => {
+      toast.success('Chantier retiré de la pile', {
+        description: 'Rien n’est supprimé : il reste consultable et peut être remis en jeu.',
+      })
+      void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+      void qc.invalidateQueries({ queryKey: ['projets'] })
+    },
+    onError: (e) =>
+      toast.error('Retrait impossible', {
+        description: e instanceof Error ? e.message : undefined,
+      }),
   })
 
   const rendre = useMutation({
@@ -317,6 +349,29 @@ export function AReattribuerPage() {
                       Ouvrir la fiche
                     </Link>
                   </Button>
+                  {/* Nettoyage de la pile, réservé à l'agence : décider qu'un
+                      chantier n'a plus d'avenir engage le chiffre d'affaires. */}
+                  {estFondateur && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-destructive"
+                      disabled={retirer.isPending}
+                      onClick={() => {
+                        const motif = window.prompt(
+                          `Retirer « ${p.client_nom} » de la pile ?\n\n` +
+                            'Le chantier sort de la liste mais reste consultable. ' +
+                            'Précisez la raison (facultatif) :',
+                        )
+                        // `null` = annulation ; une chaîne vide reste un accord.
+                        if (motif === null) return
+                        retirer.mutate({ projetId: p.projet_id, motif })
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                      Retirer
+                    </Button>
+                  )}
                 </div>
               </div>
             </Card>
