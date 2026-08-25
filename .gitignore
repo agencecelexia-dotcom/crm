@@ -52,3 +52,6 @@ pdf/
 # du projet, régénérés à chaque `supabase link`. Propres à un poste, ils n'ont
 # rien à faire dans le dépôt.
 supabase/.temp/
+
+# Captures d’écran déposées à la racine pendant le travail
+*.png
