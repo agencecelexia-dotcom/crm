@@ -22,7 +22,9 @@ const CANAUX = [
 ]
 
 // Taux de commission proposés (liens fixes distincts, pas de champ à régler).
-const TAUX = [10, 15]
+// Le taux voyage dans l'URL, est borné 5–30 % côté serveur (trigger
+// clamp_taux_inscription_publique) et se retrouve tel quel dans le contrat.
+const TAUX = [10, 15, 20]
 
 export function LienInscriptionButton() {
   const [copie, setCopie] = useState<string | null>(null)
@@ -53,8 +55,9 @@ export function LienInscriptionButton() {
         <DialogHeader>
           <DialogTitle>Liens d'inscription artisan</DialogTitle>
           <DialogDescription>
-            Deux liens distincts par canal : <b>10 %</b> (standard) et <b>15 %</b> (commission
-            majorée). Copie celui qu'il te faut — le contrat s'adapte automatiquement.
+            Un lien par canal et par taux : <b>10 %</b> (standard), <b>15 %</b> ou{' '}
+            <b>20 %</b>. La commission porte sur le <b>montant TTC</b> ; le contrat de
+            l'artisan reprend le taux du lien qu'il a utilisé.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
