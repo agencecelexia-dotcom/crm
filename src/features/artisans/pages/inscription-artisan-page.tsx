@@ -170,8 +170,9 @@ export function InscriptionArtisanPage() {
                   <li className="flex gap-2">
                     <span>•</span>
                     <span>
-                      Il <b>fixe notre commission de {tauxPct} %</b> sur les chantiers qu'on vous apporte —
-                      noir sur blanc, pas de mauvaise surprise.
+                      Il <b>fixe notre commission de {tauxPct} % du montant TTC</b> des
+                      chantiers qu'on vous apporte — noir sur blanc, pas de mauvaise
+                      surprise.
                     </span>
                   </li>
                   <li className="flex gap-2">
