@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Send, Check, CalendarIcon, Loader2, Phone, PhoneCall, PhoneMissed } from 'lucide-react'
+import { Send, Check, CalendarIcon, Loader2, Phone, PhoneCall, PhoneMissed, Bell } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -28,12 +28,15 @@ export function SuiviArtisan({
   suivis,
   onChange,
   statutActuel,
+  rappelLe,
 }: {
   token: string
   suivis: Suivi[]
   onChange: () => void
   /** Statut courant du chantier — pour mettre en évidence l'étape en cours. */
   statutActuel?: string
+  /** Rappel déjà posé, s'il y en a un. Co-statut : n'affecte pas l'étape. */
+  rappelLe?: string | null
 }) {
   const [note, setNote] = useState('')
   const [envoi, setEnvoi] = useState(false)
@@ -42,6 +45,11 @@ export function SuiviArtisan({
   const [rdvHeure, setRdvHeure] = useState('')
   const [perduMode, setPerduMode] = useState(false)
   const [perduRaison, setPerduRaison] = useState('')
+  // Rappel : un CO-statut, pas une étape. « Le client signera à son retour de
+  // vacances le 5 » ne fait pas reculer le chantier — il reste « devis
+  // envoyé », avec une date à laquelle le reprendre.
+  const [rappelMode, setRappelMode] = useState(false)
+  const [rappelDate, setRappelDate] = useState<Date | undefined>(undefined)
 
   // Date du RDV éventuelle, lue dans l'historique des suivis.
   const nonLus = suivis.filter((s) => s.auteur === 'agence' && !s.lu_at).length
@@ -77,6 +85,36 @@ export function SuiviArtisan({
 
   // Confirme « RDV pris » avec sa date : consignée dans le suivi ET enregistrée
   // en clair (date_rdv) pour la relance post-RDV automatique.
+  /** Pose ou retire la date de rappel. `null` annule. */
+  async function enregistrerRappel(quand: Date | null) {
+    setEnvoi(true)
+    try {
+      const { data, error } = await supabase.rpc('definir_rappel_by_token', {
+        p_token: token,
+        p_quand: quand ? quand.toISOString() : null,
+      })
+      if (error) throw error
+      const r = data as { ok?: boolean; error?: string } | null
+      if (!r?.ok) {
+        throw new Error(
+          r?.error === 'date_passee'
+            ? 'Choisissez une date à venir.'
+            : 'Le rappel n’a pas pu être enregistré.',
+        )
+      }
+      toast.success(quand ? 'Rappel programmé' : 'Rappel retiré')
+      setRappelMode(false)
+      setRappelDate(undefined)
+      onChange()
+    } catch (e) {
+      toast.error('Rappel impossible', {
+        description: e instanceof Error ? e.message : undefined,
+      })
+    } finally {
+      setEnvoi(false)
+    }
+  }
+
   async function confirmerRdv() {
     if (!rdvDate) return toast.error('Choisissez la date du rendez-vous')
     const txt = `RDV pris le ${format(rdvDate, 'EEEE d MMMM yyyy', { locale: fr })}${
@@ -276,6 +314,94 @@ export function SuiviArtisan({
           <p className="text-xs text-muted-foreground">
             Notez chaque tentative — surtout si le client ne décroche pas, pour qu'on sache que vous avez essayé.
           </p>
+        </div>
+
+        {/* Rappel — un CO-statut : le chantier garde son étape, on note juste
+            quand le reprendre. « Il signera à son retour le 5 » ne fait pas
+            reculer un devis envoyé. */}
+        <div className="rounded-xl border border-border bg-muted/30 p-3">
+          {rappelLe && !rappelMode ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-sm">
+                <Bell className="size-4 shrink-0 text-primary" />
+                <span>
+                  À reprendre le{' '}
+                  <strong>{format(new Date(rappelLe), 'EEEE d MMMM', { locale: fr })}</strong>
+                </span>
+              </p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={envoi}
+                        onClick={() => { setRappelDate(new Date(rappelLe)); setRappelMode(true) }}>
+                  Modifier
+                </Button>
+                <Button size="sm" variant="ghost" disabled={envoi}
+                        onClick={() => void enregistrerRappel(null)}>
+                  Retirer
+                </Button>
+              </div>
+            </div>
+          ) : !rappelMode ? (
+            <button
+              type="button"
+              disabled={envoi}
+              onClick={() => setRappelMode(true)}
+              className="flex w-full items-center gap-2 text-left text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Bell className="size-4 shrink-0" />
+              <span>
+                <strong className="text-foreground">Me le rappeler plus tard</strong> — le
+                client vous a donné une date ? Notez-la, le chantier garde son étape.
+              </span>
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <p className="flex items-center gap-1.5 text-sm font-medium">
+                <Bell className="size-4 text-primary" />
+                Quand faut-il reprendre ce chantier ?
+              </p>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      'h-11 w-full justify-start bg-card font-normal',
+                      !rappelDate && 'text-muted-foreground',
+                    )}
+                  >
+                    <CalendarIcon className="size-4" />
+                    {rappelDate
+                      ? format(rappelDate, 'd MMMM yyyy', { locale: fr })
+                      : 'Choisir la date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={rappelDate}
+                    onSelect={setRappelDate}
+                    locale={fr}
+                    // Un rappel dans le passé n'a pas de sens ; la fonction SQL
+                    // le refuse aussi (`date_passee`).
+                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    autoFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  disabled={envoi || !rappelDate}
+                  onClick={() => rappelDate && void enregistrerRappel(rappelDate)}
+                >
+                  Programmer le rappel
+                </Button>
+                <Button variant="ghost" disabled={envoi}
+                        onClick={() => { setRappelMode(false); setRappelDate(undefined) }}>
+                  Annuler
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Statuts secondaires */}
