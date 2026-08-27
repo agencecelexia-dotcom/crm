@@ -173,7 +173,11 @@ export function TableauDeBordArtisan({
         />
       </div>
 
-      {/* Funnel — chaque cran est cumulatif : « a atteint au moins cette étape ». */}
+      {/* Funnel — chaque cran est cumulatif : « a atteint au moins cette étape ».
+          Masqué tant qu'aucun chantier n'a été reçu : la fonction SQL renvoie
+          alors `funnel: null`, et une enfilade de zéros n'apprendrait rien à un
+          artisan qui vient de s'inscrire. */}
+      {stats.funnel && (
       <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-card">
         <div className="mb-3 flex items-center justify-between gap-2">
           <p className="flex items-center gap-2 text-sm font-semibold">
@@ -244,7 +248,7 @@ export function TableauDeBordArtisan({
                 </span>
               )}
             </p>
-            {stats.delai_signature_j == null && stats.funnel.devis_signe.atteint > 0 && (
+            {stats.delai_signature_j == null && (stats.funnel?.devis_signe.atteint ?? 0) > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Délai de signature non calculable : pas assez de chantiers où le devis a
                 été déposé avant d'être marqué signé.
@@ -253,6 +257,7 @@ export function TableauDeBordArtisan({
           </div>
         )}
       </div>
+      )}
 
       {/* Une étape « signé » sans PDF ni montant ne peut fonder aucune
           commission : on le dit, plutôt que de la compter silencieusement. */}
