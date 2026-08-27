@@ -548,9 +548,11 @@ function ListeChantiers({
             // Trait de séparation au premier chantier tranché. Le tri place
             // déjà les dossiers clos en bas ; la barre rend la frontière
             // visible, entre ce qui demande du travail et ce qui est acquis.
-            // La bascule se fonde sur `issue`, pas sur le libellé « devis
-            // signé » : un chantier signé mais pas encore terminé est déjà
-            // gagné, et un chantier perdu appartient au même bloc.
+            //
+            // « Clos » et non « terminés » : la section regroupe les dossiers
+            // tranchés, gagnés COMME perdus — 34 perdus pour 13 gagnés
+            // aujourd'hui. « Terminé » désigne par ailleurs l'étape finale du
+            // parcours, et laissait croire que les travaux étaient faits.
             const clos = estClos(p)
             const premierClos = clos && (i === 0 || !estClos(liste[i - 1]))
             return (
@@ -559,7 +561,7 @@ function ListeChantiers({
                   <div className="flex items-center gap-3 pb-1">
                     <span className="h-px flex-1 bg-border" />
                     <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Chantiers terminés
+                      Dossiers clos
                     </span>
                     <span className="h-px flex-1 bg-border" />
                   </div>

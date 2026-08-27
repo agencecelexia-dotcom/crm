@@ -518,7 +518,15 @@ export interface CranFunnelStats {
 }
 
 export interface StatsEspaceArtisan {
-  funnel: Record<'contacte' | 'rdv_pris' | 'devis_envoye' | 'devis_signe' | 'termine', CranFunnelStats>
+  /**
+   * Décompte par cran. NUL tant que l'artisan n'a reçu aucun chantier : la
+   * fonction SQL n'a rien à agréger. Le type le disait non nullable, ce qui
+   * masquait le cas et faisait planter l'espace au premier accès.
+   */
+  funnel: Record<
+    'contacte' | 'rdv_pris' | 'devis_envoye' | 'devis_signe' | 'termine',
+    CranFunnelStats
+  > | null
   /** Signatures appuyées par un PDF ou un montant : seule base facturable. */
   signatures_prouvees: number
   /** Déclarées au stepper sans aucune preuve matérielle. */
