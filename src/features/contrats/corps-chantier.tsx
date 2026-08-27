@@ -111,6 +111,7 @@ export function CorpsChantier({
                   suivis={projet.suivis ?? []}
                   onChange={onChange}
                   statutActuel={projet.statut}
+                  rappelLe={projet.rappel_le}
                 />
               </div>
             </div>
