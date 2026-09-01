@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut,
-  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, type LucideIcon,
+  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, Compass, type LucideIcon,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { NotificationsBell } from '@/features/automatisations/notifications-bell'
@@ -33,6 +33,7 @@ const GROUPES: { titre: string; items: Item[] }[] = [
       // commercial n'a pas la charge. Son travail est la pile de reprise.
       { to: '/taches', label: 'À faire', icon: ListChecks, end: false, fondateurSeul: true },
       { to: '/commissions', label: 'Commissions', icon: BadgeEuro, end: false, fondateurSeul: true },
+      { to: '/business-plan', label: 'Business Plan', icon: Compass, end: false, fondateurSeul: true },
     ],
   },
   {
