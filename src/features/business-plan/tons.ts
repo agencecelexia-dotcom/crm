@@ -1,4 +1,4 @@
-import type { GraviteVerrou, StatutEtape } from './donnees'
+import type { Gravite, Perimetre, Statut } from './donnees'
 
 /**
  * Le code couleur porte du sens, et rien d'autre :
@@ -17,20 +17,41 @@ export const TON = {
   neutre: { bord: 'border-border', fond: 'bg-card', texte: 'text-foreground' },
 } as const
 
-export const TON_ETAPE: Record<StatutEtape, keyof typeof TON> = {
+export const TON_ETAPE: Record<Statut, keyof typeof TON> = {
   ok: 'neutre',
   attention: 'tension',
   critique: 'critique',
 }
 
-export const TON_GRAVITE: Record<GraviteVerrou, keyof typeof TON> = {
+export const TON_GRAVITE: Record<Gravite, keyof typeof TON> = {
   critique: 'critique',
   eleve: 'tension',
   moyen: 'neutre',
 }
 
-export const LIBELLE_GRAVITE: Record<GraviteVerrou, string> = {
+export const LIBELLE_GRAVITE: Record<Gravite, string> = {
   critique: 'Critique',
   eleve: 'Élevé',
   moyen: 'Moyen',
+}
+
+/**
+ * À qui appartient une étape ou un outil.
+ *
+ * Le périmètre est orthogonal au statut : une étape peut être saine et relever
+ * d'Antoine, ou critique et relever de Thomas. Le statut colore la carte, le
+ * périmètre dit seulement qui la tient.
+ */
+export const LIBELLE_PERIMETRE: Record<Perimetre, string> = {
+  thomas: 'Thomas',
+  antoine: 'Antoine',
+  equipe: 'Équipe',
+  commun: 'Commun',
+}
+
+export const TON_PERIMETRE: Record<Perimetre, keyof typeof TON> = {
+  thomas: 'thomas',
+  antoine: 'antoine',
+  equipe: 'neutre',
+  commun: 'neutre',
 }

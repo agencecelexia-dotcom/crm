@@ -1,7 +1,7 @@
 import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from '@/components/ui/accordion'
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Section } from '../section'
 
 /**
@@ -15,7 +15,7 @@ export function SectionProcedures() {
   return (
     <Section numero="08" titre="Procédures">
       <Accordion type="single" collapsible className="rounded-lg border border-border bg-card">
-        {BUSINESS_PLAN.procedures.map((p) => (
+        {businessPlan.procedures.map((p) => (
           <AccordionItem key={p.titre} value={p.titre} className="px-4 last:border-b-0">
             <AccordionTrigger className="text-sm font-medium">{p.titre}</AccordionTrigger>
             <AccordionContent>
@@ -29,6 +29,13 @@ export function SectionProcedures() {
                   </li>
                 ))}
               </ol>
+              {/* La note porte le piège de la procédure — ce qu'on oublie en
+                  l'appliquant. Elle se distingue donc des étapes. */}
+              {p.note && (
+                <p className="mb-2 rounded-md border border-border bg-muted/40 p-2.5 text-xs leading-relaxed text-muted-foreground">
+                  {p.note}
+                </p>
+              )}
             </AccordionContent>
           </AccordionItem>
         ))}

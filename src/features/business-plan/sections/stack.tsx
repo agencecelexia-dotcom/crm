@@ -3,8 +3,10 @@ import { ExternalLink } from 'lucide-react'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Section } from '../section'
+import { LIBELLE_PERIMETRE, TON, TON_PERIMETRE } from '../tons'
+import { cn } from '@/lib/utils'
 
 /** 09 — Les outils et ce qu'ils portent. */
 export function SectionStack() {
@@ -18,10 +20,11 @@ export function SectionStack() {
             <TableRow>
               <TableHead className="w-40">Outil</TableHead>
               <TableHead>Rôle</TableHead>
+              <TableHead className="w-28">Pilote</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {BUSINESS_PLAN.stack.map((s) => (
+            {businessPlan.stack.map((s) => (
               <TableRow key={s.outil}>
                 <TableCell className="align-top font-medium">
                   {s.url ? (
@@ -39,6 +42,11 @@ export function SectionStack() {
                   )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{s.role}</TableCell>
+                <TableCell
+                  className={cn('align-top text-sm', TON[TON_PERIMETRE[s.perimetre]].texte)}
+                >
+                  {LIBELLE_PERIMETRE[s.perimetre]}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

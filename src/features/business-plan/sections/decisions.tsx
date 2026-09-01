@@ -2,13 +2,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Section } from '../section'
 import { TON } from '../tons'
 
 /** 10 — Ce qui n'est pas tranché, et pour quand. */
 export function SectionDecisions({ filtreCritique }: { filtreCritique: boolean }) {
-  const lignes = BUSINESS_PLAN.decisionsOuvertes.filter(
+  const lignes = businessPlan.decisionsOuvertes.filter(
     (d) => !filtreCritique || d.statut === 'ouvert',
   )
 

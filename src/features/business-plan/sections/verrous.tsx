@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Section } from '../section'
 import { LIBELLE_GRAVITE, TON, TON_GRAVITE } from '../tons'
 
@@ -13,7 +13,7 @@ import { LIBELLE_GRAVITE, TON, TON_GRAVITE } from '../tons'
 const ORDRE = { critique: 0, eleve: 1, moyen: 2 } as const
 
 export function SectionVerrous({ filtreCritique }: { filtreCritique: boolean }) {
-  const verrous = [...BUSINESS_PLAN.verrous]
+  const verrous = [...businessPlan.verrous]
     .filter((v) => !filtreCritique || v.gravite !== 'moyen')
     .sort((a, b) => ORDRE[a.gravite] - ORDRE[b.gravite])
 

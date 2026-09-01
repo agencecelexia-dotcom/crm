@@ -1,9 +1,9 @@
 import { ChevronRight } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Bloc, Section } from '../section'
-import { TON, TON_ETAPE } from '../tons'
+import { LIBELLE_PERIMETRE, TON, TON_ETAPE, TON_PERIMETRE } from '../tons'
 
 /**
  * 03 — La chaîne de valeur, de la publicité au chantier signé.
@@ -13,7 +13,7 @@ import { TON, TON_ETAPE } from '../tons'
  * aussi vite.
  */
 export function SectionMachine() {
-  const { machine, metriques } = BUSINESS_PLAN
+  const { machine, metriques } = businessPlan
   return (
     <Section numero="03" titre="La machine">
       {/* Le flux passe en colonne sous 768px : cinq cartes côte à côte sur un
@@ -26,6 +26,11 @@ export function SectionMachine() {
               <div className={cn('flex-1 rounded-lg border p-3', ton.bord, ton.fond)}>
                 <p className={cn('text-sm font-medium', ton.texte)}>{e.nom}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{e.sousTitre}</p>
+                {/* Le statut colore la carte, le périmètre dit qui la tient :
+                    deux informations orthogonales, deux traitements distincts. */}
+                <p className={cn('mt-1.5 text-xs', TON[TON_PERIMETRE[e.perimetre]].texte)}>
+                  {LIBELLE_PERIMETRE[e.perimetre]}
+                </p>
               </div>
               {i < machine.length - 1 && (
                 <ChevronRight

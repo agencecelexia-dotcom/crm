@@ -1,9 +1,9 @@
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Bloc, Section } from '../section'
 
 /** 01 — Ce qu'on fait et où on va. Deux cartes, rien de plus. */
 export function SectionIdentite() {
-  const { identite } = BUSINESS_PLAN
+  const { identite } = businessPlan
   return (
     <Section numero="01" titre="Identité et positionnement">
       <div className="grid gap-3 md:grid-cols-2">

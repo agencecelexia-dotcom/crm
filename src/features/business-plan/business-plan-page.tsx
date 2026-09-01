@@ -4,7 +4,8 @@ import { ExternalLink, Filter } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { BUSINESS_PLAN } from './donnees'
+import { formatDate } from '@/lib/format'
+import { businessPlan } from './donnees'
 import { TON } from './tons'
 import { SectionIdentite } from './sections/identite'
 import { SectionMoat } from './sections/moat'
@@ -32,20 +33,20 @@ import { SectionRoadmap } from './sections/roadmap'
 export function BusinessPlanPage() {
   // Le filtre le plus utilisé : ne garder que ce qui appelle une décision.
   const [filtreCritique, setFiltreCritique] = useState(false)
-  const { meta } = BUSINESS_PLAN
+  const { meta } = businessPlan
 
-  const critiques = BUSINESS_PLAN.verrous.filter((v) => v.gravite !== 'moyen').length
-  const ouvertes = BUSINESS_PLAN.decisionsOuvertes.filter((d) => d.statut === 'ouvert').length
+  const critiques = businessPlan.verrous.filter((v) => v.gravite !== 'moyen').length
+  const ouvertes = businessPlan.decisionsOuvertes.filter((d) => d.statut === 'ouvert').length
 
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader
         titre="Business Plan"
-        sousTitre={`${meta.version} · ${meta.misAJourLe}`}
+        sousTitre={`${meta.version} · mis à jour le ${formatDate(meta.miseAJour)}`}
         action={
-          meta.urlDocument ? (
+          meta.docUrl ? (
             <Button asChild variant="outline" size="sm">
-              <a href={meta.urlDocument} target="_blank" rel="noreferrer">
+              <a href={meta.docUrl} target="_blank" rel="noreferrer">
                 <ExternalLink className="size-4" />
                 Document
               </a>
@@ -74,11 +75,11 @@ export function BusinessPlanPage() {
           </span>{' '}
           en attente
         </p>
-        {!meta.urlDocument && (
+        {!meta.docUrl && (
           <p className="w-full text-xs text-muted-foreground">
             Lien vers le document non renseigné — à compléter dans{' '}
             <code className="rounded bg-muted px-1 py-0.5">donnees.ts</code>, champ{' '}
-            <code className="rounded bg-muted px-1 py-0.5">meta.urlDocument</code>.
+            <code className="rounded bg-muted px-1 py-0.5">meta.docUrl</code>.
           </p>
         )}
       </div>

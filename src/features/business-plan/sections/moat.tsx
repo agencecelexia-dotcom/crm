@@ -1,4 +1,4 @@
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Bloc, Section } from '../section'
 
 /** 02 — Les quatre protections, dans l'ordre où on y investit. */
@@ -10,7 +10,7 @@ export function SectionMoat() {
       sousTitre="Par ordre d’investissement"
     >
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        {BUSINESS_PLAN.moat.map((m) => (
+        {businessPlan.moat.map((m) => (
           <Bloc key={m.rang}>
             <p className="mb-1.5 font-mono text-xs tabular-nums text-muted-foreground">
               {String(m.rang).padStart(2, '0')}

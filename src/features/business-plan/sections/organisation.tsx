@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { BUSINESS_PLAN } from '../donnees'
+import { businessPlan } from '../donnees'
 import { Bloc, Section } from '../section'
 import { TON } from '../tons'
 
@@ -11,7 +11,7 @@ import { TON } from '../tons'
  * elle-même une information — c'est le point de vigilance du chapitre 1.
  */
 export function SectionOrganisation() {
-  const { organisation, capital } = BUSINESS_PLAN
+  const { organisation, capital } = businessPlan
   return (
     <Section
       numero="05"
@@ -32,6 +32,23 @@ export function SectionOrganisation() {
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             {capital.structure}
           </p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {capital.vesting}
+          </p>
+          {/* La réserve est le point le plus sensible du chapitre capital :
+              la masquer reviendrait à la laisser s'oublier. */}
+          {capital.reserve && (
+            <p
+              className={cn(
+                'mt-3 rounded-md border p-2.5 text-xs leading-relaxed',
+                TON.tension.bord,
+                TON.tension.fond,
+                TON.tension.texte,
+              )}
+            >
+              {capital.reserve}
+            </p>
+          )}
         </Bloc>
         <Bloc>
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
