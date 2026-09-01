@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, FileText, HandHelping, RotateCcw, Trash2, UserX } from 'lucide-react'
+import {
+  AlertTriangle, FileText, HandHelping, PhoneCall, PhoneMissed, RotateCcw,
+  Search, Trash2, UserX,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -14,6 +17,13 @@ import { formatDate, formatEuros } from '@/lib/format'
 import { MOTIF_LABEL } from '@/lib/motifs-perte'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth/use-auth'
+import { Input } from '@/components/ui/input'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import {
+  APPELS_MAX, MONTANT_ON_INSISTE, PastillesAppels, type ResultatAppel,
+} from '../components/pastilles-appels'
 
 /**
  * Chantiers rendus ou perdus par un artisan, alors que le projet reste vivant.
@@ -53,6 +63,11 @@ interface AReattribuer {
   /** Jours depuis la sortie du pipe. Au-delà d'un mois, le client a souvent
    *  signé ailleurs — c'est le critère de tri le plus utile. */
   jours_dattente: number | null
+  /** Tentatives d'appel, dans l'ordre. Cinq échecs disent d'arrêter d'insister. */
+  appels: ResultatAppel[]
+  nb_appels: number
+  nb_sans_reponse: number
+  dernier_appel: string | null
 }
 
 /**
@@ -88,13 +103,47 @@ const ETAPE_LABEL: Record<string, string> = {
   termine: 'terminé',
 }
 
-type Filtre = 'libres' | 'tous'
+type Filtre = 'libres' | 'tous' | 'jamais_appeles' | 'sans_reponse' | 'epuises'
+type Tri = 'anciennete' | 'montant' | 'appels'
+
+/** Rend une chaîne comparable : sans accent, sans casse, sans ponctuation. */
+function normaliser(v: string) {
+  return v
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
 
 export function AReattribuerPage() {
   const [filtre, setFiltre] = useState<Filtre>('libres')
+  const [tri, setTri] = useState<Tri>('anciennete')
+  const [recherche, setRecherche] = useState('')
   const qc = useQueryClient()
   const { session, estFondateur } = useAuth()
   const monUserId = session?.user.id ?? null
+
+  // Journaliser un appel. Le décompte des tentatives sert à décider quand
+  // cesser d'insister — encore faut-il qu'il soit tenu.
+  const logAppel = useMutation({
+    mutationFn: async ({ projetId, resultat }: { projetId: string; resultat: ResultatAppel }) => {
+      const { data, error } = await supabase.rpc('log_appel', {
+        p_projet_id: projetId,
+        p_resultat: resultat,
+      })
+      if (error) throw error
+      const r = data as { ok?: boolean; error?: string } | null
+      if (!r?.ok) throw new Error(r?.error ?? 'echec')
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+      void qc.invalidateQueries({ queryKey: ['projets'] })
+    },
+    onError: (e) =>
+      toast.error('Appel non enregistré', {
+        description: e instanceof Error ? e.message : undefined,
+      }),
+  })
 
   const prendre = useMutation({
     mutationFn: async (projetId: string) => {
@@ -179,20 +228,65 @@ export function AReattribuerPage() {
   })
 
   const liste = useMemo(() => {
-    const tout = data ?? []
-    // Orphelins d'abord : ce sont eux qui se perdent vraiment, personne ne
-    // s'en occupe. Puis les plus récemment sortis du pipe.
-    // Orphelins d'abord — personne ne s'en occupe. Puis les plus anciens :
-    // ce sont eux qui refroidissent, donc ceux qu'il faut traiter en premier.
-    // Les plus anciens d'abord : depuis 0111, aucun chantier de cette liste
-    // n'a d'artisan actif, le tri sur `artisans_actifs` n'a plus d'objet.
-    const tries = [...tout].sort(
-      (a, b) => (b.jours_dattente ?? 0) - (a.jours_dattente ?? 0),
-    )
-    return filtre === 'libres' ? tries.filter((p) => !p.assigne_a) : tries
-  }, [data, filtre])
+    let tout = data ?? []
+
+    // Recherche : un seul champ qui cherche partout. Devoir choisir « nom » ou
+    // « téléphone » avant de taper fait perdre plus de temps que ça n'en gagne.
+    // Les chiffres saisis sont comparés au numéro dépouillé de son formatage —
+    // « 0612 » doit trouver « 06 12 34 56 78 ».
+    const q = normaliser(recherche)
+    if (q) {
+      const chiffres = q.replace(/\D/g, '')
+      tout = tout.filter((p) => {
+        const tel = (p.client_telephone ?? '').replace(/\D/g, '')
+        if (chiffres.length >= 2 && tel.includes(chiffres)) return true
+        return [
+          p.client_nom, p.client_ville, p.client_code_postal,
+          p.metiers?.join(' '), p.metier, p.artisan_nom, p.assigne_nom,
+        ]
+          .filter(Boolean)
+          .some((v) => normaliser(v as string).includes(q))
+      })
+    }
+
+    const filtres = tout.filter((p) => {
+      switch (filtre) {
+        case 'libres':         return !p.assigne_a
+        // Jamais tenté : le gisement le plus rentable, personne ne les a
+        // encore appelés.
+        case 'jamais_appeles': return p.nb_appels === 0
+        // Tenté, jamais joint : à relancer, mais pas encore épuisé.
+        case 'sans_reponse':   return p.nb_appels > 0 && !p.appels.includes('repondu')
+        // Cinq échecs : continuer d'appeler ne sert plus à rien.
+        case 'epuises':        return p.nb_sans_reponse >= APPELS_MAX
+        default:               return true
+      }
+    })
+
+    const parAnciennete = (a: AReattribuer, b: AReattribuer) =>
+      (b.jours_dattente ?? 0) - (a.jours_dattente ?? 0)
+
+    return [...filtres].sort((a, b) => {
+      switch (tri) {
+        // Les plus gros devis d'abord : à effort d'appel égal, ce sont eux qui
+        // rapportent le plus. Un chantier sans montant passe en dernier.
+        case 'montant':
+          return (b.montant_devis ?? -1) - (a.montant_devis ?? -1) || parAnciennete(a, b)
+        // Les moins appelés d'abord : évite de s'acharner sur les mêmes.
+        case 'appels':
+          return a.nb_appels - b.nb_appels || parAnciennete(a, b)
+        default:
+          return parAnciennete(a, b)
+      }
+    })
+  }, [data, filtre, tri, recherche])
 
   const libres = (data ?? []).filter((p) => !p.assigne_a).length
+  const jamaisAppeles = (data ?? []).filter((p) => p.nb_appels === 0).length
+  const sansReponse = (data ?? []).filter(
+    (p) => p.nb_appels > 0 && !p.appels.includes('repondu'),
+  ).length
+  const epuises = (data ?? []).filter((p) => p.nb_sans_reponse >= APPELS_MAX).length
 
   if (isLoading) return <Skeleton className="m-4 h-80 rounded-2xl" />
   if (isError) {
@@ -213,10 +307,37 @@ export function AReattribuerPage() {
     <div>
       <PageHeader titre="À réattribuer" />
 
+      {/* Recherche et tri. Un seul champ cherche partout : nom, téléphone,
+          ville, code postal, métier, artisan. */}
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-11 pl-9"
+            placeholder="Rechercher (nom, téléphone, ville, métier…)"
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+          />
+        </div>
+        <Select value={tri} onValueChange={(v) => setTri(v as Tri)}>
+          <SelectTrigger className="h-11 sm:w-56">
+            <SelectValue placeholder="Trier" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="anciennete">Les plus anciens d'abord</SelectItem>
+            <SelectItem value="montant">Devis le plus élevé</SelectItem>
+            <SelectItem value="appels">Les moins appelés d'abord</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="mb-4 flex flex-wrap gap-2">
         {(
           [
             { cle: 'libres' as const, label: 'Non pris en charge', n: libres },
+            { cle: 'jamais_appeles' as const, label: 'Jamais appelés', n: jamaisAppeles },
+            { cle: 'sans_reponse' as const, label: 'Jamais joints', n: sansReponse },
+            { cle: 'epuises' as const, label: `${APPELS_MAX} échecs et plus`, n: epuises },
             { cle: 'tous' as const, label: 'Tous', n: (data ?? []).length },
           ] satisfies { cle: Filtre; label: string; n: number }[]
         ).map((f) => (
@@ -245,7 +366,21 @@ export function AReattribuerPage() {
         />
       ) : (
         <div className="space-y-3">
-          {liste.map((p) => (
+          {liste.map((p) => {
+            // Cinq sonneries dans le vide : le dossier encombre la pile. Sauf
+            // si le devis est important — à 10-15 % de commission, un gros
+            // chantier vaut largement un sixième appel. Pousser à l'abandon
+            // ferait perdre bien plus que le temps gagné.
+            const epuise =
+              p.nb_sans_reponse >= APPELS_MAX &&
+              !p.appels.includes('repondu') &&
+              (p.montant_devis ?? 0) < MONTANT_ON_INSISTE
+            const insister =
+              p.nb_sans_reponse >= APPELS_MAX &&
+              !p.appels.includes('repondu') &&
+              (p.montant_devis ?? 0) >= MONTANT_ON_INSISTE
+
+            return (
             <Card
               key={p.affectation_id}
               className={cn(
@@ -257,6 +392,10 @@ export function AReattribuerPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-display text-base tracking-tight">
                     {p.client_nom ?? 'Client non renseigné'}
+                    {/* Les tentatives d'appel, juste après le nom : c'est là
+                        qu'on décide s'il faut rappeler ce client ou passer au
+                        suivant. */}
+                    <PastillesAppels appels={p.appels} className="ml-2 align-middle" />
                   </p>
                   <p className="mt-0.5 text-sm text-muted-foreground">
                     {(p.metiers?.length ? p.metiers : [p.metier]).filter(Boolean).join(', ')}
@@ -325,6 +464,43 @@ export function AReattribuerPage() {
                 </div>
 
                 <div className="flex shrink-0 flex-col gap-2">
+                  {/* Journal d'appel, à portée immédiate : noter la tentative
+                      juste après avoir raccroché est la seule façon que le
+                      décompte reste juste. */}
+                  {p.client_telephone && (
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-[#B91C1C] hover:bg-[#EF4444]/10"
+                        title="Personne n'a décroché"
+                        disabled={logAppel.isPending}
+                        onClick={() =>
+                          logAppel.mutate({
+                            projetId: p.projet_id,
+                            resultat: 'pas_de_reponse',
+                          })
+                        }
+                      >
+                        <PhoneMissed className="size-4" />
+                        Sans réponse
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-[#15803D] hover:bg-[#16A34A]/10"
+                        title="Le client a répondu"
+                        disabled={logAppel.isPending}
+                        onClick={() =>
+                          logAppel.mutate({ projetId: p.projet_id, resultat: 'repondu' })
+                        }
+                      >
+                        <PhoneCall className="size-4" />
+                        Joint
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Prendre en charge évite que deux personnes rappellent le
                       même client — et que le client entende deux fois la même
                       agence. */}
@@ -353,9 +529,11 @@ export function AReattribuerPage() {
                       chantier n'a plus d'avenir engage le chiffre d'affaires. */}
                   {estFondateur && (
                     <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-muted-foreground hover:text-destructive"
+                      size={epuise ? 'default' : 'sm'}
+                      variant={epuise ? 'destructive' : 'ghost'}
+                      className={cn(
+                        !epuise && 'text-muted-foreground hover:text-destructive',
+                      )}
                       disabled={retirer.isPending}
                       onClick={() => {
                         const motif = window.prompt(
@@ -369,13 +547,23 @@ export function AReattribuerPage() {
                       }}
                     >
                       <Trash2 className="size-4" />
-                      Retirer
+                      {epuise ? `Retirer — ${p.nb_sans_reponse} échecs` : 'Retirer'}
                     </Button>
+                  )}
+
+                  {/* Beaucoup d'échecs mais un gros devis : on le dit, plutôt
+                      que de laisser croire que le dossier est à jeter. */}
+                  {insister && (
+                    <p className="max-w-[13rem] text-xs text-[#B45309]">
+                      {p.nb_sans_reponse} appels sans réponse, mais{' '}
+                      {formatEuros(p.montant_devis)} en jeu — ça vaut un essai de plus.
+                    </p>
                   )}
                 </div>
               </div>
             </Card>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
