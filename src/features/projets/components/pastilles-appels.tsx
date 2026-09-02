@@ -17,14 +17,15 @@ export const MONTANT_ON_INSISTE = 15000
 export type ResultatAppel = 'pas_de_reponse' | 'repondu' | 'rappeler' | 'faux_numero'
 
 /**
- * Les tentatives d'appel, en cinq pastilles.
+ * Les tentatives d'appel de L'AGENCE, en cinq pastilles.
  *
  * Verte quand le client a décroché, rouge quand personne n'a répondu, ambre
  * quand il a demandé à être rappelé. Les pastilles restantes sont vides.
  *
- * Lire un historique d'appels dans une liste de suivis demande d'ouvrir la
- * fiche ; ici l'information tient en un coup d'œil, au moment où l'on décide
- * qui appeler.
+ * Ne compte QUE nos appels, et seulement depuis que le chantier est revenu
+ * dans la pile (migration 0124). Les tentatives de l'artisan précédent ne
+ * disent rien de la nôtre : quand il rend un dossier, le compteur repart de
+ * zéro. Les mélanger afficherait l'acharnement de quelqu'un d'autre.
  */
 export function PastillesAppels({
   appels,

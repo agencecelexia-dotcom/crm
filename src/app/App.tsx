@@ -10,6 +10,7 @@ import { AccueilSelonRole } from '@/features/accueil-selon-role'
 import { EquipePage } from '@/features/equipe/equipe-page'
 import { MonPipePage } from '@/features/commercial/mon-pipe-page'
 import { ReprisesPage } from '@/features/equipe/reprises-page'
+import { BusinessPlanPage } from '@/features/business-plan/business-plan-page'
 import { CreativesPage } from '@/features/creatives/creatives-page'
 import { VueCommercialPage } from '@/features/equipe/vue-commercial-page'
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -146,6 +147,9 @@ export default function App() {
                   <Route path="/equipe/:id" element={<VueCommercialPage />} />
                   {/* Suivi des chantiers repris par chaque commercial. */}
                   <Route path="/reprises" element={<ReprisesPage />} />
+                  {/* Stratégie de la boîte : réservé aux fondateurs, comme
+                      les commissions et les réglages. */}
+                  <Route path="/business-plan" element={<BusinessPlanPage />} />
                   {/* Génération de visuels publicitaires : engage de l'argent,
                       donc réservé aux fondateurs comme les commissions. */}
                   <Route path="/creatives" element={<CreativesPage />} />
