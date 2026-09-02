@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import {
   Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut,
-  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, type LucideIcon,
+  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, Sparkles,
+  type LucideIcon,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { NotificationsBell } from '@/features/automatisations/notifications-bell'
@@ -57,6 +58,7 @@ const GROUPES: { titre: string; items: Item[] }[] = [
     items: [
       { to: '/notes', label: 'Notes', icon: StickyNote, end: false, fondateurSeul: true },
       { to: '/parametres/automatisations', label: 'Automatisations', icon: Zap, end: false, fondateurSeul: true },
+      { to: '/creatives', label: 'Créatives', icon: Sparkles, end: false, fondateurSeul: true },
       { to: '/parametres/signature', label: 'Ma signature', icon: PenTool, end: false },
       { to: '/equipe', label: 'Équipe', icon: UserCog, end: false, fondateurSeul: true },
       { to: '/reprises', label: 'Reprises', icon: RotateCcw, end: false, fondateurSeul: true },

@@ -20,6 +20,9 @@ export interface Reglages {
   post_rdv_relance_h: string
   heure_debut: string
   heure_fin: string
+  /** Nombre de générations de créatives autorisées par mois. Lu AUSSI par
+   *  l'edge function : bloquer côté écran seulement ne garderait rien. */
+  creatives_plafond_mois: string
   /**
    * État de chaque automatisation du catalogue, y compris celles ajoutées
    * après coup. Évite d'avoir à déclarer un champ par automatisation : le
@@ -39,6 +42,7 @@ const DEFAUTS: Reglages = {
   relance_escalade_h: '48',
   post_rdv_premier_h: '24',
   post_rdv_relance_h: '24',
+  creatives_plafond_mois: '200',
   heure_debut: '8',
   heure_fin: '20',
   bascules: {},
@@ -63,6 +67,8 @@ export function useReglages() {
         relance_escalade_h: map.relance_escalade_h ?? DEFAUTS.relance_escalade_h,
         post_rdv_premier_h: map.post_rdv_premier_h ?? DEFAUTS.post_rdv_premier_h,
         post_rdv_relance_h: map.post_rdv_relance_h ?? DEFAUTS.post_rdv_relance_h,
+        creatives_plafond_mois:
+          map.creatives_plafond_mois ?? DEFAUTS.creatives_plafond_mois,
         heure_debut: map.heure_debut ?? DEFAUTS.heure_debut,
         heure_fin: map.heure_fin ?? DEFAUTS.heure_fin,
         // Absent = actif, comme `automatisation_active()` côté base : les deux

@@ -161,6 +161,12 @@ export function AutomatisationsPage() {
               <CardTitre>Délais & horaires</CardTitre>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
+              <Champ
+                label="Créatives / mois (plafond)"
+                cle="creatives_plafond_mois"
+                val={r.creatives_plafond_mois}
+                onSave={setNum}
+              />
               <Champ label="1ʳᵉ relance (h)" cle="relance_premier_h" val={r.relance_premier_h} onSave={setNum} />
               <Champ label="Intervalle relances (h)" cle="relance_interval_h" val={r.relance_interval_h} onSave={setNum} />
               <Champ label="Escalade Thomas (h)" cle="relance_escalade_h" val={r.relance_escalade_h} onSave={setNum} />
