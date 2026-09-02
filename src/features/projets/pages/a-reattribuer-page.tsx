@@ -63,7 +63,8 @@ interface AReattribuer {
   /** Jours depuis la sortie du pipe. Au-delà d'un mois, le client a souvent
    *  signé ailleurs — c'est le critère de tri le plus utile. */
   jours_dattente: number | null
-  /** Tentatives d'appel, dans l'ordre. Cinq échecs disent d'arrêter d'insister. */
+  /** NOS tentatives d'appel depuis le retour du chantier dans la pile, dans
+   *  l'ordre. Celles de l'artisan précédent n'y figurent pas. */
   appels: ResultatAppel[]
   nb_appels: number
   nb_sans_reponse: number
@@ -335,7 +336,7 @@ export function AReattribuerPage() {
         {(
           [
             { cle: 'libres' as const, label: 'Non pris en charge', n: libres },
-            { cle: 'jamais_appeles' as const, label: 'Jamais appelés', n: jamaisAppeles },
+            { cle: 'jamais_appeles' as const, label: 'Jamais appelés par nous', n: jamaisAppeles },
             { cle: 'sans_reponse' as const, label: 'Jamais joints', n: sansReponse },
             { cle: 'epuises' as const, label: `${APPELS_MAX} échecs et plus`, n: epuises },
             { cle: 'tous' as const, label: 'Tous', n: (data ?? []).length },
