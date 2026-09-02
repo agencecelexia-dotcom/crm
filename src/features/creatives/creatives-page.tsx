@@ -130,7 +130,7 @@ export function CreativesPage() {
       />
 
       <Card className="mb-5 rounded-lg border-border p-4">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div>
           <div>
             <Label className="text-xs">Modèle</Label>
             <Select
@@ -159,36 +159,23 @@ export function CreativesPage() {
             {favori && <p className="mt-1 text-xs text-muted-foreground">{favori.usage}</p>}
           </div>
 
-          <div>
-            <Label className="text-xs">
-              Ou n’importe quel modèle fal
-              <span className="ml-1 font-normal text-muted-foreground">1 491 disponibles</span>
-            </Label>
-            <Input
-              className="h-10 font-mono text-xs"
-              placeholder="fal-ai/…"
-              value={modeleLibre}
-              onChange={(e) => {
-                setModeleLibre(e.target.value)
-                setAvances({})
-              }}
-            />
-            {schemaKo && modeleLibre.trim() && (
-              <p className="mt-1 text-xs text-destructive">
-                Modèle inconnu de fal — vérifiez l’identifiant.
-              </p>
-            )}
-          </div>
         </div>
 
         <div className="mt-3">
-          <Label className="text-xs">Ce que vous voulez voir</Label>
+          <Label>Décrivez le visuel voulu</Label>
           <Textarea
-            rows={3}
-            placeholder="Rénovation de toiture sur une maison moderne, ciel dégagé, photo professionnelle…"
+            rows={5}
+            placeholder="Photo professionnelle d'une toiture en tuiles rouges refaite à neuf sur une maison de plain-pied, ciel bleu dégagé, prise de vue depuis le jardin, lumière de fin d'après-midi"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
           />
+          {/* La fidélité au résultat tient d'abord à la description. Trois
+              repères valent mieux qu'un modèle plus cher. */}
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Plus vous êtes précis, plus l'image ressemblera à votre idée. Dites le{' '}
+            <strong>sujet</strong>, le <strong>cadrage</strong> et la{' '}
+            <strong>lumière</strong> — et ce que vous ne voulez pas voir.
+          </p>
         </div>
 
         {formatsDisponibles.length > 0 && (
@@ -216,7 +203,34 @@ export function CreativesPage() {
         )}
 
         {champs && (
-          <div className="mt-3">
+          <div className="mt-3 space-y-3">
+            {/* Rangé ici plutôt qu'en vue principale : les 1 491 modèles de
+                fal restent accessibles, sans encombrer l'usage courant. */}
+            <details className="rounded-lg border border-border">
+              <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">
+                Utiliser un autre modèle fal
+                <span className="ml-1.5 font-normal text-muted-foreground">
+                  1 491 disponibles
+                </span>
+              </summary>
+              <div className="border-t border-border p-3">
+                <Input
+                  className="h-10 font-mono text-xs"
+                  placeholder="fal-ai/…"
+                  value={modeleLibre}
+                  onChange={(e) => {
+                    setModeleLibre(e.target.value)
+                    setAvances({})
+                  }}
+                />
+                {schemaKo && modeleLibre.trim() && (
+                  <p className="mt-1 text-xs text-destructive">
+                    Modèle inconnu de fal — vérifiez l'identifiant.
+                  </p>
+                )}
+              </div>
+            </details>
+
             <FormulaireDynamique
               champs={champs}
               valeurs={avances}

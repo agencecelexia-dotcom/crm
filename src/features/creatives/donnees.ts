@@ -31,47 +31,43 @@ export interface ModeleFavori {
 export const SEUIL_CONFIRMATION_USD = 0.5
 
 export const MODELES: ModeleFavori[] = [
+  // En tête : le modèle qui respecte le mieux la description. C'est le
+  // critère qui compte pour une créative publicitaire — un visuel superbe
+  // mais hors sujet ne sert à rien.
   {
-    id: 'fal-ai/flux/schnell',
-    titre: 'Flux Schnell',
+    id: 'fal-ai/flux-2-pro',
+    titre: 'Fidèle à la description',
     categorie: 'text-to-image',
-    prixUsd: 0.003,
-    usage: 'Le plus rapide et le moins cher. À utiliser pour explorer des idées.',
+    prixUsd: 0.03,
+    usage: 'Le meilleur pour obtenir exactement ce que vous décrivez. À utiliser par défaut.',
   },
   {
     id: 'bytedance/seedream/v5/pro/text-to-image',
-    titre: 'Seedream v5 Pro',
+    titre: 'Bon compromis',
     categorie: 'text-to-image',
     prixUsd: 0.0045,
-    usage: 'Excellent rapport qualité-prix. Bon rendu photographique.',
-  },
-  {
-    id: 'fal-ai/flux-2-pro',
-    titre: 'Flux 2 Pro',
-    categorie: 'text-to-image',
-    prixUsd: 0.03,
-    usage: 'Qualité supérieure, respect fidèle du texte demandé.',
+    usage: 'Presque aussi fidèle, sept fois moins cher. Bon rendu photo.',
   },
   {
     id: 'fal-ai/nano-banana',
-    titre: 'Nano Banana',
+    titre: 'Scènes réalistes',
     categorie: 'text-to-image',
     prixUsd: 0.039,
-    usage: 'Modèle Google. Très bon sur les scènes réalistes.',
+    usage: 'Modèle Google. Le plus convaincant sur les photos de chantier.',
+  },
+  {
+    id: 'fal-ai/flux/schnell',
+    titre: 'Rapide, pour essayer',
+    categorie: 'text-to-image',
+    prixUsd: 0.003,
+    usage: 'Très rapide et quasi gratuit, mais suit la description de moins près.',
   },
   {
     id: 'fal-ai/nano-banana/edit',
-    titre: 'Nano Banana — retouche',
+    titre: 'Retoucher une image',
     categorie: 'image-to-image',
     prixUsd: 0.039,
     usage: 'Modifie une image existante à partir d’une consigne écrite.',
-  },
-  {
-    id: 'fal-ai/bytedance/seedream/v4/edit',
-    titre: 'Seedream v4 — retouche',
-    categorie: 'image-to-image',
-    prixUsd: null,
-    usage: 'Retouche économique. Utile pour décliner un visuel validé.',
   },
 ]
 
