@@ -116,6 +116,14 @@ export const AUTOMATISATIONS: Automatisation[] = [
     declencheur: 'Chaque jour à 7 h',
   },
   {
+    cle: 'pont_crm_artisan',
+    famille: 'planifie',
+    titre: 'Pont vers le CRM des artisans',
+    description:
+      'Pousse chaque attribution, retrait et message vers le CRM propre de l’artisan, et rapatrie ses mises à jour. Se règle artisan par artisan depuis sa fiche ; cet interrupteur coupe TOUS les ponts d’un coup.',
+    declencheur: 'À chaque événement, livré dans la minute',
+  },
+  {
     cle: 'auto_coherence',
     famille: 'planifie',
     titre: 'Contrôle de cohérence',

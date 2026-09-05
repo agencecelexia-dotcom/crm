@@ -37,11 +37,14 @@ import { useArtisan, useDeleteArtisan, useEcarterArtisan } from '../hooks/use-ar
 import { ScoringArtisanCard } from '../components/scoring-artisan-card'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
 import { ContratCard } from '@/features/contrats/contrat-card'
+import { useAuth } from '@/lib/auth/use-auth'
+import { PontCrmCard } from '../components/pont-crm-card'
 
 // Fiche artisan : infos, spécificités, historique projets, total rapporté.
 export function ArtisanDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { estFondateur } = useAuth()
   const { data: artisan, isLoading } = useArtisan(id)
   const { data: projets } = useProjetsByArtisan(id)
   const remove = useDeleteArtisan()
@@ -189,6 +192,19 @@ export function ArtisanDetailPage() {
 
       {/* Contrat d'engagement (signature en ligne) */}
       <ContratCard artisan={artisan} />
+
+      {/* Pont vers son CRM — juste après le contrat : brancher un partenaire
+          sur nos données relève de la même décision que le signer.
+          Fondateurs seuls, la carte contient un secret de signature. */}
+      {estFondateur && artisan.token && (
+        <div className="mb-4">
+          <PontCrmCard
+            artisanId={artisan.id}
+            societe={artisan.societe ?? `${artisan.nom} ${artisan.prenom ?? ''}`.trim()}
+            tokenArtisan={artisan.token}
+          />
+        </div>
+      )}
 
       {/* Historique des projets */}
       <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
