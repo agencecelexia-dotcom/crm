@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ACTIONS_PONT,
   ETAPES_PONT,
   MOTIFS_PONT,
+  RESULTATS_APPEL,
+  SLOTS_PONT,
   specificationPont,
 } from '../../src/features/artisans/specification-pont'
 
@@ -40,9 +43,29 @@ describe('notice de branchement', () => {
 
   it('énumère le vocabulaire imposé par la base', () => {
     for (const e of ETAPES_PONT) expect(notice).toContain(e)
-    // Liste fermée côté SQL (`origine_du_motif`, 0079) : un motif absent de la
-    // notice serait envoyé au hasard puis rejeté.
+    // Listes fermées côté SQL : une valeur absente de la notice serait
+    // envoyée au hasard puis rejetée.
     for (const m of MOTIFS_PONT) expect(notice).toContain(m)
+    for (const r of RESULTATS_APPEL) expect(notice).toContain(r)
+    for (const s of SLOTS_PONT) expect(notice).toContain(s)
+  })
+
+  it('couvre les DIX actions de l’espace artisan, sans exception', () => {
+    // C'est le point qui a manqué au premier jet : la notice ne couvrait que
+    // statut, correction et abandon. Les sept autres actions n'avaient aucun
+    // chemin depuis son CRM, ce qui l'obligeait à rouvrir le portail — soit
+    // exactement la double saisie qu'on supprime.
+    expect(ACTIONS_PONT).toHaveLength(10)
+    for (const a of ACTIONS_PONT) expect(notice).toContain(`\`${a.type}\``)
+  })
+
+  it('donne une marche à suivre pour valider la connexion', () => {
+    expect(notice).toContain('COMMENT ON TESTE')
+    expect(notice).toContain('Tester la connexion')
+    // Le ping doit être documenté côté réception, sinon son serveur créera
+    // une fiche à chaque test.
+    expect(notice).toContain('ping')
+    expect(notice).toContain('ne rien créer')
   })
 
   it('exige les deux dédulications, entrante et sortante', () => {

@@ -23,8 +23,34 @@ motif de perte imposé (0079/0114), recalcul de commission. Le pont les appelle
 au lieu d'écrire en base : c'est ce qui garantit qu'une intégration partenaire
 ne rouvre pas les incohérences que trois migrations ont fermées.
 
-Il manquait le sens **nous → artisan**, et trois garde-fous. C'est l'objet de
-la migration `0126_pont_crm_artisan.sql`.
+Il manquait le sens **nous → artisan**, et trois garde-fous : c'est l'objet de
+`0126_pont_crm_artisan.sql`.
+
+`0127_pont_actions_completes.sql` complète l'aiguillage. Le premier jet ne
+couvrait que trois actions — déclarer une étape, corriger, abandonner — alors
+que l'espace artisan en compte **dix**. Les sept autres (montant, devis,
+rappel, appel, restauration, messages lus) n'avaient aucun chemin depuis son
+CRM, ce qui l'obligeait à rouvrir le portail pour elles : soit exactement la
+double saisie qu'on supprimait. Elle ajoute aussi le **test de connexion**.
+
+### Les dix actions
+
+| `p_type` | Équivaut dans le portail à | Délègue à |
+|---|---|---|
+| `statut` | les boutons d'étape | `add_suivi_by_token` |
+| `note` | le fil de discussion | `add_suivi_by_token` |
+| `correction` | la correction d'étape | `corriger_etape_by_token` |
+| `montant` | le champ montant | `set_montant_by_token` |
+| `devis` | le dépôt de devis | `set_devis_by_token` |
+| `rappel` | le mode rappel | `definir_rappel_by_token` |
+| `appel` | le bouton d'appel | `log_appel_by_token` |
+| `perdu` | le retrait du chantier | `retirer_chantier_by_token` |
+| `restauration` | les chantiers perdus | `restaurer_chantier_by_token` |
+| `lu` | l'ouverture du fil | `marquer_lu_by_token` |
+
+Aucune règle n'est recopiée : chaque type délègue. Ajouter une action au
+portail demande donc d'ajouter la branche correspondante ici — sinon l'artisan
+devra revenir sur le site pour elle.
 
 ## Qui fait autorité sur quoi
 
@@ -93,7 +119,11 @@ lettres, et c'est le point qu'on oublie le plus souvent.
    ⚠️ Elle contient le secret de signature — canal sûr, pas un fil public.
 3. Il donne l'URL de son webhook, on la saisit. Les événements en attente
    partent alors tout seuls.
-4. Vérifier sur la fiche : « dernier envoi réussi » doit se remplir.
+4. **Tester la connexion** — le bouton envoie un `ping` signé à son serveur et
+   affiche le code HTTP qu'il renvoie. Le `ping` ne porte aucune donnée client
+   et ne crée rien chez lui : il prouve le tuyau sans engager un vrai chantier.
+   Tant qu'il n'est pas vert, inutile d'aller plus loin.
+5. Vérifier sur la fiche : « dernier envoi réussi » doit se remplir.
 
 Tant que l'URL est vide, rien ne part et rien ne s'accumule — le pont inactif
 ne met même pas les événements en file.

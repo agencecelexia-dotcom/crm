@@ -8,6 +8,7 @@ import {
   Loader2,
   RefreshCw,
   TriangleAlert,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -34,6 +35,7 @@ import {
   usePont,
   useRegenererSecret,
   useSortants,
+  useTesterPont,
 } from '../hooks/use-pont'
 import { specificationPont } from '../specification-pont'
 
@@ -129,6 +131,7 @@ export function PontCrmCard({
   const { data: entrants } = useEntrants(artisanId)
   const enregistrer = useEnregistrerPont(artisanId)
   const regenerer = useRegenererSecret(artisanId)
+  const tester = useTesterPont(artisanId)
   const { copie, copier } = useCopie()
 
   // `undefined` = pas encore saisi par l'utilisateur : on affiche la valeur
@@ -316,6 +319,45 @@ export function PontCrmCard({
               >
                 <RefreshCw className="size-3.5" /> Régénérer le secret
               </Button>
+            </div>
+
+            <Separator />
+
+            {/* --- Prouver le tuyau avant d'y mettre un vrai chantier --- */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={tester.isPending}
+                onClick={() =>
+                  tester.mutate(undefined, {
+                    onSuccess: ({ code, erreur }) => {
+                      if (code && code >= 200 && code < 300) {
+                        toast.success(`Connexion établie — son serveur a répondu ${code}`)
+                      } else {
+                        toast.error(
+                          code
+                            ? `Son serveur a répondu ${code}${erreur ? ` — ${erreur}` : ''}`
+                            : (erreur ?? 'Pas de réponse'),
+                        )
+                      }
+                    },
+                    onError: (e: unknown) =>
+                      toast.error(e instanceof Error ? e.message : 'Échec'),
+                  })
+                }
+              >
+                {tester.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Zap className="size-4" />
+                )}
+                Tester la connexion
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Envoie un <code className="font-mono">ping</code> à son serveur.
+                Aucune donnée client, rien de créé chez lui.
+              </span>
             </div>
 
             <Separator />
