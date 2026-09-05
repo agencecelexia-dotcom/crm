@@ -40,13 +40,29 @@ double saisie qu'on supprimait. Elle ajoute aussi le **test de connexion**.
 | `statut` | les boutons d'étape | `add_suivi_by_token` |
 | `note` | le fil de discussion | `add_suivi_by_token` |
 | `correction` | la correction d'étape | `corriger_etape_by_token` |
-| `montant` | le champ montant | `set_montant_by_token` |
-| `devis` | le dépôt de devis | `set_devis_by_token` |
+| `montant` | les deux champs montant | `set_montant_by_token` |
+| `devis` | les deux zones de dépôt (proposé **et signé**) | `set_devis_by_token` |
 | `rappel` | le mode rappel | `definir_rappel_by_token` |
 | `appel` | le bouton d'appel | `log_appel_by_token` |
 | `perdu` | le retrait du chantier | `retirer_chantier_by_token` |
 | `restauration` | les chantiers perdus | `restaurer_chantier_by_token` |
 | `lu` | l'ouverture du fil | `marquer_lu_by_token` |
+
+### Le devis signé, cas particulier
+
+`trg_coherence_issue` (0120/0121) **détache** un devis signé tant que le statut
+déclaré n'atteint pas `devis_signe` : « une affaire ne peut être gagnée que si
+le statut atteint la signature ». Dans le portail l'artisan clique l'étape puis
+dépose, donc l'ordre est respecté sans y penser. Par le pont, rien ne l'y
+oblige — son document le plus important disparaîtrait en silence, l'appel
+renvoyant pourtant `ok`.
+
+`0128_pont_devis_signe.sql` rétablit l'ordre : un `montant` ou un `devis` posé
+sur l'emplacement `devis_signe` déclare d'abord l'étape, puis dépose. Déposer
+un devis signé DIT que l'affaire est signée.
+
+Elle rhabille aussi le refus de `set_devis_by_token`, qui renvoyait un
+`{"ok": false}` nu — sans motif, l'artisan cherche la panne là où elle n'est pas.
 
 Aucune règle n'est recopiée : chaque type délègue. Ajouter une action au
 portail demande donc d'ajouter la branche correspondante ici — sinon l'artisan

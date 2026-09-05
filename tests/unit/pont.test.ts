@@ -59,6 +59,18 @@ describe('notice de branchement', () => {
     for (const a of ACTIONS_PONT) expect(notice).toContain(`\`${a.type}\``)
   })
 
+  it('distingue le devis du devis SIGNÉ, et dit où téléverser', () => {
+    // Le devis signé est la pièce qui déclenche la commission, et le garde-fou
+    // 0120/0121 le détache tant que l'étape n'y est pas. Une notice qui ne
+    // nomme pas explicitement `devis_signe` fait perdre le document en
+    // silence — l'erreur ne se voit qu'à la facturation.
+    expect(notice).toContain('devis_signe')
+    expect(notice).toContain('Le devis signé se dit toujours explicitement')
+    // Sans l'adresse de téléversement, `p_url` n'est pas remplissable.
+    expect(notice).toContain('/storage/v1/object/devis/')
+    expect(notice).toContain('/storage/v1/object/public/devis/')
+  })
+
   it('donne une marche à suivre pour valider la connexion', () => {
     expect(notice).toContain('COMMENT ON TESTE')
     expect(notice).toContain('Tester la connexion')
