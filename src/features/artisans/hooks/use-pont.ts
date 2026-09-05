@@ -146,3 +146,52 @@ export function useEntrants(artisanId: string | undefined) {
     },
   })
 }
+
+/**
+ * Envoie un `ping` au CRM de l'artisan et attend le verdict.
+ *
+ * Sans ce bouton, la seule façon de savoir si le pont fonctionne était
+ * d'attendre un vrai chantier — et de découvrir la panne au pire moment.
+ * Le `ping` ne porte aucune donnée client et ne modifie rien : il prouve le
+ * tuyau, pas le métier.
+ */
+export function useTesterPont(artisanId: string | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (): Promise<{ code: number | null; erreur: string | null }> => {
+      const { data, error } = await supabase.rpc('pont_tester', {
+        p_artisan_id: artisanId!,
+      })
+      if (error) throw error
+      const r = data as { ok?: boolean; error?: string; evenement_id?: string }
+      if (!r?.ok) throw new Error(MESSAGES[r?.error ?? ''] ?? r?.error ?? 'Échec')
+
+      // pg_net rend la main avant d'avoir la réponse : on redemande jusqu'à
+      // ce qu'un code HTTP tombe, plutôt que d'annoncer un succès qui n'en
+      // est pas un.
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 1000))
+        const { data: e } = await supabase.rpc('pont_etat_evenement', {
+          p_id: Number(r.evenement_id),
+        })
+        const etat = e as { code_http?: number | null; erreur?: string | null } | null
+        if (etat?.code_http != null) {
+          return { code: etat.code_http, erreur: etat.erreur ?? null }
+        }
+      }
+      return { code: null, erreur: 'aucune réponse au bout de 12 secondes' }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pont-sortant', artisanId] })
+      qc.invalidateQueries({ queryKey: ['pont', artisanId] })
+    },
+  })
+}
+
+/** Erreurs du test traduites en langage utilisable. */
+const MESSAGES: Record<string, string> = {
+  pont_absent: 'Active le pont d’abord.',
+  pont_inactif: 'Le pont est éteint.',
+  url_absente: 'Renseigne l’URL de son webhook avant de tester.',
+  reserve_fondateur: 'Réservé aux fondateurs.',
+}
