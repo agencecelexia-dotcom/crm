@@ -78,15 +78,15 @@ export const ACTIONS_PONT: {
   },
   {
     type: 'montant',
-    quand: 'Je saisis ou corrige le montant du devis',
-    champs: 'p_montant, p_slot',
-    portail: 'le champ montant',
+    quand: 'Je saisis le montant — du devis **ou du devis signé**',
+    champs: 'p_montant, p_slot (`devis` ou `devis_signe`)',
+    portail: 'les deux champs montant',
   },
   {
     type: 'devis',
-    quand: 'Je dépose le PDF du devis',
-    champs: 'p_url, p_slot',
-    portail: 'le dépôt de devis',
+    quand: 'Je dépose le PDF — devis **ou devis signé**',
+    champs: 'p_url, p_slot (`devis` ou `devis_signe`)',
+    portail: 'les deux zones de dépôt',
   },
   {
     type: 'rappel',
@@ -302,6 +302,53 @@ N'envoie que les champs utiles à l'action ; les autres sont optionnels.
 |---|---|---|---|
 ${tableauActions}
 
+### Les devis : deux documents distincts, ne les confonds pas
+
+C'est le point sur lequel une intégration se plante le plus souvent, et celui
+qui coûte le plus cher.
+
+| | Emplacement | Ce que c'est |
+|---|---|---|
+| Le devis que j'envoie au client | \`devis\` | Ma proposition |
+| Le devis que le client me retourne signé | \`devis_signe\` | **La preuve de l'affaire — c'est lui qui déclenche la commission** |
+
+**Déposer sur \`devis_signe\` vaut déclaration de signature.** Celexia passe le
+chantier en « devis signé » automatiquement quand je dépose là. Je n'ai donc
+pas besoin d'envoyer un \`statut\` en plus — mais je peux, ça ne fait pas de mal.
+
+Même chose pour le montant : \`p_slot: "devis_signe"\` enregistre le montant
+réellement signé, pas la proposition.
+
+⚠️ Si j'omets \`p_slot\` sur un type \`devis\`, le document part sur \`devis\` — la
+proposition. **Le devis signé se dit toujours explicitement.**
+
+### Téléverser le PDF
+
+\`p_url\` attend une URL. Deux façons de l'obtenir.
+
+**Option A — je téléverse chez Celexia** (recommandé : le document reste chez
+eux, il survit à mes propres changements d'hébergement).
+
+\`\`\`http
+POST ${c.supabaseUrl}/storage/v1/object/devis/<TOKEN_DU_CHANTIER>/devis_signe-<aleatoire>.pdf
+apikey: ${c.cleAnon}
+Content-Type: application/pdf
+
+<octets du PDF>
+\`\`\`
+
+Le premier segment du chemin **doit** être le token du chantier — c'est ce
+qui autorise le dépôt. L'URL à renvoyer ensuite est :
+
+\`${c.supabaseUrl}/storage/v1/object/public/devis/<TOKEN_DU_CHANTIER>/<nom du fichier>\`
+
+Ajoute un suffixe aléatoire au nom : deux dépôts successifs ne doivent pas
+s'écraser.
+
+**Option B — j'héberge le PDF moi-même** et j'envoie mon URL. Elle doit rester
+accessible dans la durée : Celexia ne fait que stocker le lien, si mon serveur
+change le document devient introuvable de leur côté.
+
 ### Vocabulaires imposés
 
 \`p_statut\` — ${ETAPES_PONT.map((e) => `\`${e}\``).join(' → ')}, plus
@@ -394,19 +441,25 @@ Dans cet ordre, en s'arrêtant au premier qui échoue.
    « Dernières réceptions » de ma fiche.
 8. Je renvoie **deux fois** le même \`p_evenement_id\` → **un seul** effet chez
    eux, pas de doublon dans leur fil.
-9. Je passe en revue **les dix actions** une par une : statut, note,
-   correction, montant, devis, rappel, appel, abandon, restauration, lu. Pour
-   chacune, ils confirment de leur côté. C'est long, mais c'est la seule façon
-   de savoir que je n'aurai plus jamais à rouvrir leur portail.
-10. J'envoie un statut volontairement faux (\`p_statut: "nimportequoi"\`) →
+9. **Le devis signé, en particulier.** Je téléverse un PDF, je l'envoie avec
+   \`p_slot: "devis_signe"\`, et ils vérifient chez eux que : le document est
+   visible, le chantier est passé en « devis signé », et le montant signé est
+   le bon. Si le document n'apparaît pas alors que la réponse disait \`ok\`,
+   c'est que j'ai envoyé \`devis\` au lieu de \`devis_signe\`.
+10. Je passe en revue **les dix actions** une par une : statut, note,
+    correction, montant, devis, rappel, appel, abandon, restauration, lu. Pour
+    chacune, ils confirment de leur côté. C'est long, mais c'est la seule façon
+    de savoir que je n'aurai plus jamais à rouvrir leur portail.
+11. J'envoie un statut volontairement faux (\`p_statut: "nimportequoi"\`) →
     refus propre avec la liste, et mon CRM ne réessaie pas en boucle.
 
 ### Étape D — je coupe
 
-11. Celexia coupe le pont → mes appels reçoivent \`pont_inactif\`, et mon CRM
+12. Celexia coupe le pont → mes appels reçoivent \`pont_inactif\`, et mon CRM
     le signale au lieu de perdre les changements en silence.
 
-Les points 5, 8 et 10 sont ceux qu'on oublie, et ce sont eux qui font les
-doublons et les boucles infinies. Teste-les vraiment.
+Les points 5, 8 et 11 sont ceux qu'on oublie, et ce sont eux qui font les
+doublons et les boucles infinies. Le point 9 est celui qui coûte de l'argent.
+Teste-les vraiment.
 `
 }
