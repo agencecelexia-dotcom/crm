@@ -189,6 +189,29 @@ export function useReactiverArtisan() {
   })
 }
 
+/**
+ * Classe un artisan en partenaire, ou le rend à la liste générale.
+ *
+ * Réservé aux fondateurs : la base refuse le changement pour tout autre compte
+ * (déclencheur `trg_garde_partenaire`, 0130), même si le bouton était atteint.
+ */
+export function useDefinirPartenaire() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, partenaire }: { id: string; partenaire: boolean }) => {
+      const { error } = await supabase
+        .from(TABLE)
+        .update({ partenaire_at: partenaire ? new Date().toISOString() : null })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: ['artisans'] })
+      qc.invalidateQueries({ queryKey: ['artisans', id] })
+    },
+  })
+}
+
 /** Marque (ou non) le contrat d'un artisan comme signé HORS application. */
 export function useSetContratExterne() {
   const qc = useQueryClient()

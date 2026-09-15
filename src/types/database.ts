@@ -76,6 +76,7 @@ export interface Artisan {
   contrat_externe: boolean // contrat signé hors application (pas de signature dans l'espace)
   ecarte_at: string | null // "pas fiable" : écarté (hors liste active) mais conservé
   ecarte_motif: string | null // raison de la mise à l'écart
+  partenaire_at: string | null // partenaire depuis cette date ; null = artisan classique
   source: string | null // origine : agence | demarchage | auto:facebook | auto:whatsapp …
   nb_salaries: number | null
   annees_experience: number | null
@@ -106,6 +107,9 @@ export type ArtisanInput = Omit<
   | 'contrat_externe'
   | 'ecarte_at'
   | 'ecarte_motif'
+  // Classement manuel par un fondateur, via son bouton dédié : le formulaire
+  // de fiche ne doit ni le proposer ni l'écraser à l'enregistrement.
+  | 'partenaire_at'
   | 'source'
   | 'created_at'
   | 'updated_at'

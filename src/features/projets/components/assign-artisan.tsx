@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { UserPlus, MapPin, Check, Loader2, Search } from 'lucide-react'
+import { UserPlus, MapPin, Check, Loader2, Search, Star } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -155,10 +155,18 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
                     {checked && <Check className="size-3.5" />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">
-                      {artisan.nom} {artisan.prenom}
-                      {artisan.societe && (
-                        <span className="text-muted-foreground"> · {artisan.societe}</span>
+                    <p className="flex items-center gap-1.5 font-medium">
+                      <span className="truncate">
+                        {artisan.nom} {artisan.prenom}
+                        {artisan.societe && (
+                          <span className="text-muted-foreground"> · {artisan.societe}</span>
+                        )}
+                      </span>
+                      {artisan.partenaire_at && (
+                        <Badge className="shrink-0 gap-1 bg-primary/10 text-[10px] text-primary">
+                          <Star className="size-3" />
+                          Partenaire
+                        </Badge>
                       )}
                     </p>
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
