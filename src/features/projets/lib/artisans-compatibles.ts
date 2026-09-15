@@ -22,7 +22,8 @@ function deptDeCp(cp?: string | null): string | null {
  *    Le siège ne suffit PAS : un artisan basé à Orléans qui ne déclare que l'IDF
  *    n'est pas « couvrant » pour un projet à Orléans.
  *  - `distance` : distance au siège (info / tri secondaire).
- * Tri : métier d'abord, puis ceux qui couvrent la zone, puis proximité du siège.
+ * Tri : métier d'abord, puis partenaires, puis ceux qui couvrent la zone, puis
+ * proximité du siège.
  */
 export function artisansCompatibles(
   projet: Pick<Projet, 'metiers' | 'latitude' | 'longitude' | 'client_code_postal'>,
@@ -57,6 +58,11 @@ export function artisansCompatibles(
     })
     .sort((x, y) => {
       if (x.metierMatch !== y.metierMatch) return x.metierMatch ? -1 : 1
+      // Le partenaire passe devant, mais seulement à métier égal : le faire
+      // remonter au-dessus du métier proposerait Batryx sur une piscine.
+      const xp = x.artisan.partenaire_at != null
+      const yp = y.artisan.partenaire_at != null
+      if (xp !== yp) return xp ? -1 : 1
       if (x.couvre !== y.couvre) return x.couvre ? -1 : 1
       if (x.distance == null) return 1
       if (y.distance == null) return -1

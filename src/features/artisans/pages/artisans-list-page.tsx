@@ -1,7 +1,18 @@
 import { useMemo, useState } from 'react'
 import { useDroits } from '@/lib/auth/use-droits'
-import { Link } from 'react-router-dom'
-import { Plus, Search, Users, ChevronRight, Phone, BadgeCheck, BarChart3, ShieldOff, MapPinned } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import {
+  Plus,
+  Search,
+  Users,
+  ChevronRight,
+  Phone,
+  BadgeCheck,
+  BarChart3,
+  ShieldOff,
+  MapPinned,
+  Star,
+} from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { EmptyState } from '@/components/empty-state'
@@ -10,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -21,18 +33,49 @@ import { METIERS } from '@/lib/constants'
 import { formatTel } from '@/lib/format'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { useArtisans } from '../hooks/use-artisans'
+import { useStatsArtisans } from '../hooks/use-stats-artisans'
 import { LienInscriptionButton } from '../components/lien-inscription-button'
 
-// Liste des artisans : recherche texte + filtre métier.
+type Vue = 'artisans' | 'partenaires'
+
+// Liste des artisans, en deux populations :
+//  - « Artisans » : le statut général, sollicité ponctuellement ;
+//  - « Partenaires » : ceux qui absorbent des dizaines de dossiers par mois.
+// Le tri est fait ICI et nulle part ailleurs : `useArtisans()` alimente aussi
+// la carte et le sélecteur d'attribution, où un partenaire doit rester présent.
 export function ArtisansListPage() {
   const { data: artisans, isLoading } = useArtisans()
   const { data: signes } = useArtisansSignes()
+  const { data: stats } = useStatsArtisans()
   // Masquer plutôt que laisser échouer : la RLS refuse déjà l'insertion, mais
   // seulement après que la personne a rempli tout le formulaire.
   const { peutCreerArtisan } = useDroits()
   const [recherche, setRecherche] = useState('')
   const [metier, setMetier] = useState<string>('tous')
   const [source, setSource] = useState<string>('tous')
+
+  // L'onglet vit dans l'URL : le retour arrière depuis une fiche partenaire
+  // ramène sur l'onglet Partenaires, et le lien se partage.
+  const [params, setParams] = useSearchParams()
+  const vue: Vue = params.get('vue') === 'partenaires' ? 'partenaires' : 'artisans'
+  function setVue(v: string) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (v === 'partenaires') next.set('vue', v)
+        else next.delete('vue')
+        return next
+      },
+      { replace: true },
+    )
+  }
+
+  // Chantiers en cours par artisan — déjà calculés en base par `stats_artisans`.
+  const enCours = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const s of stats ?? []) m.set(s.id, s.en_cours)
+    return m
+  }, [stats])
 
   // Provenances présentes dans la base (null → 'agence').
   const sources = useMemo(() => {
@@ -42,7 +85,9 @@ export function ArtisansListPage() {
   }, [artisans])
   const aDesAuto = sources.some((s) => s.startsWith('auto:'))
 
-  const resultats = useMemo(() => {
+  // Filtres communs aux deux onglets. Le partage par population vient après :
+  // les compteurs des onglets reflètent ainsi la recherche en cours.
+  const filtres = useMemo(() => {
     if (!artisans) return []
     const q = recherche.trim().toLowerCase()
     const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
@@ -63,6 +108,10 @@ export function ArtisansListPage() {
       return matchMetier && matchSource && matchTexte
     })
   }, [artisans, recherche, metier, source])
+
+  const partenaires = useMemo(() => filtres.filter((a) => a.partenaire_at != null), [filtres])
+  const classiques = useMemo(() => filtres.filter((a) => a.partenaire_at == null), [filtres])
+  const resultats = vue === 'partenaires' ? partenaires : classiques
 
   const labelSource = (s: string) =>
     s === 'agence'
@@ -104,6 +153,18 @@ export function ArtisansListPage() {
           </div>
         }
       />
+
+      <Tabs value={vue} onValueChange={setVue} className="mb-3">
+        <TabsList>
+          <TabsTrigger value="artisans">
+            Artisans{!isLoading && ` (${classiques.length})`}
+          </TabsTrigger>
+          <TabsTrigger value="partenaires" className="gap-1.5">
+            <Star className="size-3.5" />
+            Partenaires{!isLoading && ` (${partenaires.length})`}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Filtres */}
       <div className="mb-4 space-y-2">
@@ -156,21 +217,29 @@ export function ArtisansListPage() {
           ))}
         </div>
       ) : resultats.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          titre="Aucun artisan"
-          description="Ajoute ton premier artisan pour commencer à enrichir la base."
-          action={
-            peutCreerArtisan ? (
-              <Button asChild>
-                <Link to="/artisans/new">
-                  <Plus className="size-4" />
-                  Nouvel artisan
-                </Link>
-              </Button>
-            ) : undefined
-          }
-        />
+        vue === 'partenaires' ? (
+          <EmptyState
+            icon={Star}
+            titre="Aucun partenaire"
+            description="Ouvre la fiche d’un artisan et choisis « Passer en partenaire » pour le classer ici."
+          />
+        ) : (
+          <EmptyState
+            icon={Users}
+            titre="Aucun artisan"
+            description="Ajoute ton premier artisan pour commencer à enrichir la base."
+            action={
+              peutCreerArtisan ? (
+                <Button asChild>
+                  <Link to="/artisans/new">
+                    <Plus className="size-4" />
+                    Nouvel artisan
+                  </Link>
+                </Button>
+              ) : undefined
+            }
+          />
+        )
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
           {resultats.map((a) => (
@@ -184,15 +253,24 @@ export function ArtisansListPage() {
                         <span className="text-muted-foreground"> · {a.societe}</span>
                       )}
                     </p>
-                    {signes?.has(a.id) && (
-                      <Badge
-                        variant="secondary"
-                        className="gap-1 border-[#22C55E]/25 bg-[#22C55E]/5 text-xs text-[#16A34A]"
-                      >
-                        <BadgeCheck className="size-3.5" />
-                        Contrat signé
-                      </Badge>
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {a.partenaire_at && (
+                        <Badge className="gap-1 bg-primary/10 text-xs text-primary">
+                          <Star className="size-3.5" />
+                          Partenaire
+                          {enCours.has(a.id) && ` · ${enCours.get(a.id)} en cours`}
+                        </Badge>
+                      )}
+                      {signes?.has(a.id) && (
+                        <Badge
+                          variant="secondary"
+                          className="gap-1 border-[#22C55E]/25 bg-[#22C55E]/5 text-xs text-[#16A34A]"
+                        >
+                          <BadgeCheck className="size-3.5" />
+                          Contrat signé
+                        </Badge>
+                      )}
+                    </div>
                     {a.telephone && (
                       <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
                         <Phone className="size-3.5 shrink-0" />

@@ -10,6 +10,7 @@ import {
   MapPin,
   TrendingUp,
   ShieldOff,
+  Star,
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
@@ -33,7 +34,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
-import { useArtisan, useDeleteArtisan, useEcarterArtisan } from '../hooks/use-artisans'
+import {
+  useArtisan,
+  useDefinirPartenaire,
+  useDeleteArtisan,
+  useEcarterArtisan,
+} from '../hooks/use-artisans'
 import { ScoringArtisanCard } from '../components/scoring-artisan-card'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
 import { ContratCard } from '@/features/contrats/contrat-card'
@@ -49,6 +55,7 @@ export function ArtisanDetailPage() {
   const { data: projets } = useProjetsByArtisan(id)
   const remove = useDeleteArtisan()
   const ecarter = useEcarterArtisan()
+  const definirPartenaire = useDefinirPartenaire()
   const [motif, setMotif] = useState('')
 
   if (isLoading || !artisan) {
@@ -79,13 +86,21 @@ export function ArtisanDetailPage() {
         }
       />
 
-      {artisan.source && (
-        <div className="mb-3 flex justify-center">
-          <Badge variant="secondary">
-            {artisan.source.startsWith('auto:')
-              ? `🌐 Auto-inscrit · ${artisan.source.slice(5)}`
-              : `Source : ${artisan.source}`}
-          </Badge>
+      {(artisan.source || artisan.partenaire_at) && (
+        <div className="mb-3 flex flex-wrap justify-center gap-2">
+          {artisan.partenaire_at && (
+            <Badge className="gap-1 bg-primary/10 text-primary">
+              <Star className="size-3.5" />
+              Partenaire depuis le {formatDate(artisan.partenaire_at)}
+            </Badge>
+          )}
+          {artisan.source && (
+            <Badge variant="secondary">
+              {artisan.source.startsWith('auto:')
+                ? `🌐 Auto-inscrit · ${artisan.source.slice(5)}`
+                : `Source : ${artisan.source}`}
+            </Badge>
+          )}
         </div>
       )}
 
@@ -241,6 +256,61 @@ export function ArtisanDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Partenaire — classement manuel, fondateurs seuls. La base refuse le
+          changement pour tout autre compte (0130) : masquer ne suffit pas. */}
+      {estFondateur && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" className="mb-2 w-full" disabled={definirPartenaire.isPending}>
+              {definirPartenaire.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Star className="size-4" />
+              )}
+              {artisan.partenaire_at ? 'Retirer des partenaires' : 'Passer en partenaire'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {artisan.partenaire_at ? 'Retirer des partenaires ?' : 'Passer en partenaire ?'}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {artisan.partenaire_at
+                  ? 'Il revient dans la liste générale des artisans. Ses chantiers, son contrat et ses chiffres ne bougent pas.'
+                  : 'Il quitte la liste générale pour l’onglet Partenaires, et passe en tête des propositions quand tu attribues un dossier de son métier. Ses chantiers, son contrat et ses chiffres ne bougent pas.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  const devient = !artisan.partenaire_at
+                  definirPartenaire.mutate(
+                    { id: artisan.id, partenaire: devient },
+                    {
+                      onSuccess: () =>
+                        toast.success(devient ? 'Passé en partenaire' : 'Retiré des partenaires'),
+                      onError: (err) =>
+                        toast.error('Échec', {
+                          description:
+                            err instanceof Error && err.message.includes('reserve_fondateur')
+                              ? 'Réservé aux fondateurs.'
+                              : err instanceof Error
+                                ? err.message
+                                : undefined,
+                        }),
+                    },
+                  )
+                }}
+              >
+                {artisan.partenaire_at ? 'Retirer' : 'Passer en partenaire'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* Écarter (pas fiable) — alternative recommandée à la suppression */}
       <AlertDialog>
