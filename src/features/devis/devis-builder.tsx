@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, Sparkles, X } from 'lucide-react'
+import { Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, Sparkles, X, Calculator } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -89,6 +89,13 @@ export function DevisBuilder({
   const envoyer = useEnvoyerDevis(token)
   const [busy, setBusy] = useState(false)
   const [enTeteOuvert, setEnTeteOuvert] = useState(false)
+  // Quand le devis part d'un chantier, le client est déjà rempli : ces six
+  // champs sont à vérifier, pas à saisir. Les déplier d'office reviendrait à
+  // faire défiler deux écrans avant d'atteindre le travail.
+  const [clientOuvert, setClientOuvert] = useState(!initial?.client_nom)
+  // Le déboursé n'intéresse que ceux qui suivent leur marge. Tant qu'aucune
+  // ligne n'en porte, il reste une rangée de moins sur chaque ligne.
+  const [deboursesOuverts, setDeboursesOuverts] = useState(false)
 
   // En-tête entreprise (éditable, pré-rempli)
   const [ent, setEnt] = useState({
@@ -190,6 +197,10 @@ export function DevisBuilder({
     ])
     if (nouvelObjet && !objet.trim()) setObjet(nouvelObjet)
   }
+
+  // Une ligne venue d'un modèle ou de la bibliothèque peut déjà porter son
+  // déboursé : dans ce cas, le cacher serait perdre une information.
+  const afficheDebourses = deboursesOuverts || lignes.some((l) => l.cout_unitaire.trim())
 
   /** Les lignes réellement remplies — ce qu'on enregistre comme modèle. */
   const lignesRemplies = useMemo(
@@ -380,17 +391,31 @@ export function DevisBuilder({
             )}
           </div>
 
-          {/* Client */}
-          <div className="space-y-2">
-            <p className="text-sm font-semibold">Client</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Champ label="Nom" value={cli.nom} onChange={(v) => majCli('nom', v)} className="col-span-2" />
-              <Champ label="Adresse" value={cli.adresse} onChange={(v) => majCli('adresse', v)} className="col-span-2" />
-              <Champ label="Code postal" value={cli.cp} onChange={(v) => majCli('cp', v)} />
-              <Champ label="Ville" value={cli.ville} onChange={(v) => majCli('ville', v)} />
-              <Champ label="Email" value={cli.email} onChange={(v) => majCli('email', v)} />
-              <Champ label="Téléphone" value={cli.tel} onChange={(v) => majCli('tel', v)} />
-            </div>
+          {/* Client — replié dès lors que le chantier l'a renseigné */}
+          <div className="rounded-xl border border-border">
+            <button
+              type="button"
+              onClick={() => setClientOuvert((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 p-3 text-sm font-medium"
+            >
+              <span className="min-w-0 truncate text-left">
+                Client : {cli.nom || <span className="text-muted-foreground">à renseigner</span>}
+                {cli.ville && <span className="font-normal text-muted-foreground"> · {cli.ville}</span>}
+              </span>
+              <ChevronDown
+                className={`size-4 shrink-0 transition-transform ${clientOuvert ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {clientOuvert && (
+              <div className="grid grid-cols-2 gap-2 border-t border-border p-3">
+                <Champ label="Nom" value={cli.nom} onChange={(v) => majCli('nom', v)} className="col-span-2" />
+                <Champ label="Adresse" value={cli.adresse} onChange={(v) => majCli('adresse', v)} className="col-span-2" />
+                <Champ label="Code postal" value={cli.cp} onChange={(v) => majCli('cp', v)} />
+                <Champ label="Ville" value={cli.ville} onChange={(v) => majCli('ville', v)} />
+                <Champ label="Email" value={cli.email} onChange={(v) => majCli('email', v)} />
+                <Champ label="Téléphone" value={cli.tel} onChange={(v) => majCli('tel', v)} />
+              </div>
+            )}
           </div>
 
           {/* Objet */}
@@ -417,13 +442,12 @@ export function DevisBuilder({
             {/* Trois façons de remplir d'un geste : un modèle enregistré, le
                 devis type du métier, ou un devis déjà fait qu'on reprend. Une
                 fois les lignes posées, ce bloc n'a plus rien à proposer. */}
-            {lignesRemplies.length === 0 && (
-              <DemarrageDevis
-                token={token}
-                metier={initial?.metier}
-                onAppliquer={verserLignes}
-              />
-            )}
+            <DemarrageDevis
+              token={token}
+              metier={initial?.metier}
+              replie={lignesRemplies.length > 0}
+              onAppliquer={verserLignes}
+            />
 
             {/* Lignes proposées à partir du dossier et des échanges. Réservé
                 aux devis ouverts depuis un chantier : sans dossier, rien à lire. */}
@@ -641,7 +665,9 @@ export function DevisBuilder({
                 </div>
                 {/* Rangée 3 : déboursé et TVA. Le déboursé ne sort jamais sur
                     le devis du client — il ne sert qu'à voir la marge. */}
+                {(afficheDebourses || tvaMode === 'normal') && (
                 <div className="flex items-center gap-2">
+                  {afficheDebourses && (
                   <div className="relative flex-1">
                     <Input
                       type="text"
@@ -656,6 +682,7 @@ export function DevisBuilder({
                       €
                     </span>
                   </div>
+                  )}
                   {tvaMode === 'normal' && (
                     <Select value={l.tva_taux} onValueChange={(v) => majLigne(i, 'tva_taux', v)}>
                       <SelectTrigger className="h-10 w-28 shrink-0" aria-label="Taux de TVA">
@@ -669,6 +696,7 @@ export function DevisBuilder({
                     </Select>
                   )}
                 </div>
+                )}
               </div>
             ))}
             <Button variant="outline" className="w-full" onClick={ajouterLigne}>
@@ -738,11 +766,23 @@ export function DevisBuilder({
               <p className="montant text-base font-semibold">{euro2(chiffres.commission)}</p>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {chiffres.cout === 0
-              ? 'Renseignez le déboursé d’une ligne pour voir votre marge.'
-              : 'Marge et commission ne figurent pas sur le devis remis au client.'}
-          </p>
+          {afficheDebourses ? (
+            <p className="text-xs text-muted-foreground">
+              {chiffres.cout === 0
+                ? 'Renseignez le déboursé d’une ligne pour voir votre marge.'
+                : 'Marge et commission ne figurent pas sur le devis remis au client.'}
+            </p>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-muted-foreground"
+              onClick={() => setDeboursesOuverts(true)}
+            >
+              <Calculator className="size-4" />
+              Saisir mes déboursés pour voir ma marge
+            </Button>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <Champ label="Acompte (%)" value={acompte} onChange={setAcompte} type="number" />
@@ -753,8 +793,17 @@ export function DevisBuilder({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="grid grid-cols-2 gap-2 border-t border-border p-4 sm:grid-cols-3">
+        {/* Actions — précédées du total, qui reste ainsi sous les yeux quelle
+            que soit la position dans un devis de quinze lignes. */}
+        <div className="border-t border-border p-4 pt-3">
+          <div className="mb-2.5 flex items-baseline justify-between gap-2">
+            <span className="text-sm text-muted-foreground">
+              {lignesRemplies.length} ligne{lignesRemplies.length > 1 ? 's' : ''}
+              {tvaMode === 'normal' ? ' · TTC' : ''}
+            </span>
+            <span className="montant text-lg font-semibold text-primary">{euro2(chiffres.ttc)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Button variant="outline" onClick={apercu} disabled={busy}>
             <Eye className="size-4" />
             Aperçu
@@ -767,6 +816,7 @@ export function DevisBuilder({
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             Enregistrer & me l'envoyer
           </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Copy, Layers, Loader2, Search, Star, Trash2, X } from 'lucide-react'
+import { ChevronDown, Copy, Layers, Loader2, Search, Star, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -33,18 +33,23 @@ const euro2 = (n: number) =>
  * qu'on reprend. C'est ce bloc qui décide du temps que prendra le devis : une
  * minute ou un quart d'heure.
  *
- * Il ne s'affiche que tant que le devis est vide — une fois les lignes posées,
- * il n'a plus rien à proposer et laisse la place.
+ * Déplié tant que le devis est vide, replié dès qu'une ligne existe : un
+ * chantier façade ET toiture demande deux modèles, mais le second ne doit pas
+ * encombrer l'écran de celui qui n'en veut qu'un.
  */
 export function DemarrageDevis({
   token,
   metier,
+  replie = false,
   onAppliquer,
 }: {
   token: string
   metier?: string | null
+  replie?: boolean
   onAppliquer: (lignes: LigneModele[], objet?: string | null) => void
 }) {
+  const [force, setForce] = useState(false)
+  const ouvert = force || !replie
   const { data: modeles } = useModelesDevis(token, metier)
   const { data: devis } = useListeDevis(token)
   const dupliquer = useDupliquerDevis(token)
@@ -60,9 +65,38 @@ export function DemarrageDevis({
 
   if (!modeles?.length && !reprises.length) return null
 
+  if (replie && !ouvert)
+    return (
+      <button
+        type="button"
+        onClick={() => setForce(true)}
+        className="flex w-full items-center justify-between rounded-xl border border-border p-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
+      >
+        <span className="flex items-center gap-1.5">
+          <Layers className="size-3.5" />
+          Ajouter un modèle
+        </span>
+        <ChevronDown className="size-3.5" />
+      </button>
+    )
+
   return (
     <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
-      <p className="text-xs font-medium text-muted-foreground">Partir d’un modèle</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          {replie ? 'Ajouter un modèle' : 'Partir d’un modèle'}
+        </p>
+        {replie && (
+          <button
+            type="button"
+            onClick={() => setForce(false)}
+            aria-label="Replier"
+            className="rounded p-1 text-muted-foreground hover:bg-accent"
+          >
+            <ChevronDown className="size-3.5 rotate-180" />
+          </button>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-1.5">
         {(modeles ?? []).map((m) => (
