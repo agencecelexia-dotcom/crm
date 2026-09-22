@@ -243,6 +243,9 @@ export interface LigneModele {
   quantite: number | null
   prix_unitaire: number | null
   cout_unitaire: number | null
+  /** Taux de la ligne : un chantier mêle 10 % et 20 %, et reprendre un devis
+   *  sans lui ramenait tout à 10 %. */
+  tva_taux?: number | null
 }
 
 /**

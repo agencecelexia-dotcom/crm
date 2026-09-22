@@ -110,3 +110,29 @@ describe('uniteCommune — la cote saisie une seule fois', () => {
     ).toEqual(['ml', 3])
   })
 })
+
+describe('uniteCommune — ne pas écraser une quantité déjà posée', () => {
+  const l = (designation: string, unite: string, quantite = '1') => ({ designation, unite, quantite })
+
+  it('ignore les lignes que l’entretien a déjà chiffrées', () => {
+    // Le cas de l'audit : deux menuiseries à 10 m² ne doivent pas passer à la
+    // surface du sol parce que celle-ci porte la cote commune.
+    expect(
+      uniteCommune([
+        l('Menuiserie fixe', 'm²', '10'),
+        l('Menuiserie coulissante', 'm²', '10'),
+        l('Sol', 'm²', '25'),
+      ]),
+    ).toBeNull()
+  })
+
+  it('compte celles qui restent à la quantité par défaut', () => {
+    expect(
+      uniteCommune([l('Nettoyage', 'm²'), l('Piquage', 'm²'), l('Menuiserie', 'm²', '10')]),
+    ).toEqual(['m²', 2])
+  })
+
+  it('traite la quantité vide comme un défaut', () => {
+    expect(uniteCommune([l('Nettoyage', 'm²', ''), l('Piquage', 'm²', '1')])).toEqual(['m²', 2])
+  })
+})

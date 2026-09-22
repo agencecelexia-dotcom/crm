@@ -91,7 +91,19 @@ export function EntretienDevis({
     )
   }
 
+  // Une marge se situe entre 1 et 79 % : à 80 % et au-delà, la formule
+  // PV = déboursé / (1 − marge) diverge. Le serveur écarte déjà les valeurs
+  // aberrantes, mais EN SILENCE — l'artisan croyait sa marge appliquée.
+  const margeSaisie = marge.trim()
+  const margeNum = parseFloat(margeSaisie.replace(',', '.'))
+  const margeInvalide =
+    margeSaisie !== '' && (!Number.isFinite(margeNum) || margeNum < 1 || margeNum > 79)
+
   function composer() {
+    if (margeInvalide) {
+      toast.error('Marge hors limites', { description: 'Indiquez une valeur entre 1 et 79 %.' })
+      return
+    }
     const m = parseFloat(marge.replace(',', '.'))
     entretien.mutate(
       {
@@ -153,7 +165,7 @@ export function EntretienDevis({
             {etape === 'description'
               ? 'Comme vous le raconteriez à un collègue'
               : etape === 'questions'
-                ? `${questions.length} questions qui changent le prix`
+                ? `${questions.length} question${questions.length > 1 ? 's' : ''} qui change${questions.length > 1 ? 'nt' : ''} le prix`
                 : `${lignes.length} lignes — ${euro2(total)}`}
           </p>
         </div>
@@ -236,6 +248,7 @@ export function EntretienDevis({
                     value={marge}
                     onChange={(e) => setMarge(e.target.value)}
                     aria-label="Marge visée en pourcentage"
+                    aria-invalid={margeInvalide}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                     %
@@ -259,6 +272,11 @@ export function EntretienDevis({
                   ))}
                 </div>
               </div>
+              {margeInvalide && (
+                <p className="text-xs text-destructive">
+                  Entre 1 et 79 %. Au-delà, le prix de vente n’a plus de limite.
+                </p>
+              )}
             </div>
           </>
         )}
@@ -357,11 +375,13 @@ export function EntretienDevis({
             className="w-full"
             onClick={() => {
               onTermine(lignes, objet)
-              toast.success(`${lignes.length} lignes ajoutées au devis`)
+              toast.success(
+                `${lignes.length} ligne${lignes.length > 1 ? 's' : ''} ajoutée${lignes.length > 1 ? 's' : ''} au devis`,
+              )
             }}
           >
             <ArrowRight className="size-4" />
-            Reprendre ces {lignes.length} lignes
+            Reprendre ces {lignes.length} ligne{lignes.length > 1 ? 's' : ''}
           </Button>
         )}
       </div>

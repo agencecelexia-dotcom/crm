@@ -33,7 +33,9 @@ export interface DevisData {
     email?: string | null
   }
   objet?: string | null
-  lignes: DevisLigne[]
+  /** Le taux par ligne permet la ventilation de la TVA, obligatoire dès que
+   *  le devis en mêle plusieurs. */
+  lignes: (DevisLigne & { tva_taux?: number | null })[]
   total: number // TTC — ce que paie le client
   totalHt?: number | null
   totalTva?: number | null
@@ -256,7 +258,12 @@ export async function construireDevis(data: DevisData) {
       dy += 4.4
     }
     const midY = y + 4.6
-    doc.text(String(l.quantite ?? ''), xOf(1) + cols[1].w - 2, midY, { align: 'right' })
+    doc.text(
+      l.quantite != null ? new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 }).format(Number(l.quantite)) : '',
+      xOf(1) + cols[1].w - 2,
+      midY,
+      { align: 'right' },
+    )
     doc.text(l.unite || '', xOf(2) + 2, midY)
     doc.text(eur(Number(l.prix_unitaire) || 0), xOf(3) + cols[3].w - 2, midY, { align: 'right' })
     doc.setFont(F, 'bold')
@@ -291,9 +298,30 @@ export async function construireDevis(data: DevisData) {
     doc.text('Total HT', bx + 3, y)
     doc.text(eur(data.totalHt ?? data.total), pageW - margin - 3, y, { align: 'right' })
     y += 5.5
-    doc.text('TVA', bx + 3, y)
-    doc.text(eur(data.totalTva ?? 0), pageW - margin - 3, y, { align: 'right' })
-    y += 6.5
+
+    // Un devis mêlant 10 % et 20 % doit faire apparaître la base et la taxe de
+    // CHAQUE taux : un total agrégé ne permet ni au client de vérifier, ni à
+    // l'administration de contrôler.
+    const parTaux = new Map<number, number>()
+    for (const l of data.lignes) {
+      const taux = Number(l.tva_taux) || 0
+      const ht = (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0)
+      parTaux.set(taux, (parTaux.get(taux) ?? 0) + ht)
+    }
+    const taux = [...parTaux.entries()].filter(([t]) => t > 0).sort((a, b) => a[0] - b[0])
+
+    if (taux.length > 1) {
+      for (const [t, ht] of taux) {
+        doc.text(`TVA ${t.toLocaleString('fr-FR')} % sur ${eur(ht)}`, bx + 3, y)
+        doc.text(eur((ht * t) / 100), pageW - margin - 3, y, { align: 'right' })
+        y += 5
+      }
+      y += 1.5
+    } else {
+      doc.text(taux.length === 1 ? `TVA ${taux[0][0].toLocaleString('fr-FR')} %` : 'TVA', bx + 3, y)
+      doc.text(eur(data.totalTva ?? 0), pageW - margin - 3, y, { align: 'right' })
+      y += 6.5
+    }
   }
   doc.setFillColor(245, 243, 255)
   doc.rect(bx, y, boxW, 11, 'F')
@@ -341,8 +369,12 @@ export async function construireDevis(data: DevisData) {
     mentions.push(`Règlement par virement : IBAN ${v.iban}${v.bic ? ` — BIC ${v.bic}` : ''}.`)
   }
   mentions.push(
-    'Retard de paiement : intérêts au taux légal en vigueur, exigibles de plein droit '
-      + 'sans mise en demeure préalable.',
+    // Face à un CONSOMMATEUR, les intérêts moratoires ne courent qu'à compter
+    // de la mise en demeure (art. 1231-6 du code civil). L'exigibilité de plein
+    // droit est la règle entre professionnels (art. L441-10 du code de
+    // commerce) : l'écrire ici promettait à l'artisan un droit qu'il n'a pas.
+    'Retard de paiement : intérêts au taux légal en vigueur, à compter de la mise en '
+      + 'demeure adressée au client.',
     'Devis gratuit. Démarchage à domicile : le client dispose d’un délai de rétractation '
       + 'de 14 jours (art. L221-18 du Code de la consommation).',
     data.mediateur?.nom
@@ -382,16 +414,6 @@ export async function construireDevis(data: DevisData) {
     }
     y += 4
   }
-
-  // Bon pour accord
-  ensure(30)
-  y += 4
-  doc.setFont(F, 'normal')
-  doc.setFontSize(9.5)
-  setColor(GRIS)
-  doc.text('Bon pour accord (date et signature du client) :', pageW - margin - 80, y)
-  doc.setDrawColor(BORD[0], BORD[1], BORD[2])
-  doc.roundedRect(pageW - margin - 80, y + 3, 80, 22, 1.5, 1.5)
 
   // ---------- Conditions générales ----------
   //
@@ -435,6 +457,24 @@ export async function construireDevis(data: DevisData) {
       y += 2.5
     }
   }
+
+  // ---------- Bon pour accord ----------
+  //
+  // APRÈS les conditions générales, jamais avant. Le client signe une fois
+  // qu'il les a sous les yeux ; l'audit a relevé qu'il signait en page 2 des
+  // conditions qui commençaient en page 3.
+  ensure(34)
+  y += 4
+  doc.setFont(F, 'normal')
+  doc.setFontSize(9.5)
+  setColor(GRIS)
+  doc.text(
+    'Lu et approuvé, bon pour accord (date et signature du client) :',
+    pageW - margin - 92,
+    y,
+  )
+  doc.setDrawColor(BORD[0], BORD[1], BORD[2])
+  doc.roundedRect(pageW - margin - 92, y + 3, 92, 24, 1.5, 1.5)
 
   // Pied de page (mentions) sur chaque page
   const total = doc.getNumberOfPages()

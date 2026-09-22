@@ -26,7 +26,7 @@ import {
 import { uploaderDevisGenere } from '@/lib/storage'
 import type { ArtisanEspace } from '@/types/database'
 import { useEtatChiffrage } from '@/features/assurances/use-assurances'
-import { calculerTotaux, uniteCommune } from './calculs'
+import { calculerTotaux, estQuantiteParDefaut, uniteCommune } from './calculs'
 import { telechargerDevis, devisEnBlob, type DevisData } from './devis-pdf'
 import {
   useCreerDevis,
@@ -193,7 +193,11 @@ export function DevisBuilder({
    * Verse un jeu de lignes — modèle, devis type, devis repris — à la suite de
    * ce qui est déjà saisi. La ligne vide initiale disparaît au passage.
    */
-  function verserLignes(src: LigneModele[], nouvelObjet?: string | null) {
+  function verserLignes(
+    src: LigneModele[],
+    nouvelObjet?: string | null,
+    modeTva?: string | null,
+  ) {
     if (!src?.length) return
     setLignes((arr) => [
       ...arr.filter((l) => l.designation.trim() || l.prix_unitaire.trim()),
@@ -203,10 +207,13 @@ export function DevisBuilder({
         unite: x.unite || 'u',
         prix_unitaire: x.prix_unitaire != null ? String(x.prix_unitaire) : '',
         cout_unitaire: x.cout_unitaire != null ? String(x.cout_unitaire) : '',
-        tva_taux: '10',
+        // Le taux de la ligne d'origine, sans quoi reprendre un devis à 10 %
+        // et 20 % le ramenait tout entier à 10 %.
+        tva_taux: x.tva_taux != null ? String(x.tva_taux) : '10',
       })),
     ])
     if (nouvelObjet && !objet.trim()) setObjet(nouvelObjet)
+    if (modeTva === 'franchise' || modeTva === 'normal') setTvaMode(modeTva)
   }
 
   // Une ligne venue d'un modèle ou de la bibliothèque peut déjà porter son
@@ -237,7 +244,11 @@ export function DevisBuilder({
     if (!uniteCote || !cote.trim()) return
     const [u, n] = uniteCote
     setLignes((arr) =>
-      arr.map((l) => (l.unite === u && l.designation.trim() ? { ...l, quantite: cote.trim() } : l)),
+      arr.map((l) =>
+        l.unite === u && l.designation.trim() && estQuantiteParDefaut(l.quantite)
+          ? { ...l, quantite: cote.trim() }
+          : l,
+      ),
     )
     toast.success(`${n} lignes mises à ${cote.trim()} ${u}`)
   }
@@ -282,6 +293,8 @@ export function DevisBuilder({
           quantite: num(l.quantite),
           unite: l.unite,
           prix_unitaire: num(l.prix_unitaire),
+          // Sans le taux de la ligne, le PDF ne peut pas ventiler la TVA.
+          tva_taux: tvaMode === 'normal' ? num(l.tva_taux) : 0,
         })),
       total: chiffres.ttc,
       totalHt: chiffres.ht,
@@ -306,6 +319,14 @@ export function DevisBuilder({
     }
   }
 
+  // Fermer efface tout : un devis en cours ne se referme pas par accident.
+  function demanderFermeture() {
+    if (lignesRemplies.length === 0 || busy) return onClose()
+    const n = lignesRemplies.length
+    if (window.confirm(`Abandonner ce devis ? ${n} ligne${n > 1 ? 's' : ''} non enregistrée${n > 1 ? 's' : ''}.`))
+      onClose()
+  }
+
   function valider(): boolean {
     if (!cli.nom.trim()) {
       toast.error('Indiquez le nom du client')
@@ -314,6 +335,15 @@ export function DevisBuilder({
     if (!lignes.some((l) => l.designation.trim())) {
       toast.error('Ajoutez au moins une ligne')
       return false
+    }
+    // Un devis sans montant part au client comme les autres. Mieux vaut le
+    // demander que de le découvrir dans sa boîte mail.
+    const sansPrix = lignesRemplies.filter((l) => !l.prix_unitaire).length
+    if (chiffres.ttc === 0 || sansPrix > 0) {
+      const quoi = chiffres.ttc === 0
+        ? 'Ce devis est à 0 €.'
+        : `${sansPrix} ligne${sansPrix > 1 ? 's' : ''} sans prix.`
+      if (!window.confirm(`${quoi} L’envoyer quand même au client ?`)) return false
     }
     return true
   }
@@ -359,7 +389,10 @@ export function DevisBuilder({
 
       // Les lignes rejoignent sa bibliothèque : il ne les ressaisira plus.
       // Échec sans conséquence — le devis, lui, est déjà enregistré.
-      void enregistrerPrix.mutateAsync({ lignes: payload.lignes, metier: objet || null })
+      // Le MÉTIER du chantier, pas l'objet du devis : ce dernier est du texte
+      // libre (« Salle d'eau de Mme Durand »), et le ranger comme métier
+      // faussait tout regroupement de la bibliothèque.
+      void enregistrerPrix.mutateAsync({ lignes: payload.lignes, metier: initial?.metier ?? null })
         .catch(() => undefined)
       const blob = await devisEnBlob(construireData(numero))
       const url = await uploaderDevisGenere(token, numero, blob)
@@ -387,7 +420,7 @@ export function DevisBuilder({
   }
 
   return (
-    <Sheet open onOpenChange={(o) => !o && onClose()}>
+    <Sheet open onOpenChange={(o) => !o && demanderFermeture()}>
       <SheetContent side="bottom" className="flex max-h-[92dvh] flex-col overflow-hidden">
         <SheetHeader>
           <SheetTitle>Créer un devis</SheetTitle>
@@ -639,7 +672,8 @@ export function DevisBuilder({
                   </span>
                 </div>
                 <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-                  {uniteCote[1]} lignes en {uniteCote[0]} — saisissez la cote une seule fois.
+                  {uniteCote[1]} lignes en {uniteCote[0]} sans quantité — saisissez la cote une
+                  seule fois. Celles que vous avez déjà chiffrées ne bougeront pas.
                 </p>
                 <Button
                   size="sm"
@@ -705,10 +739,17 @@ export function DevisBuilder({
                   <Input
                     type="text"
                     inputMode="decimal"
-                    placeholder="Prix unitaire"
+                    placeholder="Prix unitaire — à chiffrer"
                     value={l.prix_unitaire}
                     onChange={(e) => majLigne(i, 'prix_unitaire', e.target.value)}
-                    className="h-11 w-full pr-8"
+                    // Une ligne venue de l'entretien sans prix connu reste
+                    // signalée ici : sinon elle se fond dans les autres et
+                    // part à 0 € chez le client.
+                    className={`h-11 w-full pr-8 ${
+                      l.designation.trim() && !l.prix_unitaire.trim()
+                        ? 'border-[#F59E0B] bg-[#F59E0B]/5'
+                        : ''
+                    }`}
                     aria-label="Prix unitaire"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
@@ -793,16 +834,19 @@ export function DevisBuilder({
           {/* Ce que ça vous laisse — jamais imprimé sur le devis du client. */}
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl border border-border p-2.5">
-              <p className="text-xs text-muted-foreground">Votre marge</p>
+              <p className="text-xs text-muted-foreground">Votre marge, net de commission</p>
               <p
                 className={`montant text-base font-semibold ${
                   chiffres.cout > 0 && chiffres.margePct < 15 ? 'text-destructive' : ''
                 }`}
               >
-                {chiffres.cout > 0 ? euro2(chiffres.marge) : '—'}
+                {chiffres.cout > 0 ? euro2(chiffres.marge - chiffres.commission) : '—'}
                 {chiffres.cout > 0 && (
                   <span className="ml-1 text-xs font-normal text-muted-foreground">
-                    {chiffres.margePct.toFixed(0)} %
+                    {chiffres.ht > 0
+                      ? (((chiffres.marge - chiffres.commission) / chiffres.ht) * 100).toFixed(0)
+                      : '0'}{' '}
+                    %
                   </span>
                 )}
               </p>
@@ -853,7 +897,10 @@ export function DevisBuilder({
             </span>
             <span className="montant text-lg font-semibold text-primary">{euro2(chiffres.ttc)}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {/* Trois colonnes dès le mobile : un bouton pleine largeur ici
+              occupait exactement la place de « Reprendre ces lignes » dans
+              l'entretien, et un second appui envoyait le devis par email. */}
+          <div className="grid grid-cols-3 gap-2">
           <Button variant="outline" onClick={apercu} disabled={busy}>
             <Eye className="size-4" />
             Aperçu
@@ -862,9 +909,9 @@ export function DevisBuilder({
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Enregistrer
           </Button>
-          <Button onClick={() => enregistrer(true)} disabled={busy} className="col-span-2 sm:col-span-1">
+          <Button onClick={() => enregistrer(true)} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            Enregistrer & me l'envoyer
+            Envoyer
           </Button>
           </div>
         </div>

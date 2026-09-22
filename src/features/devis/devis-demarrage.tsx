@@ -46,7 +46,7 @@ export function DemarrageDevis({
   token: string
   metier?: string | null
   replie?: boolean
-  onAppliquer: (lignes: LigneModele[], objet?: string | null) => void
+  onAppliquer: (lignes: LigneModele[], objet?: string | null, tvaMode?: string | null) => void
 }) {
   const [force, setForce] = useState(false)
   const ouvert = force || !replie
@@ -138,7 +138,7 @@ export function DemarrageDevis({
                 onClick={() =>
                   dupliquer.mutate(d.id, {
                     onSuccess: (r) => {
-                      onAppliquer(r.lignes ?? [], r.objet)
+                      onAppliquer(r.lignes ?? [], r.objet, r.tva_mode)
                       setChoixDevis(false)
                       toast.success(`Lignes du devis ${d.numero} reprises`)
                     },
