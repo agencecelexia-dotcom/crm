@@ -171,6 +171,10 @@ Comment choisir tes questions :
 
 1. UNIQUEMENT CE QUI CHANGE LE PRIX. Une surface, une hauteur, un état de support, un accès, une finition. Pas le nom du client, pas la date, pas ce qui relève de l'organisation.
 
+1 bis. JAMAIS DE QUESTION SUR LE BUDGET. Même si la description en annonce un, tu l'ignores : le prix se calcule à partir des tarifs de l'artisan, jamais à partir de ce que le client est prêt à mettre. Demander « le budget est-il un plafond ? » oriente le chiffrage et détruit la seule chose qui fasse la valeur de ce devis.
+
+1 ter. SI LA DESCRIPTION SE CONTREDIT — deux surfaces différentes, deux matériaux incompatibles — pose la question du choix, avec les deux valeurs en options. Ne tranche jamais en silence.
+
 2. JAMAIS CE QUE TU SAIS DÉJÀ. Si la description ou le dossier donne la surface, ne la redemande pas. Poser une question dont la réponse est sous ses yeux lui fait perdre confiance dans les autres.
 
 3. SEPT AU MAXIMUM, et la plus déterminante en premier. Il répond debout, sur un téléphone, souvent devant le client.
@@ -178,6 +182,8 @@ Comment choisir tes questions :
 4. PRÉFÈRE LE CHOIX AU TEXTE. Trois pastilles à toucher valent mieux qu'une phrase à taper. Le texte libre est un dernier recours.
 
 5. PROPOSE UN DÉFAUT JUSTE. La plupart des réponses seront conservées telles quelles : un défaut bien choisi fait gagner autant qu'une question bien posée.
+
+6. VOUVOIE, TOUJOURS ET PARTOUT. Pas un « tu » isolé au milieu de questions qui vouvoient.
 
 Tu écris comme on parle sur un chantier : court, concret, sans jargon administratif.`
 
@@ -198,7 +204,11 @@ Comment travailler :
 
 5. REPORTE LES QUANTITÉS. Une surface de façade annoncée vaut pour le nettoyage, le piquage, le gobetis et l'enduit. Ne la redivise pas sans raison.
 
-6. DIS CE QUE TU AS SUPPOSÉ. Toute quantité qui ne découle pas d'une réponse est une hypothèse, et l'artisan doit pouvoir la démentir avant d'envoyer.`
+6. RESPECTE LES RÉPONSES. Une réponse de l'artisan n'est pas une suggestion : si le terrain est annoncé plat, il n'y a pas de ligne de terrassement ; si la réparation est choisie plutôt que le remplacement, tu ne chiffres pas un ouvrage neuf. Et n'écris pas qu'une valeur est « confirmée » quand personne ne l'a confirmée.
+
+7. GARDE LES MÊMES LIBELLÉS. Sur un même chantier, la formulation d'une ligne ne doit pas changer d'une composition à l'autre : c'est elle qui permet d'y rattacher un prix connu. Reprends le catalogue à l'identique dès qu'il convient.
+
+8. DIS CE QUE TU AS SUPPOSÉ. Toute quantité qui ne découle pas d'une réponse est une hypothèse, et l'artisan doit pouvoir la démentir avant d'envoyer.`
 
 Deno.serve(async (req) => {
   const CORS = cors(req.headers.get('origin'))

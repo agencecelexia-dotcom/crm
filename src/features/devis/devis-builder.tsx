@@ -293,6 +293,8 @@ export function DevisBuilder({
           quantite: num(l.quantite),
           unite: l.unite,
           prix_unitaire: num(l.prix_unitaire),
+          // Sans le taux de la ligne, le PDF ne peut pas ventiler la TVA.
+          tva_taux: tvaMode === 'normal' ? num(l.tva_taux) : 0,
         })),
       total: chiffres.ttc,
       totalHt: chiffres.ht,
