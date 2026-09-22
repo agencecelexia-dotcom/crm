@@ -147,3 +147,26 @@ export async function urlSignee(
   if (error) return null
   return data.signedUrl
 }
+
+/**
+ * Téléverse une attestation d'assurance de l'artisan (bucket PRIVÉ).
+ *
+ * Chemin : `assurances/<jeton artisan>/<type>-<aléatoire>.<ext>`. Le premier
+ * segment fixe l'usage, le second autorise le dépôt — c'est lui que vérifie la
+ * policy `documents_assurance_token` (0131). Le suffixe aléatoire évite qu'un
+ * renouvellement écrase la pièce précédente : en cas de litige, on veut
+ * pouvoir montrer l'attestation qui était en vigueur à la date du chantier.
+ */
+export async function uploaderAssurance(
+  tokenArtisan: string,
+  type: 'decennale' | 'rc_pro',
+  file: File,
+): Promise<string> {
+  const ext = extensionDe(file.name) || 'pdf'
+  const chemin = `assurances/${tokenArtisan}/${type}-${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from(BUCKET).upload(chemin, file, {
+    contentType: file.type || 'application/pdf',
+  })
+  if (error) throw error
+  return chemin
+}

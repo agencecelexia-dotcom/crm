@@ -42,10 +42,9 @@ import { ApercuDernierSuivi } from './apercu-dernier-suivi'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
+import { CarteAssurances } from '@/features/assurances/carte-assurances'
+import { useEtatChiffrage } from '@/features/assurances/use-assurances'
 import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
-
-// Le générateur de devis n'est activé QUE pour cet artisan (Metbach) pour l'instant.
-const METBACH_ID = '98a39398-2b7f-4a44-b9bc-aa6f893e9d32'
 
 // Espace artisan UNIQUE (/artisan/:token) : il signe son contrat une fois,
 // puis retrouve TOUS ses chantiers. Identité client masquée tant que non signé.
@@ -61,6 +60,9 @@ export function EspaceArtisanPage() {
       return (data as EspaceArtisan) ?? null
     },
   })
+  // Le générateur de devis s'ouvre aux artisans dont les assurances sont
+  // déposées ET validées (0131) — il était jusqu'ici réservé en dur à un seul.
+  const { data: chiffrage } = useEtatChiffrage(token)
   const [devisInitial, setDevisInitial] = useState<DevisInitial | null>(null)
   // Bascule pipe actif / espace « Perdus » (migration 0070).
   const [vuePerdus, setVuePerdus] = useState(false)
@@ -105,7 +107,7 @@ export function EspaceArtisanPage() {
   const { artisan, engagement, signe, contrat_externe, projets } = data
   const projetsPerdus = data.projets_perdus ?? []
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
-  const isMetbach = artisan.id === METBACH_ID
+  const peutChiffrer = chiffrage?.peut_chiffrer === true
 
   function ouvrirDevisProjet(p: ProjetEspace) {
     setDevisInitial({
@@ -175,7 +177,7 @@ export function EspaceArtisanPage() {
                 </span>
               </Button>
             )}
-            {isMetbach && (
+            {peutChiffrer && (
               <Button size="sm" variant="outline" className="bg-card" onClick={() => setDevisInitial({})}>
                 <FilePlus className="size-4" />
                 Nouveau devis
@@ -264,10 +266,14 @@ export function EspaceArtisanPage() {
           }}
         />
       )}
+
+      {/* Assurances : c'est ce qui ouvre le générateur de devis. Visible une
+          fois le contrat signé, comme le reste de l'espace. */}
+      {(signe || contrat_externe) && token && <CarteAssurances token={token} />}
       </div>
 
-      {/* Devis (Metbach uniquement) */}
-      {isMetbach && token && <MesDevis token={token} />}
+      {/* Devis — ouvert aux artisans dont les assurances sont validées */}
+      {peutChiffrer && token && <MesDevis token={token} />}
 
       {/* Liste des chantiers : en cours / terminés */}
       <ListeChantiers
@@ -276,12 +282,12 @@ export function EspaceArtisanPage() {
         projets={projets}
         signe={signe}
         onChange={() => void refetch()}
-        onCreerDevis={isMetbach ? ouvrirDevisProjet : undefined}
+        onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined}
       />
       </div>
 
-      {/* Générateur de devis (Metbach) */}
-      {isMetbach && token && devisInitial && (
+      {/* Générateur de devis */}
+      {peutChiffrer && token && devisInitial && (
         <DevisBuilder
           key={devisInitial.affectation_token ?? 'standalone'}
           token={token}
