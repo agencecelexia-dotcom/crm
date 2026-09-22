@@ -388,7 +388,7 @@ export function DevisBuilder({
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="relative flex max-h-[92dvh] flex-col overflow-hidden">
+      <SheetContent side="bottom" className="flex max-h-[92dvh] flex-col overflow-hidden">
         <SheetHeader>
           <SheetTitle>Créer un devis</SheetTitle>
           <SheetDescription>
@@ -869,6 +869,10 @@ export function DevisBuilder({
           </div>
         </div>
 
+        {/* Surcouche plein panneau. Elle s'ancre sur le SheetContent sans que
+            celui-ci porte `relative` : il est déjà `fixed`, donc bloc conteneur
+            pour ses enfants absolus. Lui ajouter `relative` écrase ce `fixed`
+            et fait retomber toute la feuille dans le flux du document. */}
         {entretienOuvert && (
           <EntretienDevis
             token={token}
