@@ -20,7 +20,14 @@ import { LoginPage } from '@/features/auth/login-page'
 import { DefinirMotDePassePage } from '@/features/auth/definir-mot-de-passe-page'
 import { SignerPage } from '@/features/contrats/signer-page'
 import { MissionPage } from '@/features/contrats/mission-page'
-import { EspaceArtisanPage } from '@/features/contrats/espace-artisan-page'
+// Différé : l'espace artisan est une route PUBLIQUE par jeton, que personne de
+// l'agence n'ouvre jamais — et il emmène avec lui tout le générateur de devis
+// (modèles, entretien, identité, jsPDF). Le laisser dans le bundle initial le
+// faisait télécharger par tout le monde, pour n'être utilisé par presque
+// personne.
+const EspaceArtisanPage = lazy(() =>
+  import('@/features/contrats/espace-artisan-page').then((m) => ({ default: m.EspaceArtisanPage })),
+)
 import { InscriptionArtisanPage } from '@/features/artisans/pages/inscription-artisan-page'
 const CartePage = lazy(() => import('@/features/carte/carte-page').then((m) => ({ default: m.CartePage })))
 import { CommissionsPage } from '@/features/commissions/commissions-page'
