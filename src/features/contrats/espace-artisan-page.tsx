@@ -42,6 +42,7 @@ import { ApercuDernierSuivi } from './apercu-dernier-suivi'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
+import { CarteIdentite } from '@/features/devis/carte-identite'
 import { CarteAssurances } from '@/features/assurances/carte-assurances'
 import { useEtatChiffrage } from '@/features/assurances/use-assurances'
 import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
@@ -119,6 +120,8 @@ export function EspaceArtisanPage() {
       client_email: p.client_email,
       client_tel: p.client_telephone,
       objet: p.metiers?.length ? p.metiers.join(', ') : p.metier,
+      metier: p.metiers?.[0] ?? p.metier,
+      description: p.description,
     })
   }
 
@@ -269,7 +272,14 @@ export function EspaceArtisanPage() {
 
       {/* Assurances : c'est ce qui ouvre le générateur de devis. Visible une
           fois le contrat signé, comme le reste de l'espace. */}
-      {(signe || contrat_externe) && token && <CarteAssurances token={token} />}
+      {(signe || contrat_externe) && token && (
+          <>
+            {/* Renseignée une fois, portée par tous ses devis : en-tête,
+                immatriculation, assurance, conditions générales. */}
+            <CarteIdentite token={token} />
+            <CarteAssurances token={token} />
+          </>
+        )}
       </div>
 
       {/* Devis — ouvert aux artisans dont les assurances sont validées */}

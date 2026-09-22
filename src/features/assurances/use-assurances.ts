@@ -22,6 +22,9 @@ export interface PieceAssurance {
 export interface EtatChiffrage {
   peut_chiffrer: boolean
   validees_le: string | null
+  /** Taux de commission Celexia de cet artisan (0.15 = 15 %), pour l'afficher
+   *  pendant qu'il chiffre : il doit savoir ce qui lui restera. */
+  taux_commission: number | null
   decennale: PieceAssurance
   rc_pro: PieceAssurance
 }
