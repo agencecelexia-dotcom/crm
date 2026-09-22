@@ -45,6 +45,7 @@ import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
 import { ContratCard } from '@/features/contrats/contrat-card'
 import { useAuth } from '@/lib/auth/use-auth'
 import { PontCrmCard } from '../components/pont-crm-card'
+import { AssurancesArtisanCard } from '@/features/assurances/assurances-artisan-card'
 
 // Fiche artisan : infos, spécificités, historique projets, total rapporté.
 export function ArtisanDetailPage() {
@@ -204,6 +205,11 @@ export function ArtisanDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Assurances — leur validation ouvre le générateur de devis (0131).
+          Placées avant le contrat : c'est la même décision, laisser ou non cet
+          artisan travailler pour nous. */}
+      {estFondateur && <AssurancesArtisanCard artisan={artisan} />}
 
       {/* Contrat d'engagement (signature en ligne) */}
       <ContratCard artisan={artisan} />

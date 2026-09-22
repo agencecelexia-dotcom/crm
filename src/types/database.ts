@@ -82,6 +82,18 @@ export interface Artisan {
   annees_experience: number | null
   assurance_rc_pro: boolean | null
   assurance_decennale: boolean | null
+  // Pièces justificatives (0131) : ce sont elles qui ouvrent le générateur de
+  // devis. Les deux booléens ci-dessus restent la déclaration, ceux-ci la preuve.
+  assurance_decennale_url: string | null
+  assurance_decennale_assureur: string | null
+  assurance_decennale_police: string | null
+  assurance_decennale_echeance: string | null
+  assurance_rc_pro_url: string | null
+  assurance_rc_pro_assureur: string | null
+  assurance_rc_pro_police: string | null
+  assurance_rc_pro_echeance: string | null
+  assurances_validees_at: string | null
+  assurances_validees_par: string | null
   // Scoring interne (jamais exposé à l'artisan) — notes qualitatives manuelles /5
   note_elocution: number | null // « comment il parle » (expression, contact client)
   note_communication_agence: number | null // réactivité / échange avec l'agence
@@ -119,6 +131,18 @@ export type ArtisanInput = Omit<
   | 'annees_experience'
   | 'assurance_rc_pro'
   | 'assurance_decennale'
+  // Pièces et validation : déposées par l'artisan depuis son espace, validées
+  // par un fondateur (0131). Le formulaire de fiche ne les touche jamais.
+  | 'assurance_decennale_url'
+  | 'assurance_decennale_assureur'
+  | 'assurance_decennale_police'
+  | 'assurance_decennale_echeance'
+  | 'assurance_rc_pro_url'
+  | 'assurance_rc_pro_assureur'
+  | 'assurance_rc_pro_police'
+  | 'assurance_rc_pro_echeance'
+  | 'assurances_validees_at'
+  | 'assurances_validees_par'
   | 'note_elocution'
   | 'note_communication_agence'
 > & {
