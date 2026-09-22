@@ -25,9 +25,15 @@ export interface DevisData {
   }
   objet?: string | null
   lignes: DevisLigne[]
-  total: number
+  total: number // TTC — ce que paie le client
+  totalHt?: number | null
+  totalTva?: number | null
+  /** 'franchise' = art. 293 B du CGI (auto-entrepreneur), sinon TVA applicable. */
+  tvaMode?: string | null
   acomptePct?: number | null
   conditions?: string | null
+  /** Mentions obligatoires — l'assurance vient de la fiche artisan (0131). */
+  assurance?: { assureur?: string | null; police?: string | null } | null
 }
 
 const NAVY: [number, number, number] = [31, 58, 95]
@@ -238,21 +244,38 @@ export async function construireDevis(data: DevisData, logoUrl = '/logo-metbach.
   }
   y += 6
 
-  // ---------- Totaux (franchise TVA) ----------
-  ensure(34)
+  // ---------- Totaux ----------
+  //
+  // Deux présentations : l'artisan en franchise porte la mention du CGI et un
+  // seul total ; celui qui facture la TVA doit faire apparaître HT et TVA
+  // séparément, faute de quoi le devis n'est pas opposable.
+  ensure(42)
   const boxW = 80
   const bx = pageW - margin - boxW
+  const franchise = (data.tvaMode ?? 'franchise') === 'franchise'
   doc.setFont(F, 'normal')
   doc.setFontSize(9)
-  setColor(GRIS_CLAIR)
-  doc.text('TVA non applicable, art. 293 B du CGI', bx, y)
-  y += 7
+
+  if (franchise) {
+    setColor(GRIS_CLAIR)
+    doc.text('TVA non applicable, art. 293 B du CGI', bx, y)
+    y += 7
+  } else {
+    setColor(GRIS)
+    doc.setFontSize(9.5)
+    doc.text('Total HT', bx + 3, y)
+    doc.text(eur(data.totalHt ?? data.total), pageW - margin - 3, y, { align: 'right' })
+    y += 5.5
+    doc.text('TVA', bx + 3, y)
+    doc.text(eur(data.totalTva ?? 0), pageW - margin - 3, y, { align: 'right' })
+    y += 6.5
+  }
   doc.setFillColor(245, 243, 255)
   doc.rect(bx, y, boxW, 11, 'F')
   doc.setFont(F, 'bold')
   doc.setFontSize(12)
   setColor(NAVY)
-  doc.text('NET À PAYER', bx + 3, y + 7)
+  doc.text(franchise ? 'NET À PAYER' : 'TOTAL TTC', bx + 3, y + 7)
   doc.text(eur(data.total), pageW - margin - 3, y + 7, { align: 'right' })
   y += 16
 
@@ -268,6 +291,35 @@ export async function construireDevis(data: DevisData, logoUrl = '/logo-metbach.
     )
     y += 7
   }
+
+  // ---------- Mentions obligatoires ----------
+  //
+  // Un devis qui ne les porte pas est attaquable. Elles sont ajoutées d'office
+  // plutôt que laissées à la mémoire de l'artisan.
+  const mentions: string[] = []
+  if (data.assurance?.assureur) {
+    mentions.push(
+      `Assurance décennale : ${data.assurance.assureur}`
+        + (data.assurance.police ? ` — police n° ${data.assurance.police}` : ''),
+    )
+  }
+  mentions.push(
+    'Démarchage à domicile : le client dispose d’un délai de rétractation de 14 jours '
+      + '(art. L221-18 du Code de la consommation).',
+    'En cas de litige, le client peut recourir gratuitement à un médiateur de la consommation.',
+  )
+
+  ensure(6 + mentions.length * 4)
+  doc.setFont(F, 'normal')
+  doc.setFontSize(7.5)
+  setColor(GRIS_CLAIR)
+  for (const m of mentions) {
+    for (const ligne of doc.splitTextToSize(m, largeur)) {
+      doc.text(ligne, margin, y)
+      y += 3.4
+    }
+  }
+  y += 3
 
   // Conditions
   if (data.conditions) {

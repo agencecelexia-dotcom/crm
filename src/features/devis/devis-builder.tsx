@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/select'
 import { uploaderDevisGenere } from '@/lib/storage'
 import type { ArtisanEspace } from '@/types/database'
+import { useEtatChiffrage } from '@/features/assurances/use-assurances'
+import { calculerTotaux } from './calculs'
 import { telechargerDevis, devisEnBlob, type DevisData } from './devis-pdf'
 import {
   useCreerDevis,
@@ -29,6 +31,8 @@ import {
   useEnvoyerDevis,
   envoyerDevisPdfEmail,
   type DevisPayload,
+  usePrixArtisan,
+  useEnregistrerPrix,
 } from './use-devis'
 
 const UNITES = ['u', 'm²', 'ml', 'm³', 'forfait', 'h', 'j', 'ens.']
@@ -40,6 +44,10 @@ const euro2 = (n: number) =>
     .replace(/[\u202f\u00a0]/g, ' ') + ' €'
 
 interface LigneState {
+  /** Déboursé sec : ce que la ligne lui coûte. Jamais imprimé sur le devis. */
+  cout_unitaire: string
+  /** Taux de TVA de la ligne — un chantier mêle souvent 10 % et 20 %. */
+  tva_taux: string
   designation: string
   quantite: string
   unite: string
@@ -100,10 +108,18 @@ export function DevisBuilder({
   })
   const majCli = (k: keyof typeof cli, v: string) => setCli((p) => ({ ...p, [k]: v }))
 
+  // Taux de commission et assurance : servent l'un à montrer ce qui restera à
+  // l'artisan, l'autre à la mention obligatoire en pied de devis.
+  const { data: etat } = useEtatChiffrage(token)
+  const { data: bibliotheque } = usePrixArtisan(token)
+  const enregistrerPrix = useEnregistrerPrix(token)
   const [objet, setObjet] = useState(initial?.objet ?? '')
   const [lignes, setLignes] = useState<LigneState[]>([
-    { designation: '', quantite: '1', unite: 'u', prix_unitaire: '' },
+    { designation: '', quantite: '1', unite: 'u', prix_unitaire: '', cout_unitaire: '', tva_taux: '10' },
   ])
+  // Par défaut la franchise : c'est le régime en place jusqu'ici, et basculer
+  // tout le monde en TVA ajouterait 10 % aux devis du jour au lendemain.
+  const [tvaMode, setTvaMode] = useState<'franchise' | 'normal'>('franchise')
   const [acompte, setAcompte] = useState('30')
   const [conditions, setConditions] = useState(
     'Devis gratuit, valable 1 mois. Acompte à la commande, solde à la fin des travaux.',
@@ -116,16 +132,28 @@ export function DevisBuilder({
   const [today] = useState(() => new Date().toISOString())
 
   const num = (s: string) => parseFloat(s.replace(',', '.')) || 0
-  const total = useMemo(
-    () => lignes.reduce((s, l) => s + num(l.quantite) * num(l.prix_unitaire), 0),
-    [lignes],
+
+  // HT, TVA, TTC, déboursé, marge et commission — voir `calculs.ts`.
+  const chiffres = useMemo(
+    () =>
+      calculerTotaux(
+        lignes.map((l) => ({
+          quantite: num(l.quantite),
+          prix_unitaire: num(l.prix_unitaire),
+          cout_unitaire: num(l.cout_unitaire),
+          tva_taux: num(l.tva_taux),
+        })),
+        tvaMode === 'normal',
+        etat?.taux_commission ?? 0,
+      ),
+    [lignes, tvaMode, etat?.taux_commission],
   )
 
   function majLigne(i: number, k: keyof LigneState, v: string) {
     setLignes((arr) => arr.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
   }
   const ajouterLigne = () =>
-    setLignes((arr) => [...arr, { designation: '', quantite: '1', unite: 'u', prix_unitaire: '' }])
+    setLignes((arr) => [...arr, { designation: '', quantite: '1', unite: 'u', prix_unitaire: '', cout_unitaire: '', tva_taux: '10' }])
   const retirerLigne = (i: number) => setLignes((arr) => arr.filter((_, idx) => idx !== i))
 
   function construireData(numero: string): DevisData {
@@ -153,9 +181,15 @@ export function DevisBuilder({
           unite: l.unite,
           prix_unitaire: num(l.prix_unitaire),
         })),
-      total,
+      total: chiffres.ttc,
+      totalHt: chiffres.ht,
+      totalTva: chiffres.tva,
+      tvaMode,
       acomptePct: acompte.trim() ? num(acompte) : null,
       conditions,
+      assurance: etat?.decennale
+        ? { assureur: etat.decennale.assureur, police: etat.decennale.police }
+        : null,
     }
   }
 
@@ -190,13 +224,30 @@ export function DevisBuilder({
         client_email: cli.email,
         client_tel: cli.tel,
         objet,
-        lignes: construireData('x').lignes,
-        total,
+        // Le serveur recalcule les totaux : il ne croit pas le client sur
+        // parole, c'est ce chiffre qui porte la commission.
+        lignes: lignes
+          .filter((l) => l.designation.trim())
+          .map((l) => ({
+            designation: l.designation.trim(),
+            quantite: num(l.quantite),
+            unite: l.unite,
+            prix_unitaire: num(l.prix_unitaire),
+            cout_unitaire: l.cout_unitaire.trim() ? num(l.cout_unitaire) : null,
+            tva_taux: tvaMode === 'normal' ? num(l.tva_taux) : 0,
+          })),
+        tva_mode: tvaMode,
+        total: chiffres.ttc,
         acompte_pct: acompte.trim() ? num(acompte) : null,
         conditions,
         date_validite: validite,
       }
       const { id, numero } = await creer.mutateAsync(payload)
+
+      // Les lignes rejoignent sa bibliothèque : il ne les ressaisira plus.
+      // Échec sans conséquence — le devis, lui, est déjà enregistré.
+      void enregistrerPrix.mutateAsync({ lignes: payload.lignes, metier: objet || null })
+        .catch(() => undefined)
       const blob = await devisEnBlob(construireData(numero))
       const url = await uploaderDevisGenere(token, numero, blob)
       await setPdf.mutateAsync({ id, url })
@@ -276,7 +327,51 @@ export function DevisBuilder({
 
           {/* Lignes */}
           <div className="space-y-2">
-            <p className="text-sm font-semibold">Prestations</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Prestations</p>
+              <Select
+                value={tvaMode}
+                onValueChange={(v) => setTvaMode(v as 'franchise' | 'normal')}
+              >
+                <SelectTrigger className="h-9 w-44" aria-label="Régime de TVA">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="franchise">Sans TVA (art. 293 B)</SelectItem>
+                  <SelectItem value="normal">Avec TVA</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Bibliothèque : les lignes déjà facturées, les plus utilisées
+                d'abord. Un clic les rajoute avec leur prix et leur déboursé. */}
+            {!!bibliotheque?.length && (
+              <div className="flex flex-wrap gap-1.5">
+                {bibliotheque.slice(0, 8).map((x) => (
+                  <button
+                    key={x.id}
+                    type="button"
+                    onClick={() =>
+                      setLignes((arr) => [
+                        ...arr.filter((l) => l.designation.trim() || l.prix_unitaire.trim()),
+                        {
+                          designation: x.designation,
+                          quantite: '1',
+                          unite: x.unite,
+                          prix_unitaire: String(x.prix_unitaire),
+                          cout_unitaire: x.cout_unitaire != null ? String(x.cout_unitaire) : '',
+                          tva_taux: '10',
+                        },
+                      ])
+                    }
+                    className="rounded-full border border-border bg-card px-2.5 py-1 text-xs transition-colors hover:bg-accent"
+                  >
+                    {x.designation}
+                    <span className="ml-1 text-muted-foreground">{euro2(x.prix_unitaire)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {lignes.map((l, i) => (
               <div key={i} className="space-y-2 rounded-xl border border-border p-2.5">
                 <Textarea
@@ -337,6 +432,36 @@ export function DevisBuilder({
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
                 </div>
+                {/* Rangée 3 : déboursé et TVA. Le déboursé ne sort jamais sur
+                    le devis du client — il ne sert qu'à voir la marge. */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Déboursé (coût)"
+                      value={l.cout_unitaire}
+                      onChange={(e) => majLigne(i, 'cout_unitaire', e.target.value)}
+                      className="h-10 w-full pr-8"
+                      aria-label="Déboursé unitaire"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                      €
+                    </span>
+                  </div>
+                  {tvaMode === 'normal' && (
+                    <Select value={l.tva_taux} onValueChange={(v) => majLigne(i, 'tva_taux', v)}>
+                      <SelectTrigger className="h-10 w-28 shrink-0" aria-label="Taux de TVA">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5.5">5,5 %</SelectItem>
+                        <SelectItem value="10">10 %</SelectItem>
+                        <SelectItem value="20">20 %</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               </div>
             ))}
             <Button variant="outline" className="w-full" onClick={ajouterLigne}>
@@ -345,12 +470,66 @@ export function DevisBuilder({
             </Button>
           </div>
 
-          {/* Total */}
-          <div className="flex items-center justify-between rounded-xl bg-primary/5 p-3">
-            <span className="text-sm font-medium">Net à payer</span>
-            <span className="montant text-xl font-semibold text-primary">{euro2(total)}</span>
+          {/* Totaux */}
+          <div className="space-y-1.5 rounded-xl bg-primary/5 p-3">
+            {tvaMode === 'normal' && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Total HT</span>
+                  <span className="montant">{euro2(chiffres.ht)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">TVA</span>
+                  <span className="montant">{euro2(chiffres.tva)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">
+                {tvaMode === 'normal' ? 'Total TTC' : 'Net à payer'}
+              </span>
+              <span className="montant text-xl font-semibold text-primary">
+                {euro2(chiffres.ttc)}
+              </span>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">TVA non applicable, art. 293 B du CGI.</p>
+          {tvaMode === 'franchise' && (
+            <p className="text-xs text-muted-foreground">
+              TVA non applicable, art. 293 B du CGI.
+            </p>
+          )}
+
+          {/* Ce que ça vous laisse — jamais imprimé sur le devis du client. */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-border p-2.5">
+              <p className="text-xs text-muted-foreground">Votre marge</p>
+              <p
+                className={`montant text-base font-semibold ${
+                  chiffres.cout > 0 && chiffres.margePct < 15 ? 'text-destructive' : ''
+                }`}
+              >
+                {chiffres.cout > 0 ? euro2(chiffres.marge) : '—'}
+                {chiffres.cout > 0 && (
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    {chiffres.margePct.toFixed(0)} %
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border p-2.5">
+              <p className="text-xs text-muted-foreground">
+                Commission Celexia
+                {etat?.taux_commission != null &&
+                  ` (${(etat.taux_commission * 100).toFixed(0)} %)`}
+              </p>
+              <p className="montant text-base font-semibold">{euro2(chiffres.commission)}</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {chiffres.cout === 0
+              ? 'Renseignez le déboursé d’une ligne pour voir votre marge.'
+              : 'Marge et commission ne figurent pas sur le devis remis au client.'}
+          </p>
 
           <div className="grid grid-cols-2 gap-2">
             <Champ label="Acompte (%)" value={acompte} onChange={setAcompte} type="number" />

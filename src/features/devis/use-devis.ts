@@ -35,6 +35,52 @@ export function useDevisProjet(projetId: string | undefined) {
   })
 }
 
+/** Une ligne de la bibliothèque de prix de l'artisan (0132). */
+export interface PrixArtisan {
+  id: string
+  designation: string
+  unite: string
+  prix_unitaire: number
+  cout_unitaire: number | null
+  metier: string | null
+  utilisations: number
+}
+
+/**
+ * Bibliothèque de prix de l'artisan.
+ *
+ * Elle se construit toute seule à l'usage : chaque devis enregistré y verse
+ * ses lignes. Pas d'écran de gestion à tenir, et les prix les plus utilisés
+ * remontent d'eux-mêmes.
+ */
+export function usePrixArtisan(token: string | undefined) {
+  return useQuery({
+    queryKey: ['devis-prix', token],
+    enabled: !!token,
+    queryFn: async (): Promise<PrixArtisan[]> => {
+      const { data, error } = await supabase.rpc('prix_artisan_by_token', { p_token: token })
+      if (error) throw error
+      return (data as PrixArtisan[]) ?? []
+    },
+  })
+}
+
+/** Verse les lignes d'un devis dans la bibliothèque (appelé à l'enregistrement). */
+export function useEnregistrerPrix(token: string | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ lignes, metier }: { lignes: unknown[]; metier?: string | null }) => {
+      const { error } = await supabase.rpc('enregistrer_prix_by_token', {
+        p_token: token,
+        p_lignes: lignes,
+        p_metier: metier ?? null,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['devis-prix', token] }),
+  })
+}
+
 export interface DevisPayload {
   affectation_token?: string
   client_nom?: string
@@ -44,7 +90,17 @@ export interface DevisPayload {
   client_email?: string
   client_tel?: string
   objet?: string
-  lignes: { designation: string; quantite: number; unite: string; prix_unitaire: number }[]
+  lignes: {
+    designation: string
+    quantite: number
+    unite: string
+    prix_unitaire: number
+    // Déboursé et TVA (0132). Le déboursé ne sort jamais sur le PDF client :
+    // il ne sert qu'à afficher la marge à l'artisan.
+    cout_unitaire?: number | null
+    tva_taux?: number
+  }[]
+  tva_mode?: string
   total: number
   acompte_pct?: number | null
   conditions?: string
