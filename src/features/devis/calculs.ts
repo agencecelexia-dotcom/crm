@@ -82,14 +82,23 @@ export const UNITES_COTE = ['m²', 'ml', 'm³']
  * @returns `[unité, nombre de lignes]`, ou `null` s'il n'y a pas de cote commune.
  */
 export function uniteCommune(
-  lignes: { designation: string; unite: string }[],
+  lignes: { designation: string; unite: string; quantite?: string }[],
 ): [string, number] | null {
   const compte = new Map<string, number>()
   for (const l of lignes)
-    if (l.designation.trim() && UNITES_COTE.includes(l.unite))
+    // Seules les lignes restées à la quantité par défaut. Un entretien qui a
+    // déjà chiffré 10 m² de menuiseries fixes et 10 m² de coulissantes ne doit
+    // pas les voir passer à la surface du sol.
+    if (l.designation.trim() && UNITES_COTE.includes(l.unite) && estQuantiteParDefaut(l.quantite))
       compte.set(l.unite, (compte.get(l.unite) ?? 0) + 1)
 
   let tete: [string, number] | null = null
   for (const e of compte) if (!tete || e[1] > tete[1]) tete = e
   return tete && tete[1] >= 2 ? tete : null
+}
+
+/** Une quantité que personne n'a encore touchée : vide, ou le 1 par défaut. */
+export function estQuantiteParDefaut(q: string | undefined): boolean {
+  const t = (q ?? '1').trim()
+  return t === '' || t === '1'
 }
