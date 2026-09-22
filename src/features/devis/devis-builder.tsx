@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -33,6 +33,9 @@ import {
   type DevisPayload,
   usePrixArtisan,
   useEnregistrerPrix,
+  useSuggestionsDevis,
+  type LigneSuggeree,
+  type Suggestions,
 } from './use-devis'
 
 const UNITES = ['u', 'm²', 'ml', 'm³', 'forfait', 'h', 'j', 'ens.']
@@ -113,6 +116,8 @@ export function DevisBuilder({
   const { data: etat } = useEtatChiffrage(token)
   const { data: bibliotheque } = usePrixArtisan(token)
   const enregistrerPrix = useEnregistrerPrix(token)
+  const suggerer = useSuggestionsDevis(token)
+  const [suggestions, setSuggestions] = useState<Suggestions | null>(null)
   const [objet, setObjet] = useState(initial?.objet ?? '')
   const [lignes, setLignes] = useState<LigneState[]>([
     { designation: '', quantite: '1', unite: 'u', prix_unitaire: '', cout_unitaire: '', tva_taux: '10' },
@@ -148,6 +153,21 @@ export function DevisBuilder({
       ),
     [lignes, tvaMode, etat?.taux_commission],
   )
+
+  /** Verse une ligne proposée dans le devis, en remplaçant la ligne vide initiale. */
+  function ajouterSuggestion(x: LigneSuggeree) {
+    setLignes((arr) => [
+      ...arr.filter((l) => l.designation.trim() || l.prix_unitaire.trim()),
+      {
+        designation: x.designation,
+        quantite: String(x.quantite ?? 1),
+        unite: x.unite || 'u',
+        prix_unitaire: x.prix_unitaire != null ? String(x.prix_unitaire) : '',
+        cout_unitaire: '',
+        tva_taux: '10',
+      },
+    ])
+  }
 
   function majLigne(i: number, k: keyof LigneState, v: string) {
     setLignes((arr) => arr.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
@@ -342,6 +362,109 @@ export function DevisBuilder({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Lignes proposées à partir du dossier et des échanges. Réservé
+                aux devis ouverts depuis un chantier : sans dossier, rien à lire. */}
+            {initial?.affectation_token && (
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={suggerer.isPending}
+                onClick={() =>
+                  suggerer.mutate(initial.affectation_token!, {
+                    onSuccess: (s) => {
+                      if (!s.ok) {
+                        toast.error('Proposition indisponible', { description: s.error })
+                        return
+                      }
+                      setSuggestions(s)
+                      if (!s.lignes?.length) toast.info('Aucune ligne à proposer sur ce dossier')
+                    },
+                    onError: (e) =>
+                      toast.error('Proposition indisponible', {
+                        description: e instanceof Error ? e.message : undefined,
+                      }),
+                  })
+                }
+              >
+                {suggerer.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Sparkles className="size-4" />
+                )}
+                Proposer des lignes depuis le dossier
+              </Button>
+            )}
+
+            {!!suggestions?.lignes?.length && (
+              <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/5 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium">
+                    {suggestions.lignes.length} lignes proposées
+                  </p>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        suggestions.lignes?.forEach(ajouterSuggestion)
+                        setSuggestions(null)
+                      }}
+                    >
+                      Tout ajouter
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-8"
+                      aria-label="Fermer"
+                      onClick={() => setSuggestions(null)}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+                <ul className="space-y-1.5">
+                  {suggestions.lignes.map((x, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => ajouterSuggestion(x)}
+                        className="w-full rounded-lg border border-border bg-card p-2.5 text-left transition-colors hover:bg-accent"
+                      >
+                        <p className="text-sm font-medium">{x.designation}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {x.quantite} {x.unite}
+                          {' · '}
+                          {x.prix_unitaire != null
+                            ? `${euro2(x.prix_unitaire)} — ${
+                                x.source === 'bibliotheque' ? 'votre prix' : 'prix observé'
+                              }`
+                            : 'prix à saisir'}
+                        </p>
+                        {x.pourquoi && (
+                          <p className="mt-1 text-xs italic text-muted-foreground">{x.pourquoi}</p>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {!!suggestions.manques?.length && (
+                  <div className="rounded-lg bg-card p-2.5">
+                    <p className="text-xs font-medium">À vérifier sur place</p>
+                    <ul className="mt-1 list-inside list-disc text-xs text-muted-foreground">
+                      {suggestions.manques.map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Les prix viennent de vos devis ou de ceux observés sur ce métier — jamais
+                  d’une estimation. Vérifiez tout avant d’envoyer.
+                </p>
+              </div>
+            )}
 
             {/* Bibliothèque : les lignes déjà facturées, les plus utilisées
                 d'abord. Un clic les rajoute avec leur prix et leur déboursé. */}

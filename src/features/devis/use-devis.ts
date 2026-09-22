@@ -81,6 +81,44 @@ export function useEnregistrerPrix(token: string | undefined) {
   })
 }
 
+/** Une ligne proposée par l'IA à partir du dossier (edge `devis-suggerer`). */
+export interface LigneSuggeree {
+  designation: string
+  unite: string
+  quantite: number
+  /** Toujours issu d'un catalogue — jamais inventé. Absent = prix à saisir. */
+  prix_unitaire?: number | null
+  source: 'bibliotheque' | 'reference' | 'aucune'
+  pourquoi?: string
+}
+
+export interface Suggestions {
+  ok: boolean
+  error?: string
+  metier?: string | null
+  lignes?: LigneSuggeree[]
+  /** Ce qui manque au dossier pour chiffrer sérieusement. */
+  manques?: string[]
+}
+
+/**
+ * Propose les lignes du devis à partir du chantier et des échanges.
+ *
+ * Le modèle choisit les désignations et estime les quantités ; les prix
+ * viennent de la bibliothèque de l'artisan ou du référentiel, jamais de lui.
+ */
+export function useSuggestionsDevis(token: string | undefined) {
+  return useMutation({
+    mutationFn: async (affectationToken: string): Promise<Suggestions> => {
+      const { data, error } = await supabase.functions.invoke('devis-suggerer', {
+        body: { token, affectation_token: affectationToken },
+      })
+      if (error) throw error
+      return data as Suggestions
+    },
+  })
+}
+
 export interface DevisPayload {
   affectation_token?: string
   client_nom?: string
