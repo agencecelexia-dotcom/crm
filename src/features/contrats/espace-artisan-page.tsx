@@ -121,6 +121,7 @@ export function EspaceArtisanPage() {
       client_tel: p.client_telephone,
       objet: p.metiers?.length ? p.metiers.join(', ') : p.metier,
       metier: p.metiers?.[0] ?? p.metier,
+      description: p.description,
     })
   }
 

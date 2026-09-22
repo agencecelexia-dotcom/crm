@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, Sparkles, X, Calculator } from 'lucide-react'
+import {
+  Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, Sparkles, X, Calculator,
+  MessageSquareText,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import {
@@ -39,6 +42,7 @@ import {
 } from './use-devis'
 import { BibliothequePrix, DemarrageDevis, EnregistrerModele } from './devis-demarrage'
 import { useIdentite } from './use-identite'
+import { EntretienDevis } from './entretien-devis'
 
 const UNITES = ['u', 'm²', 'ml', 'm³', 'forfait', 'h', 'j', 'ens.']
 
@@ -70,6 +74,8 @@ export interface DevisInitial {
   objet?: string | null
   /** Métier du chantier : sert à proposer le devis type correspondant. */
   metier?: string | null
+  /** Demande du client : point de départ de l'entretien. */
+  description?: string | null
 }
 
 export function DevisBuilder({
@@ -98,6 +104,7 @@ export function DevisBuilder({
   // Le déboursé n'intéresse que ceux qui suivent leur marge. Tant qu'aucune
   // ligne n'en porte, il reste une rangée de moins sur chaque ligne.
   const [deboursesOuverts, setDeboursesOuverts] = useState(false)
+  const [entretienOuvert, setEntretienOuvert] = useState(false)
 
   // En-tête entreprise (éditable, pré-rempli depuis « Mon entreprise »)
   const [ent, setEnt] = useState({
@@ -381,7 +388,7 @@ export function DevisBuilder({
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="flex max-h-[92dvh] flex-col overflow-hidden">
+      <SheetContent side="bottom" className="relative flex max-h-[92dvh] flex-col overflow-hidden">
         <SheetHeader>
           <SheetTitle>Créer un devis</SheetTitle>
           <SheetDescription>
@@ -466,6 +473,25 @@ export function DevisBuilder({
             {/* Trois façons de remplir d'un geste : un modèle enregistré, le
                 devis type du métier, ou un devis déjà fait qu'on reprend. Une
                 fois les lignes posées, ce bloc n'a plus rien à proposer. */}
+            {/* La seconde porte d'entrée : décrire plutôt que remplir. Celui
+                qui sort d'une visite a le chantier en tête, pas ses lignes. */}
+            {lignesRemplies.length === 0 && (
+              <Button
+                variant="outline"
+                className="h-auto w-full flex-col items-start gap-0.5 border-primary/30 bg-primary/5 py-3 text-left"
+                onClick={() => setEntretienOuvert(true)}
+              >
+                <span className="flex items-center gap-1.5 font-medium">
+                  <MessageSquareText className="size-4 text-primary" />
+                  Décrire le chantier
+                </span>
+                <span className="whitespace-normal text-xs font-normal text-muted-foreground">
+                  Vous racontez, on vous pose les questions qui changent le prix, le devis sort
+                  chiffré à vos tarifs.
+                </span>
+              </Button>
+            )}
+
             <DemarrageDevis
               token={token}
               metier={initial?.metier}
@@ -842,6 +868,20 @@ export function DevisBuilder({
           </Button>
           </div>
         </div>
+
+        {entretienOuvert && (
+          <EntretienDevis
+            token={token}
+            metier={initial?.metier}
+            affectationToken={initial?.affectation_token}
+            descriptionInitiale={initial?.description}
+            onAnnuler={() => setEntretienOuvert(false)}
+            onTermine={(l, o) => {
+              verserLignes(l, o)
+              setEntretienOuvert(false)
+            }}
+          />
+        )}
       </SheetContent>
     </Sheet>
   )

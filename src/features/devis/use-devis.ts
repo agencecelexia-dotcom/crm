@@ -331,3 +331,62 @@ export function useDupliquerDevis(token: string | undefined) {
     },
   })
 }
+
+/** Une question posée par l'entretien (0140, edge `devis-entretien`). */
+export interface QuestionEntretien {
+  cle: string
+  libelle: string
+  type: 'nombre' | 'choix' | 'texte'
+  unite?: string | null
+  options?: string[] | null
+  defaut?: string | null
+  pourquoi?: string | null
+}
+
+export interface ReponseQuestions {
+  ok: boolean
+  error?: string
+  objet?: string | null
+  metier?: string | null
+  questions?: QuestionEntretien[]
+}
+
+export interface LigneEntretien extends LigneModele {
+  source: 'bibliotheque' | 'reference' | 'marge' | 'a_chiffrer'
+}
+
+export interface ReponseLignes {
+  ok: boolean
+  error?: string
+  objet?: string | null
+  lignes?: LigneEntretien[]
+  hypotheses?: string[]
+  manques?: string[]
+}
+
+/**
+ * Le devis par entretien : l'artisan décrit, le modèle questionne, le devis
+ * sort chiffré.
+ *
+ * Le modèle ne voit aucun prix et son outil n'a pas de champ de prix : il ne
+ * peut pas en inventer. Les prix sont attachés en base, depuis la bibliothèque
+ * de l'artisan puis le référentiel du métier.
+ */
+export function useEntretienDevis(token: string | undefined) {
+  return useMutation({
+    mutationFn: async (p: {
+      phase: 'questions' | 'lignes'
+      description: string
+      metier?: string | null
+      affectation_token?: string | null
+      reponses?: Record<string, string>
+      marge?: number | null
+    }): Promise<ReponseQuestions & ReponseLignes> => {
+      const { data, error } = await supabase.functions.invoke('devis-entretien', {
+        body: { token, ...p },
+      })
+      if (error) throw error
+      return data as ReponseQuestions & ReponseLignes
+    },
+  })
+}
