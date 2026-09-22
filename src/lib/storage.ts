@@ -170,3 +170,21 @@ export async function uploaderAssurance(
   if (error) throw error
   return chemin
 }
+
+/**
+ * Dépose le logo de l'entreprise dans le bucket public `devis`, sous
+ * `logos/<jeton artisan>/`.
+ *
+ * Chaque dépôt porte un nom neuf : la politique de stockage (0139) n'autorise
+ * que l'INSERT, jamais l'UPDATE — écraser un fichier existant ouvrirait la
+ * modification de ce qui est déjà en ligne.
+ */
+export async function uploaderLogo(tokenArtisan: string, file: File): Promise<string> {
+  const ext = extensionDe(file.name) || 'png'
+  const chemin = `logos/${tokenArtisan}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from(BUCKET_DEVIS).upload(chemin, file, {
+    contentType: file.type || 'image/png',
+  })
+  if (error) throw error
+  return supabase.storage.from(BUCKET_DEVIS).getPublicUrl(chemin).data.publicUrl
+}

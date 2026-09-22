@@ -14,6 +14,15 @@ export interface DevisData {
     forme?: string | null
     tel?: string | null
     email?: string | null
+    /** Logo propre à l'entreprise. Aucun logo par défaut : mieux vaut pas de
+     *  logo que celui d'une autre entreprise. */
+    logoUrl?: string | null
+    capital?: string | null
+    villeImmat?: string | null
+    tvaIntracom?: string | null
+    ape?: string | null
+    iban?: string | null
+    bic?: string | null
   }
   client: {
     nom?: string | null
@@ -33,7 +42,18 @@ export interface DevisData {
   acomptePct?: number | null
   conditions?: string | null
   /** Mentions obligatoires — l'assurance vient de la fiche artisan (0131). */
-  assurance?: { assureur?: string | null; police?: string | null } | null
+  assurance?: {
+    assureur?: string | null
+    police?: string | null
+    /** Couverture géographique : première chose que vérifie un assureur. */
+    zone?: string | null
+    rcProAssureur?: string | null
+    rcProPolice?: string | null
+  } | null
+  mediateur?: { nom?: string | null; url?: string | null } | null
+  /** Conditions générales, imprimées en dernière page (0139). */
+  cgv?: string | null
+  conditionsPaiement?: string | null
 }
 
 const NAVY: [number, number, number] = [31, 58, 95]
@@ -59,8 +79,8 @@ function chargerImage(url: string): Promise<HTMLImageElement | null> {
   })
 }
 
-/** Construit le document jsPDF du devis (logo Metbach + tableau + totaux). */
-export async function construireDevis(data: DevisData, logoUrl = '/logo-metbach.png') {
+/** Construit le document jsPDF du devis (en-tête, tableau, totaux, CGV). */
+export async function construireDevis(data: DevisData) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const F = 'helvetica'
@@ -79,7 +99,10 @@ export async function construireDevis(data: DevisData, logoUrl = '/logo-metbach.
   const setColor = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2])
 
   // ---------- En-tête : logo + société (droite) ----------
-  const logo = await chargerImage(logoUrl)
+  //
+  // Aucun logo par défaut : imprimer celui d'une autre entreprise sur le devis
+  // d'un artisan serait pire que n'en imprimer aucun.
+  const logo = data.vendeur.logoUrl ? await chargerImage(data.vendeur.logoUrl) : null
   if (logo) {
     const w = 45
     const h = (logo.height / logo.width) * w
@@ -101,8 +124,10 @@ export async function construireDevis(data: DevisData, logoUrl = '/logo-metbach.
   const infos = [
     v.adresse,
     [v.cp, v.ville].filter(Boolean).join(' '),
-    v.forme,
-    v.siren ? `SIREN ${v.siren}` : null,
+    [v.forme, v.capital ? `capital ${v.capital}` : null].filter(Boolean).join(' — ') || null,
+    v.siren ? `SIREN ${v.siren}${v.villeImmat ? ` — RCS ${v.villeImmat}` : ''}` : null,
+    v.tvaIntracom ? `TVA ${v.tvaIntracom}` : null,
+    v.ape ? `APE ${v.ape}` : null,
     v.tel,
     v.email,
   ].filter(Boolean) as string[]
@@ -297,16 +322,35 @@ export async function construireDevis(data: DevisData, logoUrl = '/logo-metbach.
   // Un devis qui ne les porte pas est attaquable. Elles sont ajoutées d'office
   // plutôt que laissées à la mémoire de l'artisan.
   const mentions: string[] = []
-  if (data.assurance?.assureur) {
+  const a = data.assurance
+  if (a?.assureur) {
     mentions.push(
-      `Assurance décennale : ${data.assurance.assureur}`
-        + (data.assurance.police ? ` — police n° ${data.assurance.police}` : ''),
+      `Assurance décennale : ${a.assureur}`
+        + (a.police ? ` — police n° ${a.police}` : '')
+        + (a.zone ? ` — couverture : ${a.zone}` : ''),
     )
   }
+  if (a?.rcProAssureur) {
+    mentions.push(
+      `Responsabilité civile professionnelle : ${a.rcProAssureur}`
+        + (a.rcProPolice ? ` — police n° ${a.rcProPolice}` : ''),
+    )
+  }
+  if (data.conditionsPaiement) mentions.push(data.conditionsPaiement)
+  if (v.iban) {
+    mentions.push(`Règlement par virement : IBAN ${v.iban}${v.bic ? ` — BIC ${v.bic}` : ''}.`)
+  }
   mentions.push(
-    'Démarchage à domicile : le client dispose d’un délai de rétractation de 14 jours '
-      + '(art. L221-18 du Code de la consommation).',
-    'En cas de litige, le client peut recourir gratuitement à un médiateur de la consommation.',
+    'Retard de paiement : intérêts au taux légal en vigueur, exigibles de plein droit '
+      + 'sans mise en demeure préalable.',
+    'Devis gratuit. Démarchage à domicile : le client dispose d’un délai de rétractation '
+      + 'de 14 jours (art. L221-18 du Code de la consommation).',
+    data.mediateur?.nom
+      ? `Médiateur de la consommation : ${data.mediateur.nom}`
+          + (data.mediateur.url ? ` — ${data.mediateur.url}` : '')
+          + ' (art. L612-1 du Code de la consommation).'
+      : 'En cas de litige, le client peut recourir gratuitement à un médiateur de la '
+          + 'consommation (art. L612-1 du Code de la consommation).',
   )
 
   ensure(6 + mentions.length * 4)
@@ -348,6 +392,49 @@ export async function construireDevis(data: DevisData, logoUrl = '/logo-metbach.
   doc.text('Bon pour accord (date et signature du client) :', pageW - margin - 80, y)
   doc.setDrawColor(BORD[0], BORD[1], BORD[2])
   doc.roundedRect(pageW - margin - 80, y + 3, 80, 22, 1.5, 1.5)
+
+  // ---------- Conditions générales ----------
+  //
+  // Sur une page à part : elles ne doivent ni repousser le « bon pour accord »
+  // en deuxième page, ni se retrouver coupées au milieu d'un article.
+  if (data.cgv?.trim()) {
+    doc.addPage()
+    y = margin
+    doc.setFont(F, 'bold')
+    doc.setFontSize(12)
+    setColor(NAVY)
+    doc.text('Conditions générales', margin, y)
+    y += 7
+    doc.setDrawColor(ORANGE[0], ORANGE[1], ORANGE[2])
+    doc.setLineWidth(0.5)
+    doc.line(margin, y - 3, margin + 40, y - 3)
+
+    doc.setFontSize(7.5)
+    for (const paragraphe of data.cgv.trim().split(/\n\s*\n/)) {
+      const [titre, ...reste] = paragraphe.split('\n')
+      // Un titre d'article est court et commence par son numéro : le mettre en
+      // gras rend les onze articles parcourables d'un coup d'œil.
+      const estTitre = /^\d+\.\s/.test(titre) && titre.length < 70
+      ensure(8)
+      doc.setFont(F, estTitre ? 'bold' : 'normal')
+      setColor(estTitre ? NAVY : GRIS)
+      for (const ln of doc.splitTextToSize(titre, largeur)) {
+        ensure(3.6)
+        doc.text(ln, margin, y)
+        y += 3.6
+      }
+      if (reste.length) {
+        doc.setFont(F, 'normal')
+        setColor(GRIS)
+        for (const ln of doc.splitTextToSize(reste.join(' '), largeur)) {
+          ensure(3.6)
+          doc.text(ln, margin, y)
+          y += 3.6
+        }
+      }
+      y += 2.5
+    }
+  }
 
   // Pied de page (mentions) sur chaque page
   const total = doc.getNumberOfPages()

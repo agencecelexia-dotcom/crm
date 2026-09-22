@@ -38,6 +38,7 @@ import {
   type LigneModele,
 } from './use-devis'
 import { BibliothequePrix, DemarrageDevis, EnregistrerModele } from './devis-demarrage'
+import { useIdentite } from './use-identite'
 
 const UNITES = ['u', 'm²', 'ml', 'm³', 'forfait', 'h', 'j', 'ens.']
 
@@ -84,6 +85,7 @@ export function DevisBuilder({
   onClose: () => void
   onDone?: () => void
 }) {
+  const identite = useIdentite(token).data
   const creer = useCreerDevis(token)
   const setPdf = useSetDevisPdf(token)
   const envoyer = useEnvoyerDevis(token)
@@ -97,16 +99,16 @@ export function DevisBuilder({
   // ligne n'en porte, il reste une rangée de moins sur chaque ligne.
   const [deboursesOuverts, setDeboursesOuverts] = useState(false)
 
-  // En-tête entreprise (éditable, pré-rempli)
+  // En-tête entreprise (éditable, pré-rempli depuis « Mon entreprise »)
   const [ent, setEnt] = useState({
-    nom: vendeur.societe && vendeur.societe !== 'ZACHARI METBACH' ? vendeur.societe : 'METBACH RÉNOVATION',
-    adresse: vendeur.adresse ?? '',
-    cp: vendeur.code_postal ?? '',
-    ville: vendeur.ville ?? '',
-    siren: vendeur.siren ?? '',
-    forme: vendeur.forme_juridique ?? '',
-    tel: vendeur.telephone ?? '',
-    email: vendeur.email ?? '',
+    nom: identite?.societe || vendeur.societe || '',
+    adresse: identite?.adresse ?? vendeur.adresse ?? '',
+    cp: identite?.code_postal ?? vendeur.code_postal ?? '',
+    ville: identite?.ville ?? vendeur.ville ?? '',
+    siren: identite?.siren ?? vendeur.siren ?? '',
+    forme: identite?.forme_juridique ?? vendeur.forme_juridique ?? '',
+    tel: identite?.telephone ?? vendeur.telephone ?? '',
+    email: identite?.email ?? vendeur.email ?? '',
   })
   const majEnt = (k: keyof typeof ent, v: string) => setEnt((p) => ({ ...p, [k]: v }))
 
@@ -133,8 +135,10 @@ export function DevisBuilder({
   ])
   // Par défaut la franchise : c'est le régime en place jusqu'ici, et basculer
   // tout le monde en TVA ajouterait 10 % aux devis du jour au lendemain.
-  const [tvaMode, setTvaMode] = useState<'franchise' | 'normal'>('franchise')
-  const [acompte, setAcompte] = useState('30')
+  const [tvaMode, setTvaMode] = useState<'franchise' | 'normal'>(
+    identite?.tva_mode_defaut ?? 'franchise',
+  )
+  const [acompte, setAcompte] = useState(String(identite?.acompte_defaut ?? 30))
   const [conditions, setConditions] = useState(
     'Devis gratuit, valable 1 mois. Acompte à la commande, solde à la fin des travaux.',
   )
@@ -252,6 +256,15 @@ export function DevisBuilder({
         forme: ent.forme,
         tel: ent.tel,
         email: ent.email,
+        // Mentions d'immatriculation et coordonnées bancaires : elles ne sont
+        // pas éditables ici, c'est « Mon entreprise » qui en est la source.
+        logoUrl: identite?.logo_url,
+        capital: identite?.capital_social,
+        villeImmat: identite?.ville_immatriculation,
+        tvaIntracom: identite?.tva_intracom,
+        ape: identite?.code_ape,
+        iban: identite?.iban,
+        bic: identite?.bic,
       },
       client: { nom: cli.nom, adresse: cli.adresse, cp: cli.cp, ville: cli.ville, tel: cli.tel, email: cli.email },
       objet,
@@ -270,8 +283,19 @@ export function DevisBuilder({
       acomptePct: acompte.trim() ? num(acompte) : null,
       conditions,
       assurance: etat?.decennale
-        ? { assureur: etat.decennale.assureur, police: etat.decennale.police }
+        ? {
+            assureur: etat.decennale.assureur,
+            police: etat.decennale.police,
+            zone: identite?.garantie_zone,
+            rcProAssureur: identite?.assurance?.rc_pro_assureur,
+            rcProPolice: identite?.assurance?.rc_pro_police,
+          }
         : null,
+      mediateur: identite?.mediateur_nom
+        ? { nom: identite.mediateur_nom, url: identite.mediateur_url }
+        : null,
+      cgv: identite?.cgv,
+      conditionsPaiement: identite?.conditions_paiement,
     }
   }
 
