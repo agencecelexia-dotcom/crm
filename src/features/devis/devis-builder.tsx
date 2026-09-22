@@ -23,7 +23,7 @@ import {
 import { uploaderDevisGenere } from '@/lib/storage'
 import type { ArtisanEspace } from '@/types/database'
 import { useEtatChiffrage } from '@/features/assurances/use-assurances'
-import { calculerTotaux } from './calculs'
+import { calculerTotaux, uniteCommune } from './calculs'
 import { telechargerDevis, devisEnBlob, type DevisData } from './devis-pdf'
 import {
   useCreerDevis,
@@ -31,12 +31,13 @@ import {
   useEnvoyerDevis,
   envoyerDevisPdfEmail,
   type DevisPayload,
-  usePrixArtisan,
   useEnregistrerPrix,
   useSuggestionsDevis,
   type LigneSuggeree,
   type Suggestions,
+  type LigneModele,
 } from './use-devis'
+import { BibliothequePrix, DemarrageDevis, EnregistrerModele } from './devis-demarrage'
 
 const UNITES = ['u', 'm²', 'ml', 'm³', 'forfait', 'h', 'j', 'ens.']
 
@@ -66,6 +67,8 @@ export interface DevisInitial {
   client_email?: string | null
   client_tel?: string | null
   objet?: string | null
+  /** Métier du chantier : sert à proposer le devis type correspondant. */
+  metier?: string | null
 }
 
 export function DevisBuilder({
@@ -114,7 +117,6 @@ export function DevisBuilder({
   // Taux de commission et assurance : servent l'un à montrer ce qui restera à
   // l'artisan, l'autre à la mention obligatoire en pied de devis.
   const { data: etat } = useEtatChiffrage(token)
-  const { data: bibliotheque } = usePrixArtisan(token)
   const enregistrerPrix = useEnregistrerPrix(token)
   const suggerer = useSuggestionsDevis(token)
   const [suggestions, setSuggestions] = useState<Suggestions | null>(null)
@@ -167,6 +169,55 @@ export function DevisBuilder({
         tva_taux: '10',
       },
     ])
+  }
+
+  /**
+   * Verse un jeu de lignes — modèle, devis type, devis repris — à la suite de
+   * ce qui est déjà saisi. La ligne vide initiale disparaît au passage.
+   */
+  function verserLignes(src: LigneModele[], nouvelObjet?: string | null) {
+    if (!src?.length) return
+    setLignes((arr) => [
+      ...arr.filter((l) => l.designation.trim() || l.prix_unitaire.trim()),
+      ...src.map((x) => ({
+        designation: x.designation ?? '',
+        quantite: String(x.quantite ?? 1),
+        unite: x.unite || 'u',
+        prix_unitaire: x.prix_unitaire != null ? String(x.prix_unitaire) : '',
+        cout_unitaire: x.cout_unitaire != null ? String(x.cout_unitaire) : '',
+        tva_taux: '10',
+      })),
+    ])
+    if (nouvelObjet && !objet.trim()) setObjet(nouvelObjet)
+  }
+
+  /** Les lignes réellement remplies — ce qu'on enregistre comme modèle. */
+  const lignesRemplies = useMemo(
+    () =>
+      lignes
+        .filter((l) => l.designation.trim())
+        .map((l) => ({
+          designation: l.designation.trim(),
+          unite: l.unite,
+          quantite: num(l.quantite),
+          prix_unitaire: num(l.prix_unitaire),
+          cout_unitaire: l.cout_unitaire.trim() ? num(l.cout_unitaire) : null,
+        })),
+    [lignes],
+  )
+
+  // L'unité métrique la plus représentée, dès lors qu'elle porte au moins
+  // deux lignes : au-dessous, saisir la cote à la main va plus vite.
+  const [cote, setCote] = useState('')
+  const uniteCote = useMemo(() => uniteCommune(lignes), [lignes])
+
+  function appliquerCote() {
+    if (!uniteCote || !cote.trim()) return
+    const [u, n] = uniteCote
+    setLignes((arr) =>
+      arr.map((l) => (l.unite === u && l.designation.trim() ? { ...l, quantite: cote.trim() } : l)),
+    )
+    toast.success(`${n} lignes mises à ${cote.trim()} ${u}`)
   }
 
   function majLigne(i: number, k: keyof LigneState, v: string) {
@@ -363,6 +414,17 @@ export function DevisBuilder({
               </Select>
             </div>
 
+            {/* Trois façons de remplir d'un geste : un modèle enregistré, le
+                devis type du métier, ou un devis déjà fait qu'on reprend. Une
+                fois les lignes posées, ce bloc n'a plus rien à proposer. */}
+            {lignesRemplies.length === 0 && (
+              <DemarrageDevis
+                token={token}
+                metier={initial?.metier}
+                onAppliquer={verserLignes}
+              />
+            )}
+
             {/* Lignes proposées à partir du dossier et des échanges. Réservé
                 aux devis ouverts depuis un chantier : sans dossier, rien à lire. */}
             {initial?.affectation_token && (
@@ -466,35 +528,57 @@ export function DevisBuilder({
               </div>
             )}
 
-            {/* Bibliothèque : les lignes déjà facturées, les plus utilisées
-                d'abord. Un clic les rajoute avec leur prix et leur déboursé. */}
-            {!!bibliotheque?.length && (
-              <div className="flex flex-wrap gap-1.5">
-                {bibliotheque.slice(0, 8).map((x) => (
-                  <button
-                    key={x.id}
-                    type="button"
-                    onClick={() =>
-                      setLignes((arr) => [
-                        ...arr.filter((l) => l.designation.trim() || l.prix_unitaire.trim()),
-                        {
-                          designation: x.designation,
-                          quantite: '1',
-                          unite: x.unite,
-                          prix_unitaire: String(x.prix_unitaire),
-                          cout_unitaire: x.cout_unitaire != null ? String(x.cout_unitaire) : '',
-                          tva_taux: '10',
-                        },
-                      ])
-                    }
-                    className="rounded-full border border-border bg-card px-2.5 py-1 text-xs transition-colors hover:bg-accent"
-                  >
-                    {x.designation}
-                    <span className="ml-1 text-muted-foreground">{euro2(x.prix_unitaire)}</span>
-                  </button>
-                ))}
+            {/* Bibliothèque de prix, avec recherche : au-delà d'une dizaine
+                de lignes, une liste figée n'est plus consultable. */}
+            <BibliothequePrix
+              token={token}
+              onAjouter={(x) =>
+                verserLignes([
+                  {
+                    designation: x.designation,
+                    unite: x.unite,
+                    quantite: 1,
+                    prix_unitaire: x.prix_unitaire,
+                    cout_unitaire: x.cout_unitaire,
+                  },
+                ])
+              }
+            />
+
+            {/* La cote commune, saisie une fois pour toutes les lignes qui la
+                partagent. C'est le geste qui reste le plus répétitif une fois
+                les lignes posées par un modèle. */}
+            {uniteCote && (
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-2.5">
+                <div className="relative w-24 shrink-0">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Cote"
+                    value={cote}
+                    onChange={(e) => setCote(e.target.value)}
+                    className="h-10 w-full pr-9"
+                    aria-label={`Quantité commune en ${uniteCote[0]}`}
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    {uniteCote[0]}
+                  </span>
+                </div>
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  {uniteCote[1]} lignes en {uniteCote[0]} — saisissez la cote une seule fois.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={appliquerCote}
+                  disabled={!cote.trim()}
+                >
+                  Appliquer
+                </Button>
               </div>
             )}
+
             {lignes.map((l, i) => (
               <div key={i} className="space-y-2 rounded-xl border border-border p-2.5">
                 <Textarea
@@ -591,6 +675,12 @@ export function DevisBuilder({
               <Plus className="size-4" />
               Ajouter une ligne
             </Button>
+
+            <EnregistrerModele
+              token={token}
+              lignes={lignesRemplies}
+              metier={initial?.metier ?? (objet || null)}
+            />
           </div>
 
           {/* Totaux */}

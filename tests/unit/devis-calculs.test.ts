@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculerTotaux, type LigneChiffrable } from '../../src/features/devis/calculs'
+import { calculerTotaux, uniteCommune, type LigneChiffrable } from '../../src/features/devis/calculs'
 
 // Ce sont les chiffres sur lesquels l'artisan fixe son prix, et celui qui
 // porte notre commission. Une erreur ici se voit sur une facture.
@@ -70,5 +70,43 @@ describe('totaux du devis', () => {
     const lignes = [ligne({ quantite: 2, prix_unitaire: 500, tva_taux: 20 })]
     expect(calculerTotaux(lignes, false).ttc).toBe(1000)
     expect(calculerTotaux(lignes, true).ttc).toBe(1200)
+  })
+})
+
+describe('uniteCommune — la cote saisie une seule fois', () => {
+  const l = (designation: string, unite: string) => ({ designation, unite })
+
+  it('retient l’unité métrique la plus représentée', () => {
+    // Un ravalement type : quatre lignes au m², quatre au forfait.
+    expect(
+      uniteCommune([
+        l('Installation échafaudage', 'forfait'),
+        l('Nettoyage haute pression', 'm²'),
+        l('Piquage de l’enduit', 'm²'),
+        l('Gobetis d’accrochage', 'm²'),
+        l('Enduit traditionnel', 'm²'),
+        l('Protection des abords', 'forfait'),
+        l('Évacuation des gravats', 'forfait'),
+        l('Nettoyage de fin de chantier', 'forfait'),
+      ]),
+    ).toEqual(['m²', 4])
+  })
+
+  it('ne propose rien sous deux lignes', () => {
+    expect(uniteCommune([l('Enduit', 'm²'), l('Échafaudage', 'forfait')])).toBeNull()
+  })
+
+  it('ignore les lignes vides que l’artisan n’a pas encore remplies', () => {
+    expect(uniteCommune([l('Enduit', 'm²'), l('  ', 'm²'), l('', 'm²')])).toBeNull()
+  })
+
+  it('ne retient pas le forfait : deux forfaits ne partagent aucune cote', () => {
+    expect(uniteCommune([l('Échafaudage', 'forfait'), l('Nettoyage', 'forfait')])).toBeNull()
+  })
+
+  it('départage en faveur de l’unité la plus fréquente', () => {
+    expect(
+      uniteCommune([l('Clôture', 'ml'), l('Bordure', 'ml'), l('Dalle', 'm²'), l('Terrasse', 'm²'), l('Mur', 'ml')]),
+    ).toEqual(['ml', 3])
   })
 })

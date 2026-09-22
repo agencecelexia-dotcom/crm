@@ -235,3 +235,99 @@ export async function envoyerDevisPdfEmail(p: {
     }),
   })
 }
+
+/** Une ligne telle qu'elle vit dans un modèle ou dans un devis dupliqué. */
+export interface LigneModele {
+  designation: string
+  unite: string | null
+  quantite: number | null
+  prix_unitaire: number | null
+  cout_unitaire: number | null
+}
+
+/**
+ * Un modèle de devis (0135).
+ *
+ * `source` dit d'où il vient : `perso` pour ceux que l'artisan a enregistrés,
+ * `reference` pour le devis type du métier, déduit des devis réellement
+ * observés. Le second n'a pas d'`id` — il est recalculé à chaque appel.
+ */
+export interface ModeleDevis {
+  id: string | null
+  nom: string
+  metier: string | null
+  lignes: LigneModele[]
+  nb_lignes: number
+  source: 'perso' | 'reference'
+}
+
+export function useModelesDevis(token: string | undefined, metier?: string | null) {
+  return useQuery({
+    queryKey: ['devis-modeles', token, metier ?? null],
+    enabled: !!token,
+    queryFn: async (): Promise<ModeleDevis[]> => {
+      const { data, error } = await supabase.rpc('modeles_by_token', {
+        p_token: token,
+        p_metier: metier ?? null,
+      })
+      if (error) throw error
+      return (data as ModeleDevis[]) ?? []
+    },
+  })
+}
+
+export function useEnregistrerModele(token: string | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (p: { nom: string; lignes: LigneModele[]; metier?: string | null }) => {
+      const { data, error } = await supabase.rpc('enregistrer_modele_by_token', {
+        p_token: token,
+        p_nom: p.nom,
+        p_lignes: p.lignes,
+        p_metier: p.metier ?? null,
+      })
+      if (error) throw error
+      const r = data as { ok: boolean; error?: string }
+      if (!r.ok) throw new Error(r.error)
+      return r
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['devis-modeles', token] }),
+  })
+}
+
+export function useSupprimerModele(token: string | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('supprimer_modele_by_token', {
+        p_token: token,
+        p_id: id,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['devis-modeles', token] }),
+  })
+}
+
+/** Reprend les lignes d'un devis déjà fait — deux chantiers se ressemblent souvent. */
+export function useDupliquerDevis(token: string | undefined) {
+  return useMutation({
+    mutationFn: async (devisId: string) => {
+      const { data, error } = await supabase.rpc('dupliquer_devis_by_token', {
+        p_token: token,
+        p_devis_id: devisId,
+      })
+      if (error) throw error
+      const r = data as {
+        ok: boolean
+        error?: string
+        objet?: string | null
+        lignes?: LigneModele[]
+        tva_mode?: string | null
+        conditions?: string | null
+      }
+      if (!r.ok) throw new Error(r.error)
+      return r
+    },
+  })
+}

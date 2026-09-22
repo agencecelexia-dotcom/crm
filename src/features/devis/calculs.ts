@@ -61,3 +61,35 @@ export function calculerTotaux(
     commission: ttc * tauxCommission,
   }
 }
+
+/**
+ * Unités pour lesquelles une même cote se répète de ligne en ligne.
+ *
+ * Un ravalement de 120 m² porte la même surface sur le nettoyage, le piquage,
+ * le gobetis et l'enduit. L'artisan connaît ce chiffre ; il ne devrait pas
+ * avoir à le retaper quatre fois.
+ */
+export const UNITES_COTE = ['m²', 'ml', 'm³']
+
+/**
+ * L'unité métrique la plus représentée parmi les lignes remplies, dès lors
+ * qu'elle en porte au moins deux.
+ *
+ * Au-dessous de deux, proposer un champ « cote commune » ferait perdre plus de
+ * temps qu'il n'en fait gagner. Les lignes sans désignation ne comptent pas :
+ * ce sont des lignes vides que l'artisan n'a pas encore remplies.
+ *
+ * @returns `[unité, nombre de lignes]`, ou `null` s'il n'y a pas de cote commune.
+ */
+export function uniteCommune(
+  lignes: { designation: string; unite: string }[],
+): [string, number] | null {
+  const compte = new Map<string, number>()
+  for (const l of lignes)
+    if (l.designation.trim() && UNITES_COTE.includes(l.unite))
+      compte.set(l.unite, (compte.get(l.unite) ?? 0) + 1)
+
+  let tete: [string, number] | null = null
+  for (const e of compte) if (!tete || e[1] > tete[1]) tete = e
+  return tete && tete[1] >= 2 ? tete : null
+}
