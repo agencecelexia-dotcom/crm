@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Loader2, TriangleAlert } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { surfaceMur, type Batiment } from './bati-ign'
 import { formatM, formatM2, surfaceReelle, type Mur } from './geometrie'
+import { useFicheMaison } from './use-fiche-maison'
 
 /** Pentes courantes, pour corriger d'un doigt ce que la BD TOPO propose. */
 const PENTES = [0, 30, 35, 40, 45, 60, 80]
@@ -37,13 +38,21 @@ export function PanneauBatiment({
   onEnregistrer,
   enCours,
   onMurChoisi,
+  token,
 }: {
   batiment: Batiment
   onEnregistrer: (m: MesureAEnregistrer) => void
   enCours: boolean
   onMurChoisi: (m: Mur | null) => void
+  token: string
 }) {
-  const [onglet, setOnglet] = useState<'toiture' | 'facades'>('toiture')
+  const [onglet, setOnglet] = useState<'toiture' | 'facades' | 'maison'>('toiture')
+  const { data: fiche, isLoading: ficheEnCours } = useFicheMaison(
+    token,
+    batiment.cleabs,
+    batiment.centre?.[1] ?? null,
+    batiment.centre?.[0] ?? null,
+  )
 
   // La pente vient des altitudes de la BD TOPO ; l'artisan peut la corriger,
   // et on retient alors qu'elle est saisie et non déduite.
@@ -69,8 +78,24 @@ export function PanneauBatiment({
 
   return (
     <>
+      {/* L'alerte qui change un devis de ravalement : dans le périmètre des
+          500 m d'un monument, l'Architecte des Bâtiments de France impose les
+          teintes, la déclaration préalable devient obligatoire et le délai
+          d'instruction s'allonge de deux mois. */}
+      {fiche?.urbanisme?.abf && (
+        <div className="flex items-start gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-2.5">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-[#B45309]" />
+          <p className="text-xs text-[#B45309]">
+            <strong>Abords de monument historique.</strong> Teintes et matériaux soumis à
+            l’Architecte des Bâtiments de France, déclaration préalable obligatoire, deux mois
+            d’instruction en plus.
+            {fiche.urbanisme.abf_motifs.length > 0 && ` — ${fiche.urbanisme.abf_motifs[0]}`}
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-1 rounded-lg bg-muted p-1">
-        {(['toiture', 'facades'] as const).map((o) => (
+        {(['toiture', 'facades', 'maison'] as const).map((o) => (
           <button
             key={o}
             type="button"
@@ -83,7 +108,7 @@ export function PanneauBatiment({
               onglet === o ? 'bg-card font-medium shadow-sm' : 'text-muted-foreground',
             )}
           >
-            {o === 'toiture' ? 'Toiture' : 'Façades'}
+            {o === 'toiture' ? 'Toiture' : o === 'facades' ? 'Façades' : 'La maison'}
           </button>
         ))}
       </div>
@@ -152,7 +177,7 @@ export function PanneauBatiment({
             }
           />
         </>
-      ) : (
+      ) : onglet === 'facades' ? (
         <>
           {/* Un côté du bâtiment = une façade, nommée par son orientation. */}
           <div className="flex flex-wrap gap-1.5">
@@ -260,7 +285,88 @@ export function PanneauBatiment({
             </p>
           )}
         </>
+      ) : (
+        <FicheMaison fiche={fiche} enCours={ficheEnCours} />
       )}
+    </>
+  )
+}
+
+/**
+ * Ce que l'État sait de cette maison.
+ *
+ * Six sources publiques et gratuites. Aucune n'est garantie : la BDNB ne
+ * couvre pas tout, le DPE concerne quatre logements sur dix. On ne montre donc
+ * que ce qui a répondu, et on le dit quand rien ne répond — une absence de
+ * donnée n'est pas une donnée.
+ */
+function FicheMaison({
+  fiche,
+  enCours,
+}: {
+  fiche: ReturnType<typeof useFicheMaison>['data']
+  enCours: boolean
+}) {
+  if (enCours) {
+    return (
+      <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Interrogation des bases publiques…
+      </p>
+    )
+  }
+  if (!fiche?.ok) {
+    return (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        Aucune donnée publique sur ce bâtiment.
+      </p>
+    )
+  }
+
+  const b = fiche.bdnb
+  const d = fiche.dpe?.recent
+  const lignes: [string, string][] = []
+
+  if (b?.annee_construction) lignes.push(['Construite en', String(b.annee_construction)])
+  else if (d?.annee_construction) lignes.push(['Construite en', String(d.annee_construction)])
+  if (b?.nb_niveau) lignes.push(['Niveaux', String(b.nb_niveau)])
+  if (d?.surface_habitable_logement)
+    lignes.push(['Surface habitable', `${d.surface_habitable_logement} m²`])
+  if (b?.mat_mur_txt) lignes.push(['Murs', b.mat_mur_txt])
+  if (b?.mat_toit_txt) lignes.push(['Toiture', b.mat_toit_txt])
+  if (d?.qualite_isolation_murs) lignes.push(['Isolation des murs', d.qualite_isolation_murs])
+  if (d?.isolation_toiture != null)
+    lignes.push(['Toiture isolée', d.isolation_toiture ? 'oui' : 'non'])
+  if (d?.qualite_isolation_menuiseries)
+    lignes.push(['Menuiseries', d.qualite_isolation_menuiseries])
+  if (d?.etiquette_dpe) lignes.push(['Étiquette énergie', d.etiquette_dpe])
+  if (fiche.urbanisme?.zonage) lignes.push(['Zone du PLU', fiche.urbanisme.zonage])
+  if (fiche.cadastre?.contenance) lignes.push(['Terrain', `${fiche.cadastre.contenance} m²`])
+  if (fiche.risques?.argile) lignes.push(['Retrait-gonflement argile', fiche.risques.argile])
+
+  if (lignes.length === 0) {
+    return (
+      <p className="py-6 text-center text-sm text-muted-foreground">
+        Les bases publiques ne connaissent pas ce bâtiment.
+      </p>
+    )
+  }
+
+  return (
+    <>
+      <dl className="divide-y divide-border rounded-xl border border-border">
+        {lignes.map(([k, v]) => (
+          <div key={k} className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+            <dt className="min-w-0 shrink text-muted-foreground">{k}</dt>
+            <dd className="shrink-0 text-right font-medium">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Sources publiques : BD nationale des bâtiments, DPE de l’ADEME, Géoportail de
+        l’urbanisme, Géorisques, cadastre.
+        {fiche.dpe?.approche && ' Le DPE est celui du logement le plus proche, à vérifier.'}
+      </p>
     </>
   )
 }

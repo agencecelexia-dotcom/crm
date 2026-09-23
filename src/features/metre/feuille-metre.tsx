@@ -294,6 +294,7 @@ export function FeuilleMetre({
         <div className="shrink-0 space-y-3 border-t border-border p-3">
           {choisi ? (
             <PanneauBatiment
+              token={token}
               batiment={choisi}
               enCours={enregistrer.isPending}
               onEnregistrer={garder}

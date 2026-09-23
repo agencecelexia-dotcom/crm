@@ -23,6 +23,9 @@ const WFS = 'https://data.geopf.fr/wfs/ows'
 /** Un bâtiment, tel qu'on le montre à l'artisan. */
 export interface Batiment {
   id: string
+  /** Identifiant BD TOPO — la clé qui rattache ce bâtiment au RNB, à la BDNB
+   *  et au DPE. Sans elle, aucune fiche maison n'est possible. */
+  cleabs: string | null
   contour: Point[]
   /** Emprise au sol, en m² — l'ombre du bâtiment, pas la surface de toiture. */
   emprise: number
@@ -113,6 +116,7 @@ function lireBatiment(brut: unknown): Batiment | null {
 
   return {
     id: String(f.id ?? p.cleabs ?? Math.random()),
+    cleabs: typeof p.cleabs === 'string' ? p.cleabs : null,
     contour,
     emprise,
     perimetre: longueur(contour, true),
