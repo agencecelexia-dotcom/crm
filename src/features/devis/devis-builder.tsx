@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import {
   Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, Sparkles, X, Calculator,
   MessageSquareText,
@@ -96,6 +96,10 @@ export function DevisBuilder({
   const setPdf = useSetDevisPdf(token)
   const envoyer = useEnvoyerDevis(token)
   const [busy, setBusy] = useState(false)
+  // `busy` ne protège que l'affichage : entre deux appuis rapprochés, l'état
+  // React n'a pas eu le temps de se propager et l'enregistrement partait deux
+  // fois — deux devis, deux numéros. Le verrou doit être synchrone.
+  const enCours = useRef(false)
   const [enTeteOuvert, setEnTeteOuvert] = useState(false)
   // Quand le devis part d'un chantier, le client est déjà rempli : ces six
   // champs sont à vérifier, pas à saisir. Les déplier d'office reviendrait à
@@ -136,7 +140,10 @@ export function DevisBuilder({
   const enregistrerPrix = useEnregistrerPrix(token)
   const suggerer = useSuggestionsDevis(token)
   const [suggestions, setSuggestions] = useState<Suggestions | null>(null)
-  const [objet, setObjet] = useState(initial?.objet ?? '')
+  // L'objet est ce que le client lit en tête de son devis. Y déverser la liste
+  // des métiers du chantier — « Toiture, Petits travaux / Multiservices » — ne
+  // lui apprend rien et se retrouve tel quel sur le PDF.
+  const [objet, setObjet] = useState('')
   const [lignes, setLignes] = useState<LigneState[]>([
     { designation: '', quantite: '1', unite: 'u', prix_unitaire: '', cout_unitaire: '', tva_taux: '10' },
   ])
@@ -231,6 +238,9 @@ export function DevisBuilder({
           quantite: num(l.quantite),
           prix_unitaire: num(l.prix_unitaire),
           cout_unitaire: l.cout_unitaire.trim() ? num(l.cout_unitaire) : null,
+          // Sans lui, un modèle enregistré depuis un devis à 10 % et 20 %
+          // revenait tout entier à 10 %.
+          tva_taux: num(l.tva_taux),
         })),
     [lignes],
   )
@@ -336,6 +346,10 @@ export function DevisBuilder({
       toast.error('Ajoutez au moins une ligne')
       return false
     }
+    if (lignesRemplies.some((l) => (l.quantite ?? 0) < 0)) {
+      toast.error('Quantité négative', { description: 'Corrigez la ligne avant d’enregistrer.' })
+      return false
+    }
     // Un devis sans montant part au client comme les autres. Mieux vaut le
     // demander que de le découvrir dans sa boîte mail.
     const sansPrix = lignesRemplies.filter((l) => !l.prix_unitaire).length
@@ -343,7 +357,7 @@ export function DevisBuilder({
       const quoi = chiffres.ttc === 0
         ? 'Ce devis est à 0 €.'
         : `${sansPrix} ligne${sansPrix > 1 ? 's' : ''} sans prix.`
-      if (!window.confirm(`${quoi} L’envoyer quand même au client ?`)) return false
+      if (!window.confirm(`${quoi} Continuer quand même ?`)) return false
     }
     return true
   }
@@ -355,7 +369,9 @@ export function DevisBuilder({
 
   // Enregistre (DB + PDF) ; envoie l'email si demandé ; sinon télécharge.
   async function enregistrer(avecEnvoi: boolean) {
+    if (enCours.current) return
     if (!valider()) return
+    enCours.current = true
     setBusy(true)
     try {
       const payload: DevisPayload = {
@@ -415,6 +431,7 @@ export function DevisBuilder({
     } catch (e) {
       toast.error('Échec', { description: e instanceof Error ? e.message : undefined })
     } finally {
+      enCours.current = false
       setBusy(false)
     }
   }
@@ -424,9 +441,8 @@ export function DevisBuilder({
       <SheetContent side="bottom" className="flex max-h-[92dvh] flex-col overflow-hidden">
         <SheetHeader>
           <SheetTitle>Créer un devis</SheetTitle>
-          <SheetDescription>
-            Remplissez les lignes (prix par ligne, total automatique), prévisualisez, puis
-            téléchargez ou recevez le PDF par email.
+          <SheetDescription className="sr-only">
+            Remplissez les lignes, prévisualisez, puis téléchargez ou recevez le PDF par email.
           </SheetDescription>
         </SheetHeader>
 
@@ -911,7 +927,7 @@ export function DevisBuilder({
           </Button>
           <Button onClick={() => enregistrer(true)} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            Envoyer
+            Me l’envoyer
           </Button>
           </div>
         </div>
@@ -953,10 +969,16 @@ function Champ({
   type?: string
   placeholder?: string
 }) {
+  // Sans lien entre l’étiquette et le champ, un lecteur d’écran annonce
+  // « champ de saisie » sans dire lequel.
+  const id = useId()
   return (
     <div className={`space-y-1.5 ${className ?? ''}`}>
-      <Label className="text-xs">{label}</Label>
+      <Label className="text-xs" htmlFor={id}>
+        {label}
+      </Label>
       <Input
+        id={id}
         className="h-10"
         value={value}
         type={type}

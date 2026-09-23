@@ -131,8 +131,18 @@ const OUTIL_LIGNES = {
             designation: {
               type: 'string',
               description:
-                'Recopie MOT POUR MOT la désignation du catalogue quand elle convient : c’est ce '
-                + 'qui permet d’y rattacher un prix connu. Sans l’unité, qui a son propre champ.',
+                'Le libellé de la ligne. Reprends celui du catalogue MOT POUR MOT lorsque le '
+                + 'catalogue décrit EXACTEMENT ce travail ; sinon écris le tien. Sans l’unité, '
+                + 'qui a son propre champ.',
+            },
+            prix_id: {
+              type: 'string',
+              description:
+                'L’identifiant entre crochets de la ligne de catalogue que tu reprends, et '
+                + 'seulement si elle désigne EXACTEMENT le même travail. C’est lui, et lui seul, '
+                + 'qui rattache un prix à la ligne. En cas de doute, ne le donne pas : une ligne '
+                + 'sans prix se voit et se complète, un prix faux passe inaperçu et fait perdre '
+                + 'l’affaire.',
             },
             unite: { type: 'string', description: 'm², ml, m³, u, forfait, h, j, ens.' },
             quantite: {
@@ -194,21 +204,25 @@ Tu ne fixes AUCUN prix : ils sont attachés ensuite, depuis ses propres tarifs. 
 
 Comment travailler :
 
-1. RECOPIE LES DÉSIGNATIONS DU CATALOGUE mot pour mot quand elles conviennent. C'est ce qui permet d'y rattacher un prix connu. N'invente une désignation que si rien ne correspond.
+1. LE CATALOGUE EST UN VOCABULAIRE, PAS UNE LISTE DE COURSES. Il contient les lignes que cet artisan a déjà facturées, sur d'autres chantiers. Tu n'as aucune obligation d'en utiliser une seule. Ne fais figurer un ouvrage que si le chantier décrit le comporte VRAIMENT.
 
-2. N'OUBLIE PAS CE QUI SE FACTURE TOUJOURS. Un chantier réel comporte des lignes que le client ne demande jamais mais qui se paient : installation et location d'échafaudage, protection des abords, évacuation des gravats en déchetterie, mise en sécurité, nettoyage de fin de chantier. C'est leur absence qui rend un devis incomplet.
+2. NE PLAQUE JAMAIS UN LIBELLÉ SUR UN AUTRE TRAVAIL. « Gouttière (fourniture et pose) » ne désigne pas le nettoyage d'une gouttière ; « Clôture panneaux rigides » ne désigne pas les poteaux qui la tiennent. Si aucune ligne du catalogue ne décrit exactement le travail, écris ta propre désignation et NE DONNE PAS d'identifiant : la ligne arrivera sans prix, l'artisan le saisira, et tu auras eu raison. Un libellé détourné apporte avec lui un prix faux, que personne ne remarque et qui fait perdre l'affaire.
 
-3. UN OUVRAGE, UNE LIGNE. Le catalogue contient souvent plusieurs formulations du même travail : « Installation échafaudage » et « Montage et démontage d'échafaudage de pied » sont la même chose, et la facturer deux fois double une ligne qui pèse plus de mille euros. Choisis la formulation la plus complète, et une seule. Cela vaut pour l'échafaudage, l'évacuation des gravats et le nettoyage de fin de chantier, qui reviennent tous sous deux ou trois libellés.
+3. L'IDENTIFIANT ENGAGE. Ne rends l'identifiant d'une ligne de catalogue que si elle décrit exactement le même ouvrage, dans la même unité. C'est lui seul qui attache un prix.
 
-4. RANGE DANS L'ORDRE DES TRAVAUX. Un devis se lit comme le chantier se déroule : installation, préparation, exécution, finitions, repli.
+4. N'OUBLIE PAS CE QUI SE FACTURE TOUJOURS — mais seulement ce que CE chantier appelle. Un ravalement demande un échafaudage, une protection des abords et une évacuation ; un simple nettoyage de gouttières n'en demande aucun. C'est l'absence de ces lignes qui rend un devis de chantier incomplet, et leur présence injustifiée qui le rend suspect.
 
-5. REPORTE LES QUANTITÉS. Une surface de façade annoncée vaut pour le nettoyage, le piquage, le gobetis et l'enduit. Ne la redivise pas sans raison.
+5. UN OUVRAGE, UNE LIGNE. Le catalogue contient souvent plusieurs formulations du même travail : « Installation échafaudage » et « Montage et démontage d'échafaudage de pied » sont la même chose, et la facturer deux fois double une ligne qui pèse plus de mille euros. Choisis la formulation la plus complète, et une seule. Cela vaut pour l'échafaudage, l'évacuation des gravats et le nettoyage de fin de chantier, qui reviennent tous sous deux ou trois libellés.
 
-6. RESPECTE LES RÉPONSES. Une réponse de l'artisan n'est pas une suggestion : si le terrain est annoncé plat, il n'y a pas de ligne de terrassement ; si la réparation est choisie plutôt que le remplacement, tu ne chiffres pas un ouvrage neuf. Et n'écris pas qu'une valeur est « confirmée » quand personne ne l'a confirmée.
+6. RANGE DANS L'ORDRE DES TRAVAUX. Un devis se lit comme le chantier se déroule : installation, préparation, exécution, finitions, repli.
 
-7. GARDE LES MÊMES LIBELLÉS. Sur un même chantier, la formulation d'une ligne ne doit pas changer d'une composition à l'autre : c'est elle qui permet d'y rattacher un prix connu. Reprends le catalogue à l'identique dès qu'il convient.
+7. REPORTE LES QUANTITÉS. Une surface de façade annoncée vaut pour le nettoyage, le piquage, le gobetis et l'enduit. Ne la redivise pas sans raison.
 
-8. DIS CE QUE TU AS SUPPOSÉ. Toute quantité qui ne découle pas d'une réponse est une hypothèse, et l'artisan doit pouvoir la démentir avant d'envoyer.`
+8. RESPECTE LES RÉPONSES. Une réponse de l'artisan n'est pas une suggestion : si le terrain est annoncé plat, il n'y a pas de ligne de terrassement ; si la réparation est choisie plutôt que le remplacement, tu ne chiffres pas un ouvrage neuf. Et n'écris pas qu'une valeur est « confirmée » quand personne ne l'a confirmée.
+
+9. GARDE LES MÊMES LIBELLÉS. Sur un même chantier, la formulation d'une ligne ne doit pas changer d'une composition à l'autre : c'est elle qui permet d'y rattacher un prix connu. Reprends le catalogue à l'identique dès qu'il convient.
+
+10. DIS CE QUE TU AS SUPPOSÉ. Toute quantité qui ne découle pas d'une réponse est une hypothèse, et l'artisan doit pouvoir la démentir avant d'envoyer.`
 
 Deno.serve(async (req) => {
   const CORS = cors(req.headers.get('origin'))
@@ -252,11 +266,18 @@ Deno.serve(async (req) => {
     // Désignation et unité en DEUX COLONNES : coller « (forfait) » derrière la
     // désignation la ferait recopier telle quelle — la consigne dit mot pour
     // mot, et le modèle obéit.
-    const ligneCatalogue = (x: { designation: string; unite: string }) =>
-      `${x.designation}\t${x.unite ?? ''}`
+    // Les lignes de SA bibliothèque portent un identifiant : c'est par lui, et
+    // non plus par ressemblance de libellé, que le prix est rattaché.
     const designations = [
-      ...(Array.isArray(biblio) ? biblio : []).map(ligneCatalogue),
-      ...(Array.isArray(reference) ? reference : []).map(ligneCatalogue),
+      ...(Array.isArray(biblio) ? biblio : []).map(
+        (x: { id: string; designation: string; unite: string }) =>
+          `[${x.id}] ${x.designation}\t${x.unite ?? ''}`,
+      ),
+      // Le référentiel n'a pas d'identifiant : ses libellés viennent des devis
+      // observés, et son prix est une médiane de métier.
+      ...(Array.isArray(reference) ? reference : []).map(
+        (x: { designation: string; unite: string }) => `${x.designation}\t${x.unite ?? ''}`,
+      ),
     ]
 
     const questions = phase === 'questions'
@@ -267,8 +288,9 @@ Deno.serve(async (req) => {
       + (questions
         ? ''
         : `RÉPONSES DE L'ARTISAN\n${JSON.stringify(reponses ?? {}, null, 1)}\n\n`)
-      + `CATALOGUE DES DÉSIGNATIONS UTILISABLES (désignation puis unité, séparées par une tabulation ;\n`
-      + `recopie la désignation SEULE, sans l'unité)\n${designations.join('\n') || '(vide)'}`
+      + `CATALOGUE (identifiant entre crochets quand il y en a un, puis désignation, puis unité,\n`
+      + `séparées par une tabulation ; recopie la désignation SEULE, sans l'unité)\n`
+      + `${designations.join('\n') || '(vide)'}`
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

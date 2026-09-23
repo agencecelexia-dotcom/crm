@@ -276,7 +276,7 @@ export function EnregistrerModele({
           }}
         >
           <Layers className="size-4" />
-          Enregistrer ces {lignes.length} lignes comme modèle
+          Enregistrer {lignes.length === 1 ? 'cette ligne' : `ces ${lignes.length} lignes`} comme modèle
         </Button>
       ) : (
         <div className="space-y-2 rounded-xl border border-border p-3">

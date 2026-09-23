@@ -71,6 +71,14 @@ const eur = (n: number) =>
     // de la police Helvetica de jsPDF → s'affiche en barre. On met une espace simple.
     .replace(/[\u202f\u00a0]/g, ' ') + ' €'
 
+// Même précaution que pour les montants : l'espace fine insécable (U+202F)
+// qu'Intl insère entre les milliers n'existe pas dans la police Helvetica de
+// jsPDF et s'y imprime en barre — « 1 / 0 0 0 / 0 0 0 » pour un million.
+const qte = (n: number) =>
+  new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 })
+    .format(n || 0)
+    .replace(/[\u202f\u00a0]/g, ' ')
+
 function chargerImage(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image()
@@ -123,9 +131,13 @@ export async function construireDevis(data: DevisData) {
   doc.setFont(F, 'normal')
   doc.setFontSize(9)
   setColor(GRIS)
+  // L'adresse saisie contient souvent déjà le code postal et la ville ; les
+  // réafficher dessous donnait « 862 Rte de la Dranse, 74500 Publier » suivi de
+  // « 74500 Publier ».
+  const cpVille = [v.cp, v.ville].filter(Boolean).join(' ')
   const infos = [
     v.adresse,
-    [v.cp, v.ville].filter(Boolean).join(' '),
+    cpVille && !(v.adresse ?? '').includes(cpVille) ? cpVille : null,
     [v.forme, v.capital ? `capital ${v.capital}` : null].filter(Boolean).join(' — ') || null,
     v.siren ? `SIREN ${v.siren}${v.villeImmat ? ` — RCS ${v.villeImmat}` : ''}` : null,
     v.tvaIntracom ? `TVA ${v.tvaIntracom}` : null,
@@ -259,7 +271,7 @@ export async function construireDevis(data: DevisData) {
     }
     const midY = y + 4.6
     doc.text(
-      l.quantite != null ? new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 }).format(Number(l.quantite)) : '',
+      l.quantite != null ? qte(Number(l.quantite)) : '',
       xOf(1) + cols[1].w - 2,
       midY,
       { align: 'right' },
@@ -492,6 +504,8 @@ export async function construireDevis(data: DevisData) {
       .filter(Boolean)
       .join(' — ')
     doc.text(pied, pageW / 2, pageH - 8, { align: 'center', maxWidth: largeur })
+    // Une page détachée d'un devis de trois pages doit pouvoir s'y raccrocher.
+    if (total > 1) doc.text(`${p} / ${total}`, pageW - margin, pageH - 8, { align: 'right' })
   }
 
   return doc
