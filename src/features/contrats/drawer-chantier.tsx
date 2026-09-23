@@ -20,12 +20,14 @@ export function DrawerChantier({
   onClose,
   onChange,
   onCreerDevis,
+  onMesurer,
 }: {
   projet: ProjetEspace | null
   signe: boolean
   onClose: () => void
   onChange: () => void
   onCreerDevis?: (p: ProjetEspace) => void
+  onMesurer?: (p: ProjetEspace) => void
 }) {
   if (!projet) return null
 
@@ -64,6 +66,7 @@ export function DrawerChantier({
             adresse={adresse}
             onChange={onChange}
             onCreerDevis={onCreerDevis}
+            onMesurer={onMesurer}
             encadre={false}
           />
         </div>

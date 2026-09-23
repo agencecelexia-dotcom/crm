@@ -37,6 +37,7 @@ import { formatEuros, formatTel } from '@/lib/format'
 import { useProjet, usePatchProjet, useDeleteProjet, useRepreneurs } from '../hooks/use-projets'
 import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
+import { CarteMetresProjet } from '@/features/metre/carte-metres-projet'
 import { ProjetPhotos } from '../components/projet-photos'
 import { SuiviCard } from '../components/suivi-card'
 import { NotesInternesCard } from '../components/notes-internes-card'
@@ -287,6 +288,10 @@ export function ProjetDetailPage() {
 
       {/* Photos du chantier (vues par l'artisan après signature) */}
       <ProjetPhotos projet={projet} />
+
+        {/* Les métrés relevés par l'artisan : ils précèdent le devis, comme
+            dans la réalité du chantier. */}
+        <CarteMetresProjet projetId={projet.id} />
 
       {/* Suivi du chantier (parcours déclaré par l'artisan + notes) — PARTAGÉ avec l'artisan */}
       <SuiviCard projetId={projet.id} />

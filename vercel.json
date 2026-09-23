@@ -20,7 +20,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.fontshare.com; img-src 'self' data: blob: https://*.supabase.co https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.tile.openstreetmap.org; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://nominatim.openstreetmap.org https://geo.api.gouv.fr https://recherche-entreprises.api.gouv.fr https://n8n.srv1241880.hstgr.cloud; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.fontshare.com; img-src 'self' data: blob: https://data.geopf.fr https://*.supabase.co https://*.basemaps.cartocdn.com https://server.arcgisonline.com https://*.tile.openstreetmap.org; connect-src 'self' https://data.geopf.fr https://api-adresse.data.gouv.fr https://*.supabase.co wss://*.supabase.co https://nominatim.openstreetmap.org https://geo.api.gouv.fr https://recherche-entreprises.api.gouv.fr https://n8n.srv1241880.hstgr.cloud; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
         }
       ]
     }

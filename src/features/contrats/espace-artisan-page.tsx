@@ -43,6 +43,8 @@ import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
 import { CarteIdentite } from '@/features/devis/carte-identite'
+import { EcranMetres } from '@/features/metre/ecran-metres'
+import { FeuilleMetreDifferee } from '@/features/metre/feuille-metre-differee'
 import { MenuEspace } from './menu-espace'
 import { useVueEspace } from './use-vue-espace'
 import { CarteAssurances } from '@/features/assurances/carte-assurances'
@@ -72,6 +74,8 @@ export function EspaceArtisanPage() {
   // L'écran courant vit dans l'URL : le bouton retour du téléphone ramène au
   // précédent au lieu de quitter l'espace.
   const [vue, allerA] = useVueEspace()
+  // Le chantier dont on prend les mesures, s'il y en a un.
+  const [mesure, setMesure] = useState<ProjetEspace | null>(null)
   // Filtre demandé depuis le tableau de bord.
   const [filtreDemande, setFiltreDemande] = useState<'urgents' | null>(null)
 
@@ -251,6 +255,7 @@ export function EspaceArtisanPage() {
                       signe={signe}
                       onChange={() => void refetch()}
                       onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined}
+                      onMesurer={setMesure}
                     />
             </div>
           </>
@@ -276,6 +281,13 @@ export function EspaceArtisanPage() {
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ---------- Métrés ---------- */}
+      {vue === 'metres' && token && (
+        <div className="mx-auto max-w-2xl">
+          <EcranMetres token={token} projets={projets} />
         </div>
       )}
 
@@ -339,6 +351,17 @@ export function EspaceArtisanPage() {
       {/* ---------- Aide ---------- */}
       {vue === 'aide' && <PiedDePageArtisan />}
       </div>
+
+      {/* Le métré, ouvert depuis n'importe quel chantier. */}
+      {mesure && token && (
+        <FeuilleMetreDifferee
+          key={mesure.token}
+          token={token}
+          affectationToken={mesure.token}
+          titre={mesure.client_nom}
+          onClose={() => setMesure(null)}
+        />
+      )}
 
       {/* Générateur de devis, quel que soit l'écran : il s'ouvre depuis les
           devis comme depuis un chantier. */}
@@ -433,6 +456,7 @@ function ListeChantiers({
   signe,
   onChange,
   onCreerDevis,
+  onMesurer,
   filtreDemande,
   onFiltreApplique,
 }: {
@@ -440,6 +464,7 @@ function ListeChantiers({
   signe: boolean
   onChange: () => void
   onCreerDevis?: (p: ProjetEspace) => void
+  onMesurer?: (p: ProjetEspace) => void
   filtreDemande?: 'urgents' | null
   onFiltreApplique?: () => void
 }) {
@@ -624,6 +649,7 @@ function ListeChantiers({
                   signe={signe}
                   onChange={onChange}
                   onCreerDevis={onCreerDevis}
+                  onMesurer={onMesurer}
                 />
               </div>
             )
@@ -638,6 +664,7 @@ function ListeChantiers({
         onClose={() => setOuvertDrawer(null)}
         onChange={onChange}
         onCreerDevis={onCreerDevis}
+        onMesurer={onMesurer}
       />
     </section>
   )
@@ -761,11 +788,13 @@ function ProjetItem({
   signe,
   onChange,
   onCreerDevis,
+  onMesurer,
 }: {
   projet: ProjetEspace
   signe: boolean
   onChange: () => void
   onCreerDevis?: (p: ProjetEspace) => void
+  onMesurer?: (p: ProjetEspace) => void
 }) {
   const [ouvert, setOuvert] = useState(false)
   const adresse = [projet.client_adresse, projet.client_code_postal, projet.client_ville]
@@ -794,6 +823,7 @@ function ProjetItem({
           adresse={adresse}
           onChange={onChange}
           onCreerDevis={onCreerDevis}
+          onMesurer={onMesurer}
         />
       )}
     </Card>
