@@ -6,7 +6,7 @@ import type { Point } from './geometrie'
 export interface Metre {
   id: string
   nom: string
-  type: 'surface' | 'longueur'
+  type: 'surface' | 'longueur' | 'facade'
   geometrie: Point[]
   surface_m2: number | null
   perimetre_m: number | null
@@ -14,6 +14,10 @@ export interface Metre {
   hauteur_m: number | null
   pente_pct: number | null
   surface_reelle_m2: number | null
+  ouvertures_m2: number | null
+  azimut: number | null
+  pente_source: 'altitudes' | 'saisie' | null
+  hauteur_source: 'bati' | 'saisie' | null
   source: 'bati' | 'dessin'
   created_at: string
 }
@@ -60,11 +64,15 @@ export function useEnregistrerMetre(token: string | undefined) {
     mutationFn: async (p: {
       affectation_token: string
       nom: string
-      type: 'surface' | 'longueur'
+      type: 'surface' | 'longueur' | 'facade'
       geometrie: Point[]
       hauteur_m?: number | null
       pente_pct?: number | null
       source?: 'bati' | 'dessin'
+      ouvertures_m2?: number | null
+      azimut?: number | null
+      pente_source?: 'altitudes' | 'saisie' | null
+      hauteur_source?: 'bati' | 'saisie' | null
     }) => {
       const { data, error } = await supabase.rpc('enregistrer_metre_by_token', {
         p_token: token,
@@ -75,6 +83,10 @@ export function useEnregistrerMetre(token: string | undefined) {
         p_hauteur_m: p.hauteur_m ?? null,
         p_pente_pct: p.pente_pct ?? null,
         p_source: p.source ?? 'dessin',
+        p_ouvertures_m2: p.ouvertures_m2 ?? null,
+        p_azimut: p.azimut ?? null,
+        p_pente_source: p.pente_source ?? null,
+        p_hauteur_source: p.hauteur_source ?? null,
       })
       if (error) throw error
       const r = data as { ok: boolean; error?: string }

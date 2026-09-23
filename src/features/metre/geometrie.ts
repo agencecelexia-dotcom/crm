@@ -114,3 +114,204 @@ export const formatM = (n: number) =>
   new Intl.NumberFormat('fr-FR', { maximumFractionDigits: n < 10 ? 2 : 1 })
     .format(n || 0)
     .replace(/[\u202f\u00a0]/g, ' ') + ' m'
+
+// ---------------------------------------------------------------------------
+//  Ce qu'on déduit d'une emprise : des murs, des dimensions, une pente.
+// ---------------------------------------------------------------------------
+
+/** Composantes est/nord d'un segment, en mètres. */
+function enMetres(a: Point, b: Point): [number, number] {
+  const est = rad(b[0] - a[0]) * R * Math.cos(rad((a[1] + b[1]) / 2))
+  const nord = rad(b[1] - a[1]) * R
+  return [est, nord]
+}
+
+/**
+ * Sens de parcours du contour.
+ *
+ * Positif = sens trigonométrique (intérieur à gauche des arêtes). Il décide de
+ * quel côté regarde un mur, donc de son orientation cardinale.
+ */
+function aireSignee(points: Point[]): number {
+  let s = 0
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    s += (points[j][0] + points[i][0]) * (points[i][1] - points[j][1])
+  }
+  return s / 2
+}
+
+const CARDINAUX = ['nord', 'nord-est', 'est', 'sud-est', 'sud', 'sud-ouest', 'ouest', 'nord-ouest']
+
+/** Nomme une direction comme le fait un client au téléphone : « la façade sud ». */
+export function cardinal(azimut: number): string {
+  const a = ((azimut % 360) + 360) % 360
+  return CARDINAUX[Math.round(a / 45) % 8]
+}
+
+/** Un mur : un côté du bâtiment, avec ce qu'il faut pour le chiffrer. */
+export interface Mur {
+  index: number
+  /** Longueur au sol, en mètres. */
+  longueur: number
+  /** Azimut de la face extérieure : 0 = nord, 90 = est. */
+  azimut: number
+  /** « sud », « nord-ouest »… */
+  orientation: string
+  /** Les deux extrémités, pour le tracé. */
+  a: Point
+  b: Point
+}
+
+/**
+ * Les murs d'un bâtiment, un par côté de son emprise.
+ *
+ * C'est la correction d'une erreur : multiplier le PÉRIMÈTRE par la hauteur
+ * donne l'enveloppe entière, que personne ne vend. Un façadier chiffre UNE
+ * façade — celle qui est décollée, celle qui est plein sud — et il la désigne
+ * par son orientation. D'où l'azimut, calculé depuis la normale extérieure.
+ *
+ * Les murs de moins d'un mètre sont écartés : ce sont des décrochés de
+ * numérisation, pas des façades.
+ */
+export function murs(contour: Point[]): Mur[] {
+  if (!contour || contour.length < 3) return []
+  // Sens de parcours : il dit de quel côté est l'extérieur.
+  const trigo = aireSignee(contour) > 0
+  const out: Mur[] = []
+
+  for (let i = 0; i < contour.length; i++) {
+    const a = contour[i]
+    const b = contour[(i + 1) % contour.length]
+    const [est, nord] = enMetres(a, b)
+    const longueur = Math.hypot(est, nord)
+    if (longueur < 1) continue
+
+    // Normale extérieure : à droite de l'arête si le contour est trigonométrique.
+    const [nEst, nNord] = trigo ? [nord, -est] : [-nord, est]
+    const azimut = (((Math.atan2(nEst, nNord) * 180) / Math.PI) % 360 + 360) % 360
+
+    out.push({ index: i, longueur, azimut, orientation: cardinal(azimut), a, b })
+  }
+  return out
+}
+
+/** Les dimensions hors tout d'un bâtiment, et l'axe de son faîtage. */
+export interface Encombrement {
+  longueur: number
+  largeur: number
+  /** Azimut du grand axe — celui que suit le faîtage d'un toit à deux pans. */
+  azimutLong: number
+}
+
+/**
+ * Le plus petit rectangle qui contient l'emprise.
+ *
+ * Les bâtiments sont presque toujours rectangulaires : le rectangle minimal
+ * s'aligne alors sur l'un de leurs côtés. On essaie donc chaque côté comme
+ * direction candidate et on garde la plus économe — une soixantaine de lignes
+ * au lieu d'un algorithme de rotation de calipers.
+ *
+ * Sa LARGEUR est ce qui manquait pour la pente : sur un toit à deux pans, le
+ * faîtage suit le grand axe, et chaque pan couvre la moitié de la largeur.
+ */
+export function encombrement(contour: Point[]): Encombrement | null {
+  if (!contour || contour.length < 3) return null
+  const o = contour[0]
+  // Repère local en mètres, centré sur le premier sommet.
+  const pts = contour.map((p) => enMetres(o, p))
+
+  let meilleur: Encombrement | null = null
+  let minAire = Infinity
+
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i]
+    const b = pts[(i + 1) % pts.length]
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (d < 0.5) continue
+    const ux = (b[0] - a[0]) / d
+    const uy = (b[1] - a[1]) / d
+
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity
+    for (const [x, y] of pts) {
+      const u = x * ux + y * uy
+      const v = -x * uy + y * ux
+      if (u < minU) minU = u
+      if (u > maxU) maxU = u
+      if (v < minV) minV = v
+      if (v > maxV) maxV = v
+    }
+    const cu = maxU - minU
+    const cv = maxV - minV
+    const surface = cu * cv
+    if (surface < minAire) {
+      minAire = surface
+      const long = Math.max(cu, cv)
+      const court = Math.min(cu, cv)
+      // Azimut de l'axe long : le grand côté suit u si cu >= cv, sinon v.
+      const [ex, ey] = cu >= cv ? [ux, uy] : [-uy, ux]
+      const az = (((Math.atan2(ex, ey) * 180) / Math.PI) % 360 + 360) % 360
+      meilleur = { longueur: long, largeur: court, azimutLong: az }
+    }
+  }
+  return meilleur
+}
+
+/** Ce qu'on peut dire d'une toiture sans monter dessus. */
+export interface Toiture {
+  /** Pente en pourcentage. */
+  pente: number
+  /** Dénivelé du toit, gouttière au faîtage, en mètres. */
+  denivele: number
+  /** Incertitude sur la pente, en points de pourcentage. */
+  incertitude: number
+  /** Surface réelle des pans, à partir de l'emprise. */
+  surface: number
+}
+
+/**
+ * La pente d'un toit, déduite des altitudes de la BD TOPO.
+ *
+ * L'artisan ne peut pas la voir du ciel, et jusqu'ici on la lui faisait
+ * DEVINER. Elle se calcule pourtant : la BD TOPO donne l'altitude de la
+ * gouttière et celle du faîtage, et le rectangle englobant donne la largeur.
+ * Sur un toit à deux pans, chaque pan monte du bord au faîtage sur la moitié
+ * de cette largeur.
+ *
+ *     pente % = (faîtage − gouttière) / (largeur / 2) × 100
+ *
+ * L'INCERTITUDE EST RENDUE AVEC LE CHIFFRE. La BD TOPO annonce sa précision
+ * altimétrique — souvent un mètre. Sur une petite maison au dénivelé d'un
+ * mètre cinquante, cela fait une pente à ± 30 points : le chiffre reste utile,
+ * mais l'artisan doit savoir qu'il doit le vérifier. Sur un grand bâtiment il
+ * devient fiable. Taire l'incertitude serait pire que de ne rien calculer.
+ */
+export function toitureDepuisAltitudes(p: {
+  emprise: number
+  largeur: number
+  toitMin: number | null
+  toitMax: number | null
+  precisionAltimetrique?: number | null
+}): Toiture | null {
+  const { emprise, largeur, toitMin, toitMax } = p
+  if (toitMin == null || toitMax == null || !(largeur > 1)) return null
+
+  const denivele = toitMax - toitMin
+  if (denivele < 0.2) {
+    // Toit-terrasse ou faible dénivelé : la pente n'a pas de sens, la surface
+    // est celle de l'emprise.
+    return { pente: 0, denivele: Math.max(denivele, 0), incertitude: 0, surface: emprise }
+  }
+
+  const demiLargeur = largeur / 2
+  const pente = (denivele / demiLargeur) * 100
+  const precision = p.precisionAltimetrique ?? 1
+  // L'erreur sur le dénivelé se propage telle quelle sur la pente.
+  const incertitude = (precision / demiLargeur) * 100
+
+  return {
+    pente,
+    denivele,
+    incertitude,
+    surface: surfaceReelle(emprise, pente),
+  }
+}

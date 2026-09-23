@@ -4,7 +4,7 @@ import type { LatLngExpression } from 'leaflet'
 
 import { cn } from '@/lib/utils'
 import type { Batiment } from './bati-ign'
-import type { Point } from './geometrie'
+import type { Mur, Point } from './geometrie'
 
 /**
  * La carte de métré.
@@ -71,6 +71,7 @@ export function CarteMetre({
   mode,
   batiments,
   batimentChoisi,
+  murChoisi,
   onChoisirBatiment,
   trace,
   onPoserSommet,
@@ -83,6 +84,7 @@ export function CarteMetre({
   mode: ModeCarte
   batiments: Batiment[]
   batimentChoisi: string | null
+  murChoisi?: Mur | null
   onChoisirBatiment: (b: Batiment) => void
   trace: Point[]
   onPoserSommet: (p: Point) => void
@@ -156,6 +158,14 @@ export function CarteMetre({
             />
           )
         })}
+
+      {/* La façade en cours de chiffrage : un trait épais sur son côté. */}
+      {murChoisi && (
+        <Polyline
+          positions={[versLeaflet(murChoisi.a), versLeaflet(murChoisi.b)]}
+          pathOptions={{ color: '#EA580C', weight: 6, opacity: 0.95 }}
+        />
+      )}
 
       {/* Le tracé en cours */}
       {trace.length >= 2 &&
