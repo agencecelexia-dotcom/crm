@@ -28,11 +28,12 @@ import type { ArtisanEspace } from '@/types/database'
 import { useEtatChiffrage } from '@/features/assurances/use-assurances'
 import { calculerTotaux, estQuantiteParDefaut, uniteCommune } from './calculs'
 import { telechargerDevis, devisEnBlob, type DevisData } from './devis-pdf'
+import { devisEnHtml, objetCourriel } from './devis-html'
 import {
   useCreerDevis,
   useSetDevisPdf,
   useEnvoyerDevis,
-  envoyerDevisPdfEmail,
+  envoyerDevisAuClient,
   type DevisPayload,
   useEnregistrerPrix,
   useSuggestionsDevis,
@@ -367,8 +368,21 @@ export function DevisBuilder({
     await telechargerDevis(construireData('APERÇU'))
   }
 
-  // Enregistre (DB + PDF) ; envoie l'email si demandé ; sinon télécharge.
-  async function enregistrer(avecEnvoi: boolean) {
+  /**
+   * Enregistre le devis, puis selon le mode :
+   *   'garder'  — le télécharge, pour que l'artisan en ait un exemplaire ;
+   *   'client'  — l'envoie au client et fait passer le chantier en « devis
+   *               envoyé », avec son montant.
+   */
+  async function enregistrer(mode: 'garder' | 'client') {
+    const avecEnvoi = mode === 'client'
+    if (avecEnvoi && !cli.email.trim()) {
+      toast.error('Adresse du client manquante', {
+        description: 'Ouvrez le bloc Client pour la renseigner.',
+      })
+      setClientOuvert(true)
+      return
+    }
     if (enCours.current) return
     if (!valider()) return
     enCours.current = true
@@ -415,13 +429,23 @@ export function DevisBuilder({
       await setPdf.mutateAsync({ id, url })
 
       if (avecEnvoi) {
-        await envoyer.mutateAsync(id) // met à jour le CRM si le devis vient d'un projet
-        if (vendeur.email) {
-          await envoyerDevisPdfEmail({ email: vendeur.email, numero, client_nom: cli.nom, pdf: blob })
-          toast.success(`Devis ${numero} envoyé à ${vendeur.email} (PDF en pièce jointe)`)
-        } else {
-          toast.success(`Devis ${numero} créé — ajoute ton email dans l'en-tête pour l'envoi`)
-        }
+        // Le devis passe en « envoyé » et, s'il vient d'un chantier, l'étape et
+        // le montant remontent au CRM — c'est `envoyer_devis_by_token` qui s'en
+        // charge, jusqu'au statut du projet.
+        await envoyer.mutateAsync(id)
+        const donnees = construireData(numero)
+        await envoyerDevisAuClient({
+          email: cli.email.trim(),
+          numero,
+          sujet: objetCourriel(donnees),
+          html: devisEnHtml(donnees),
+          pdf: blob,
+        })
+        toast.success(`Devis ${numero} envoyé à ${cli.email.trim()}`, {
+          description: initial?.affectation_token
+            ? 'Le chantier passe en « devis envoyé ».'
+            : undefined,
+        })
       } else {
         await telechargerDevis(construireData(numero))
         toast.success(`Devis ${numero} enregistré`)
@@ -921,13 +945,13 @@ export function DevisBuilder({
             <Eye className="size-4" />
             Aperçu
           </Button>
-          <Button variant="outline" onClick={() => enregistrer(false)} disabled={busy}>
+          <Button variant="outline" onClick={() => enregistrer('garder')} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Enregistrer
           </Button>
-          <Button onClick={() => enregistrer(true)} disabled={busy}>
+          <Button onClick={() => enregistrer('client')} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-            Me l’envoyer
+            Au client
           </Button>
           </div>
         </div>
