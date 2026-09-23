@@ -1,4 +1,4 @@
-import { Building2, FileText, HardHat, LifeBuoy, Wallet } from 'lucide-react'
+import { Building2, FileText, HardHat, LifeBuoy, Ruler, Wallet } from 'lucide-react'
 
 /**
  * Les cinq écrans de l'espace artisan.
@@ -7,7 +7,13 @@ import { Building2, FileText, HardHat, LifeBuoy, Wallet } from 'lucide-react'
  * identité, assurances, devis, chantiers, relevé de commissions et mentions.
  * Il fallait faire défiler seize cents pixels pour atteindre ses devis.
  */
-export type VueEspace = 'chantiers' | 'devis' | 'commissions' | 'entreprise' | 'aide'
+export type VueEspace =
+  | 'chantiers'
+  | 'devis'
+  | 'metres'
+  | 'commissions'
+  | 'entreprise'
+  | 'aide'
 
 export const ECRANS: {
   cle: VueEspace
@@ -26,6 +32,12 @@ export const ECRANS: {
     titre: 'Mes devis',
     detail: 'Créer, retrouver et envoyer un devis',
     Icone: FileText,
+  },
+  {
+    cle: 'metres',
+    titre: 'Métrés',
+    detail: 'Mesurer un toit, un terrain, une clôture',
+    Icone: Ruler,
   },
   {
     cle: 'commissions',

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import {
-  Clock, FileText, FilePlus, Loader2, Lock, Mail, MapPin, Pencil, Phone, Save, X,
+  Clock, FileText, FilePlus, Loader2, Lock, Mail, MapPin, Pencil, Phone, Ruler, Save, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -33,6 +33,7 @@ export function CorpsChantier({
   adresse,
   onChange,
   onCreerDevis,
+  onMesurer,
   encadre = true,
 }: {
   projet: ProjetEspace
@@ -40,6 +41,7 @@ export function CorpsChantier({
   adresse: string
   onChange: () => void
   onCreerDevis?: (p: ProjetEspace) => void
+  onMesurer?: (p: ProjetEspace) => void
   /** false dans le drawer, qui gère lui-même ses marges. */
   encadre?: boolean
 }) {
@@ -119,6 +121,18 @@ export function CorpsChantier({
             {/* Colonne droite : documents */}
             <div className="space-y-2">
               <SousTitre icon={FileText}>Documents</SousTitre>
+              {/* Avant de chiffrer : les quantités. La photo aérienne s'ouvre
+                  sur ce chantier, le bâtiment déjà tracé avec sa hauteur. */}
+              {onMesurer && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => onMesurer(projet)}
+                >
+                  <Ruler className="size-4" />
+                  Mesurer sur la carte
+                </Button>
+              )}
               {onCreerDevis && (
                 <Button
                   className="w-full shadow-violet transition-transform active:scale-[0.99]"
