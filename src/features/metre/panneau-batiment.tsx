@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { pignonDe, surfaceMur, type Batiment } from './bati-ign'
-import { formatM, formatM2, surfaceReelle, type Mur } from './geometrie'
+import { formatM, formatM2, surfaceReelle, type Facade } from './geometrie'
 import { useFicheMaison } from './use-fiche-maison'
 
 /** Pentes courantes, pour corriger d'un doigt ce que la BD TOPO propose. */
@@ -43,7 +43,7 @@ export function PanneauBatiment({
   batiment: Batiment
   onEnregistrer: (m: MesureAEnregistrer) => void
   enCours: boolean
-  onMurChoisi: (m: Mur | null) => void
+  onMurChoisi: (f: Facade | null) => void
   token: string
 }) {
   const [onglet, setOnglet] = useState<'toiture' | 'facades' | 'maison'>('toiture')
@@ -60,7 +60,7 @@ export function PanneauBatiment({
   const pente = penteSaisie ?? Math.round(batiment.toiture?.pente ?? 0)
   const penteDeduite = penteSaisie == null && batiment.toiture != null
 
-  const [mur, setMur] = useState<Mur | null>(null)
+  const [mur, setMur] = useState<Facade | null>(null)
   const [hauteurSaisie, setHauteurSaisie] = useState('')
   const [nbOuvertures, setNbOuvertures] = useState(0)
 
@@ -74,7 +74,7 @@ export function PanneauBatiment({
   const surfaceFacade = mur ? surfaceMur(mur, hauteur, ouvertures, pignon) : null
   const toiture = surfaceReelle(batiment.emprise, pente)
 
-  function choisirMur(m: Mur | null) {
+  function choisirMur(m: Facade | null) {
     setMur(m)
     onMurChoisi(m)
   }
@@ -161,13 +161,24 @@ export function PanneauBatiment({
 
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Pente&nbsp;:</span>
+            {/* Revenir à la valeur de l'IGN : une fois une pastille touchée,
+                elle était perdue. */}
+            {penteSaisie != null && batiment.toiture && (
+              <button
+                type="button"
+                onClick={() => setPenteSaisie(null)}
+                className="rounded-full border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
+              >
+                IGN&nbsp;: {Math.round(batiment.toiture.pente)} %
+              </button>
+            )}
             {PENTES.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setPenteSaisie(p)}
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                  'rounded-full border px-3 py-1.5 text-xs transition-colors',
                   pente === p
                     ? 'border-primary bg-primary/10 font-medium text-primary'
                     : 'border-border bg-card hover:bg-accent',
@@ -198,19 +209,22 @@ export function PanneauBatiment({
         <>
           {/* Un côté du bâtiment = une façade, nommée par son orientation. */}
           <div className="flex flex-wrap gap-1.5">
-            {batiment.murs.map((m) => (
+            {batiment.facades.map((m) => (
               <button
-                key={m.index}
+                key={m.orientation}
                 type="button"
-                onClick={() => choisirMur(mur?.index === m.index ? null : m)}
+                onClick={() => choisirMur(mur?.orientation === m.orientation ? null : m)}
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs transition-colors',
-                  mur?.index === m.index
+                  'rounded-full border px-3 py-1.5 text-xs transition-colors',
+                  mur?.orientation === m.orientation
                     ? 'border-primary bg-primary/10 font-medium text-primary'
                     : 'border-border bg-card hover:bg-accent',
                 )}
               >
                 {m.orientation} · {formatM(m.longueur)}
+                {m.pans.length > 1 && (
+                  <span className="ml-1 opacity-70">({m.pans.length} pans)</span>
+                )}
               </button>
             ))}
           </div>
@@ -292,7 +306,7 @@ export function PanneauBatiment({
                   onEnregistrer({
                     nom,
                     type: 'facade',
-                    geometrie: [mur.a, mur.b],
+                    geometrie: mur.pans.flatMap((p) => [p.a, p.b]),
                     hauteur_m: hauteur,
                     ouvertures_m2: ouvertures > 0 ? ouvertures : null,
                     azimut: mur.azimut,
@@ -370,7 +384,10 @@ function FicheMaison({
   if (d?.etiquette_dpe) lignes.push(['Étiquette énergie', d.etiquette_dpe])
   if (fiche.urbanisme?.zonage) lignes.push(['Zone du PLU', fiche.urbanisme.zonage])
   if (fiche.cadastre?.contenance) lignes.push(['Terrain', `${fiche.cadastre.contenance} m²`])
-  if (fiche.risques?.argile) lignes.push(['Retrait-gonflement argile', fiche.risques.argile])
+  // Géorisques répond parfois 200 avec un corps vide — trois fiches sur sept
+  // lors de l'audit. La BDNB porte le même aléa : on s'en sert en secours.
+  const argile = fiche.risques?.argile ?? b?.alea_argile ?? null
+  if (argile) lignes.push(['Retrait-gonflement argile', argile])
 
   if (lignes.length === 0) {
     return (

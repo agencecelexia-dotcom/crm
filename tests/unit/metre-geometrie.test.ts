@@ -111,7 +111,7 @@ describe('centre et formats', () => {
   })
 })
 
-import { cardinal, encombrement, murs, toitureDepuisAltitudes } from '../../src/features/metre/geometrie'
+import { cardinal, encombrement, facades, murs, toitureDepuisAltitudes } from '../../src/features/metre/geometrie'
 
 /** Rectangle aligné nord-sud / est-ouest, parcouru dans le sens trigonométrique. */
 function batiment(lat = 46, lon = 5, largeur = 8, longueur = 12): Point[] {
@@ -258,5 +258,67 @@ describe('toitureDepuisAltitudes — dire quand le calcul ne vaut rien', () => {
   it('tient un toit plat pour fiable', () => {
     expect(toitureDepuisAltitudes({ emprise: 500, largeur: 30, toitMin: 100, toitMax: 100.1 })!.fiable)
       .toBe(true)
+  })
+})
+
+describe('murs — recoller ce que la numérisation a morcelé', () => {
+  it('ramène un contour en escalier à quatre façades', () => {
+    // Un rectangle dont un côté est découpé en trois petits segments alignés :
+    // la BD TOPO fait cela, et l'artisan n'y voit qu'un mur.
+    const lat = 46
+    const dLat = 8 / 111320
+    const dLon = 12 / (111320 * Math.cos((lat * Math.PI) / 180))
+    const morcele: Point[] = [
+      [5, lat],
+      [5 + dLon / 3, lat],
+      [5 + (2 * dLon) / 3, lat],
+      [5 + dLon, lat],
+      [5 + dLon, lat + dLat],
+      [5, lat + dLat],
+    ]
+    const m = murs(morcele)
+    expect(m).toHaveLength(4)
+    expect(m[0].longueur).toBeCloseTo(12, 0)
+    expect(m[0].orientation).toBe('sud')
+  })
+
+  it('écarte les décrochés sous un mètre', () => {
+    const m = murs(batiment())
+    expect(m.every((x) => x.longueur >= 1)).toBe(true)
+  })
+
+  it('ne recolle pas deux murs perpendiculaires', () => {
+    expect(murs(batiment())).toHaveLength(4)
+  })
+})
+
+describe('facades — regrouper comme parle un artisan', () => {
+  it('donne quatre façades sur un rectangle', () => {
+    const f = facades(batiment())
+    expect(f).toHaveLength(4)
+    expect(f.map((x) => x.orientation).sort()).toEqual(['est', 'nord', 'ouest', 'sud'])
+  })
+
+  it('additionne les pans de même orientation', () => {
+    // Un contour en L : deux pans regardent le sud, séparés par un décroché.
+    const lat = 46
+    const dy = 8 / 111320
+    const dx = 12 / (111320 * Math.cos((lat * Math.PI) / 180))
+    const enL: Point[] = [
+      [5, lat],
+      [5 + dx, lat],
+      [5 + dx, lat + dy / 2],
+      [5 + dx / 2, lat + dy / 2],
+      [5 + dx / 2, lat + dy],
+      [5, lat + dy],
+    ]
+    const sud = facades(enL).find((x) => x.orientation === 'sud')!
+    expect(sud.pans.length).toBeGreaterThanOrEqual(1)
+    expect(sud.longueur).toBeGreaterThan(10)
+  })
+
+  it('classe la plus longue en tête', () => {
+    const f = facades(batiment())
+    expect(f[0].longueur).toBeGreaterThanOrEqual(f[f.length - 1].longueur)
   })
 })

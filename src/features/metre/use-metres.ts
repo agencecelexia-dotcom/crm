@@ -91,7 +91,13 @@ export function useEnregistrerMetre(token: string | undefined) {
       if (error) throw error
       const r = data as { ok: boolean; error?: string }
       if (!r.ok) throw new Error(r.error)
-      return r as { ok: true; id: string; surface_m2: number | null }
+      return r as {
+        ok: true
+        id: string
+        surface_m2: number | null
+        surface_reelle_m2: number | null
+        longueur_m: number | null
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['metre-contexte'] }),
   })

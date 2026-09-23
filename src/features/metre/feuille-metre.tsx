@@ -27,7 +27,7 @@ import {
   formatM2,
   longueur,
   plusProche,
-  type Mur,
+  type Facade,
   type Point,
 } from './geometrie'
 import { useQuery } from '@tanstack/react-query'
@@ -72,7 +72,7 @@ export function FeuilleMetre({
   const [batiments, setBatiments] = useState<Batiment[]>([])
   const [choisi, setChoisi] = useState<Batiment | null>(null)
   // La façade en cours de chiffrage, surlignée sur la carte.
-  const [murChoisi, setMurChoisi] = useState<Mur | null>(null)
+  const [murChoisi, setMurChoisi] = useState<Facade | null>(null)
   const [nom, setNom] = useState('')
   const [recherche, setRecherche] = useState('')
   const [resultats, setResultats] = useState<Adresse[]>([])
@@ -192,8 +192,11 @@ export function FeuilleMetre({
       { affectation_token: affectationToken, source: 'bati', ...m },
       {
         onSuccess: (r) => {
+          // La surface RÉELLE quand elle existe : annoncer l'emprise au sol
+          // après avoir affiché la toiture prêtait à confusion.
+          const retenue = r.surface_reelle_m2 ?? r.surface_m2
           toast.success('Métré enregistré', {
-            description: r.surface_m2 != null ? formatM2(Number(r.surface_m2)) : undefined,
+            description: retenue != null ? formatM2(Number(retenue)) : undefined,
           })
           recommencer()
         },

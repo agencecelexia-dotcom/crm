@@ -1,12 +1,10 @@
-import type { Encombrement, Mur, Point, Toiture } from './geometrie'
-import { aire, centre, encombrement, estPignon, longueur, murs, toitureDepuisAltitudes } from './geometrie'
+import type { Encombrement, Facade, Point, Toiture } from './geometrie'
+import { aire, centre, encombrement, estPignon, facades, longueur, toitureDepuisAltitudes } from './geometrie'
 
-/** Le dénivelé à ajouter à un mur pignon, ou null s'il n'en est pas un. */
-export function pignonDe(b: Batiment, mur: Mur): { denivele: number } | null {
+/** Le dénivelé à ajouter à une façade pignon, ou null si elle n'en est pas une. */
+export function pignonDe(b: Batiment, f: Facade): { denivele: number } | null {
   if (!b.encombrement || !b.toiture || b.toiture.denivele <= 0) return null
-  return estPignon(mur.azimut, b.encombrement.azimutLong)
-    ? { denivele: b.toiture.denivele }
-    : null
+  return estPignon(f.azimut, b.encombrement.azimutLong) ? { denivele: b.toiture.denivele } : null
 }
 
 /**
@@ -43,8 +41,8 @@ export interface Batiment {
   nature: string | null
   usage: string | null
   centre: Point | null
-  /** Un mur par côté, avec son orientation : c'est ce qu'on chiffre. */
-  murs: Mur[]
+  /** Les façades, regroupées par orientation : c'est ce qu'on chiffre. */
+  facades: Facade[]
   /** Dimensions hors tout, et axe du faîtage. */
   encombrement: Encombrement | null
   /**
@@ -135,7 +133,7 @@ function lireBatiment(brut: unknown): Batiment | null {
     nature: txt('nature'),
     usage: txt('usage_1'),
     centre: centre(contour),
-    murs: murs(contour),
+    facades: facades(contour),
     encombrement: enc,
     toiture: enc
       ? toitureDepuisAltitudes({
@@ -187,7 +185,7 @@ function premierAnneau(g?: Geometrie): Point[] {
  * est décollée, et il en déduit les fenêtres.
  */
 export function surfaceMur(
-  mur: Mur,
+  facade: Facade,
   hauteur: number | null,
   ouvertures = 0,
   pignon?: { denivele: number } | null,
@@ -196,8 +194,8 @@ export function surfaceMur(
   // La « hauteur » de la BD TOPO est celle de la GOUTTIÈRE, pas du faîtage :
   // vérifié, elle vaut altitude_minimale_toit − altitude_minimale_sol. Un
   // pignon monte plus haut, et le triangle sous la charpente s'ajoute.
-  const triangle = pignon && pignon.denivele > 0 ? (mur.longueur * pignon.denivele) / 2 : 0
-  return Math.max(0, mur.longueur * hauteur + triangle - Math.max(0, ouvertures))
+  const triangle = pignon && pignon.denivele > 0 ? (facade.longueur * pignon.denivele) / 2 : 0
+  return Math.max(0, facade.longueur * hauteur + triangle - Math.max(0, ouvertures))
 }
 
 /** L'enveloppe complète, quand il s'agit vraiment de tout traiter. */

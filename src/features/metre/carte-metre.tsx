@@ -4,7 +4,7 @@ import type { LatLngExpression } from 'leaflet'
 
 import { cn } from '@/lib/utils'
 import type { Batiment } from './bati-ign'
-import type { Mur, Point } from './geometrie'
+import type { Facade, Point } from './geometrie'
 
 /**
  * La carte de métré.
@@ -84,7 +84,7 @@ export function CarteMetre({
   mode: ModeCarte
   batiments: Batiment[]
   batimentChoisi: string | null
-  murChoisi?: Mur | null
+  murChoisi?: Facade | null
   onChoisirBatiment: (b: Batiment) => void
   trace: Point[]
   onPoserSommet: (p: Point) => void
@@ -162,13 +162,15 @@ export function CarteMetre({
           )
         })}
 
-      {/* La façade en cours de chiffrage : un trait épais sur son côté. */}
-      {murChoisi && (
+      {/* La façade en cours de chiffrage. Elle peut compter plusieurs pans —
+          une maison en L a deux murs au sud — et tous s'allument. */}
+      {murChoisi?.pans.map((pan, i) => (
         <Polyline
-          positions={[versLeaflet(murChoisi.a), versLeaflet(murChoisi.b)]}
+          key={i}
+          positions={[versLeaflet(pan.a), versLeaflet(pan.b)]}
           pathOptions={{ color: '#EA580C', weight: 6, opacity: 0.95 }}
         />
-      )}
+      ))}
 
       {/* Le tracé en cours */}
       {trace.length >= 2 &&

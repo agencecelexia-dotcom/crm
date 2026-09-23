@@ -177,22 +177,123 @@ export function murs(contour: Point[]): Mur[] {
   if (!contour || contour.length < 3) return []
   // Sens de parcours : il dit de quel côté est l'extérieur.
   const trigo = aireSignee(contour) > 0
-  const out: Mur[] = []
 
+  // 1) Une arête par côté du contour.
+  const aretes: Mur[] = []
   for (let i = 0; i < contour.length; i++) {
     const a = contour[i]
     const b = contour[(i + 1) % contour.length]
     const [est, nord] = enMetres(a, b)
     const longueur = Math.hypot(est, nord)
-    if (longueur < 1) continue
+    if (longueur < 0.3) continue
 
     // Normale extérieure : à droite de l'arête si le contour est trigonométrique.
     const [nEst, nNord] = trigo ? [nord, -est] : [-nord, est]
     const azimut = (((Math.atan2(nEst, nNord) * 180) / Math.PI) % 360 + 360) % 360
 
-    out.push({ index: i, longueur, azimut, orientation: cardinal(azimut), a, b })
+    aretes.push({ index: i, longueur, azimut, orientation: cardinal(azimut), a, b })
   }
-  return out
+  if (aretes.length < 2) return aretes
+
+  // 2) Les arêtes presque alignées forment UNE façade.
+  //
+  // Un contour de la BD TOPO suit les décrochés de numérisation : une maison
+  // ordinaire y compte onze côtés, dont un de 1,21 m. L'artisan, lui, voit
+  // quatre façades et les nomme par leur orientation. On recolle donc les
+  // arêtes dont la direction ne varie pas de plus de douze degrés.
+  const ECART_MAX = 12
+  const fusion: Mur[] = []
+  for (const arete of aretes) {
+    const prec = fusion[fusion.length - 1]
+    if (prec && ecartAngulaire(arete.azimut, prec.azimut) < ECART_MAX) {
+      // On prolonge la façade : sa direction devient la moyenne pondérée par
+      // les longueurs, et elle va du premier point au dernier.
+      const total = prec.longueur + arete.longueur
+      prec.azimut = moyenneAngles(prec.azimut, prec.longueur, arete.azimut, arete.longueur)
+      prec.orientation = cardinal(prec.azimut)
+      prec.longueur = total
+      prec.b = arete.b
+    } else {
+      fusion.push({ ...arete })
+    }
+  }
+
+  // Le contour est fermé : la dernière façade peut prolonger la première.
+  if (fusion.length > 2) {
+    const premier = fusion[0]
+    const dernier = fusion[fusion.length - 1]
+    if (ecartAngulaire(dernier.azimut, premier.azimut) < ECART_MAX) {
+      premier.azimut = moyenneAngles(
+        premier.azimut, premier.longueur, dernier.azimut, dernier.longueur)
+      premier.orientation = cardinal(premier.azimut)
+      premier.longueur += dernier.longueur
+      premier.a = dernier.a
+      fusion.pop()
+    }
+  }
+
+  // 3) Un pan de moins d'un mètre n'est pas une façade à chiffrer.
+  return fusion.filter((m) => m.longueur >= 1).map((m, i) => ({ ...m, index: i }))
+}
+
+/**
+ * Les façades d'un bâtiment, telles qu'un artisan les nomme.
+ *
+ * Recoller les pans presque alignés ne suffisait pas : un contour de la BD
+ * TOPO garde de vrais décrochés, et une maison ordinaire y compte encore huit
+ * à onze côtés après fusion. Or un façadier ne dit jamais « le mur n° 3 » : il
+ * dit « LA FAÇADE SUD », et elle peut être faite de trois pans.
+ *
+ * On regroupe donc par orientation cardinale. Une maison en L peut avoir deux
+ * pans au sud, séparés par un décroché : ils se traitent ensemble, au même
+ * prix, et se chiffrent ensemble.
+ */
+export interface Facade {
+  orientation: string
+  /** Somme des pans qui regardent dans cette direction. */
+  longueur: number
+  /** Direction moyenne, pour savoir si c'est un pignon. */
+  azimut: number
+  pans: Mur[]
+}
+
+export function facades(contour: Point[]): Facade[] {
+  const groupes = new Map<string, Mur[]>()
+  for (const m of murs(contour)) {
+    const l = groupes.get(m.orientation)
+    if (l) l.push(m)
+    else groupes.set(m.orientation, [m])
+  }
+
+  return [...groupes.entries()]
+    .map(([orientation, pans]) => {
+      const longueur = pans.reduce((s, m) => s + m.longueur, 0)
+      let x = 0
+      let y = 0
+      for (const m of pans) {
+        x += Math.cos(rad(m.azimut)) * m.longueur
+        y += Math.sin(rad(m.azimut)) * m.longueur
+      }
+      return {
+        orientation,
+        longueur,
+        azimut: (((Math.atan2(y, x) * 180) / Math.PI) % 360 + 360) % 360,
+        pans,
+      }
+    })
+    .sort((a, b) => b.longueur - a.longueur)
+}
+
+/** Écart entre deux directions, de 0 (identiques) à 180 (opposées). */
+function ecartAngulaire(a: number, b: number): number {
+  return Math.abs(((a - b + 180) % 360 + 360) % 360 - 180)
+}
+
+/** Moyenne de deux directions, pondérée — une moyenne arithmétique franchirait mal le nord. */
+function moyenneAngles(a: number, pa: number, b: number, pb: number): number {
+  const x = Math.cos(rad(a)) * pa + Math.cos(rad(b)) * pb
+  const y = Math.sin(rad(a)) * pa + Math.sin(rad(b)) * pb
+  return (((Math.atan2(y, x) * 180) / Math.PI) % 360 + 360) % 360
 }
 
 /** Les dimensions hors tout d'un bâtiment, et l'axe de son faîtage. */
