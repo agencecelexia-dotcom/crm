@@ -43,6 +43,8 @@ import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
 import { useListeDevis } from '@/features/devis/use-devis'
 import { CarteIdentite } from '@/features/devis/carte-identite'
+import { MenuEspace } from './menu-espace'
+import { useVueEspace } from './use-vue-espace'
 import { CarteAssurances } from '@/features/assurances/carte-assurances'
 import { useEtatChiffrage } from '@/features/assurances/use-assurances'
 import type { EspaceArtisan, ProjetEspace, StatutProjet } from '@/types/database'
@@ -67,6 +69,9 @@ export function EspaceArtisanPage() {
   const [devisInitial, setDevisInitial] = useState<DevisInitial | null>(null)
   // Bascule pipe actif / espace « Perdus » (migration 0070).
   const [vuePerdus, setVuePerdus] = useState(false)
+  // L'écran courant vit dans l'URL : le bouton retour du téléphone ramène au
+  // précédent au lieu de quitter l'espace.
+  const [vue, allerA] = useVueEspace()
   // Filtre demandé depuis le tableau de bord.
   const [filtreDemande, setFiltreDemande] = useState<'urgents' | null>(null)
 
@@ -166,7 +171,8 @@ export function EspaceArtisanPage() {
                 <Lock className="size-3.5" /> Contrat à signer
               </a>
             )}
-            {projetsPerdus.length > 0 && !vuePerdus && (
+            {/* « Perdus » n'a de sens que devant la liste des chantiers. */}
+            {vue === 'chantiers' && projetsPerdus.length > 0 && !vuePerdus && (
               <Button
                 size="sm"
                 variant="outline"
@@ -180,123 +186,162 @@ export function EspaceArtisanPage() {
                 </span>
               </Button>
             )}
-            {peutChiffrer && (
-              <Button size="sm" variant="outline" className="bg-card" onClick={() => setDevisInitial({})}>
-                <FilePlus className="size-4" />
-                Nouveau devis
-              </Button>
-            )}
+            <MenuEspace
+              vue={vue}
+              onAller={(v) => {
+                setVuePerdus(false)
+                allerA(v)
+              }}
+              compteurs={{ chantiers: projets.length }}
+            />
           </div>
         </div>
       </header>
 
-      {/* Espace « Perdus » : remplace le pipe le temps de la consultation.
-          L'artisan y récupère un chantier si le client le recontacte. */}
-      {vuePerdus && (
+      {/* Le contrat commande tout le reste : tant qu'il n'est pas signé, il
+          s'affiche quel que soit l'écran choisi. */}
+      {!signe && !contrat_externe && (
         <div className="mx-auto max-w-2xl">
-          <ChantiersPerdus
-            projets={projetsPerdus}
-            signe={signe}
-            onRetour={() => setVuePerdus(false)}
-            onChange={() => void refetch()}
-          />
+          <SignatureContrat engagement={engagement} onSigne={() => void refetch()} />
         </div>
       )}
 
-      {/* Contrat + intro gardés dans une colonne lisible (centrée) même sur grand écran */}
-      <div className={cn('mx-auto max-w-2xl', vuePerdus && 'hidden')}>
-      {/* Contrat (signé une fois pour tous les chantiers).
-          Si contrat signé HORS application : on n'affiche aucun bloc contrat. */}
-      {contrat_externe ? null : signe ? (
-        <div className="mb-4 rounded-2xl border border-[#22C55E]/25 bg-[#22C55E]/5 shadow-card">
-          <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
-            <p className="flex min-w-0 items-center gap-2.5 text-sm font-medium">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#22C55E]/15 text-[#16A34A]">
-                <CheckCircle2 className="size-5" />
-              </span>
-              <span className="min-w-0">
-                Contrat signé
-                {engagement.signed_at && (
-                  <span className="block truncate text-xs font-normal text-muted-foreground sm:inline sm:before:content-['_']">
-                    le {formatDate(engagement.signed_at)}
-                  </span>
-                )}
-              </span>
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 bg-card"
-              onClick={() =>
-                telechargerContratPdf({
-                  contenu: finaliserContenu(engagement.contenu, engagement.signed_at),
-                  signataire: engagement.signataire_nom,
-                  signedAt: engagement.signed_at,
-                  signatureDataUrl: engagement.signature_data,
-                  apporteurSignatureUrl: engagement.apporteur_signature,
-                })
-              }
-            >
-              <Download className="size-4" />
-              Télécharger
-            </Button>
+      {/* ---------- Mes chantiers ---------- */}
+      {vue === 'chantiers' &&
+        (vuePerdus ? (
+          <div className="mx-auto max-w-2xl">
+            <ChantiersPerdus
+                        projets={projetsPerdus}
+                        signe={signe}
+                        onRetour={() => setVuePerdus(false)}
+                        onChange={() => void refetch()}
+                      />
           </div>
-        </div>
-      ) : (
-        <SignatureContrat engagement={engagement} onSigne={() => void refetch()} />
-      )}
-
-      {/* Intro */}
-      {signe && (
-        <div className="mb-3 flex items-start gap-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 font-display text-sm font-semibold text-primary">
-            A
-          </span>
-          <p className="text-sm leading-relaxed text-foreground/90">
-            <strong>Antoine</strong> vous transmet ces chantiers. Contactez vos
-            clients dès que possible et tenez-nous informés avec les boutons de suivi.
-          </p>
-        </div>
-      )}
-
-      {/* Résumé de son activité (statuts + commission due) */}
-      {signe && data.stats && (
-        <TableauDeBordArtisan
-          stats={data.stats}
-          onFiltrer={(f) => {
-            setFiltreDemande(f)
-            document.getElementById('mes-chantiers')?.scrollIntoView({ behavior: 'smooth' })
-          }}
-        />
-      )}
-
-      {/* Assurances : c'est ce qui ouvre le générateur de devis. Visible une
-          fois le contrat signé, comme le reste de l'espace. */}
-      {(signe || contrat_externe) && token && (
+        ) : (
           <>
-            {/* Renseignée une fois, portée par tous ses devis : en-tête,
-                immatriculation, assurance, conditions générales. */}
-            <CarteIdentite token={token} />
-            <CarteAssurances token={token} />
+            <div className="mx-auto max-w-2xl">
+              {/* Intro */}
+                    {signe && (
+                      <div className="mb-3 flex items-start gap-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 font-display text-sm font-semibold text-primary">
+                          A
+                        </span>
+                        <p className="text-sm leading-relaxed text-foreground/90">
+                          <strong>Antoine</strong> vous transmet ces chantiers. Contactez vos
+                          clients dès que possible et tenez-nous informés avec les boutons de suivi.
+                        </p>
+                      </div>
+                    )}
+              {/* Résumé de son activité (statuts + commission due) */}
+                    {signe && data.stats && (
+                      <TableauDeBordArtisan
+                        stats={data.stats}
+                        onFiltrer={(f) => {
+                          setFiltreDemande(f)
+                          document.getElementById('mes-chantiers')?.scrollIntoView({ behavior: 'smooth' })
+                        }}
+                      />
+                    )}
+            </div>
+            <div className="mx-auto max-w-5xl">
+              <ListeChantiers
+                      filtreDemande={filtreDemande}
+                      onFiltreApplique={() => setFiltreDemande(null)}
+                      projets={projets}
+                      signe={signe}
+                      onChange={() => void refetch()}
+                      onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined}
+                    />
+            </div>
           </>
-        )}
+        ))}
+
+      {/* ---------- Mes devis ---------- */}
+      {vue === 'devis' && (
+        <div className="mx-auto max-w-2xl space-y-4">
+          {peutChiffrer && token ? (
+            <>
+              <Button className="w-full shadow-violet" onClick={() => setDevisInitial({})}>
+                <FilePlus className="size-4" />
+                Nouveau devis
+              </Button>
+              {peutChiffrer && token && <MesDevis token={token} />}
+            </>
+          ) : (
+            <div className="rounded-2xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-4 text-sm text-[#B45309]">
+              <p className="font-medium">Le chiffrage n’est pas encore ouvert.</p>
+              <p className="mt-1">
+                Déposez votre attestation décennale et votre RC pro dans « Mon entreprise » :
+                l’agence les valide, et le générateur de devis s’ouvre.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---------- Commissions ---------- */}
+      {vue === 'commissions' && signe && token && (
+        <div className="mx-auto max-w-2xl">
+          <ReleveCommissions token={token} />
+        </div>
+      )}
+
+      {/* ---------- Mon entreprise ---------- */}
+      {vue === 'entreprise' && (
+        <div className="mx-auto max-w-2xl">
+          {contrat_externe ? null : signe ? (
+                  <div className="mb-4 rounded-2xl border border-[#22C55E]/25 bg-[#22C55E]/5 shadow-card">
+                    <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
+                      <p className="flex min-w-0 items-center gap-2.5 text-sm font-medium">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#22C55E]/15 text-[#16A34A]">
+                          <CheckCircle2 className="size-5" />
+                        </span>
+                        <span className="min-w-0">
+                          Contrat signé
+                          {engagement.signed_at && (
+                            <span className="block truncate text-xs font-normal text-muted-foreground sm:inline sm:before:content-['_']">
+                              le {formatDate(engagement.signed_at)}
+                            </span>
+                          )}
+                        </span>
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 bg-card"
+                        onClick={() =>
+                          telechargerContratPdf({
+                            contenu: finaliserContenu(engagement.contenu, engagement.signed_at),
+                            signataire: engagement.signataire_nom,
+                            signedAt: engagement.signed_at,
+                            signatureDataUrl: engagement.signature_data,
+                            apporteurSignatureUrl: engagement.apporteur_signature,
+                          })
+                        }
+                      >
+                        <Download className="size-4" />
+                        Télécharger
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+          {(signe || contrat_externe) && token && (
+                    <>
+                      {/* Renseignée une fois, portée par tous ses devis : en-tête,
+                          immatriculation, assurance, conditions générales. */}
+                      <CarteIdentite token={token} />
+                      <CarteAssurances token={token} />
+                    </>
+                  )}
+        </div>
+      )}
+
+      {/* ---------- Aide ---------- */}
+      {vue === 'aide' && <PiedDePageArtisan />}
       </div>
 
-      {/* Devis — ouvert aux artisans dont les assurances sont validées */}
-      {peutChiffrer && token && <MesDevis token={token} />}
-
-      {/* Liste des chantiers : en cours / terminés */}
-      <ListeChantiers
-        filtreDemande={filtreDemande}
-        onFiltreApplique={() => setFiltreDemande(null)}
-        projets={projets}
-        signe={signe}
-        onChange={() => void refetch()}
-        onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined}
-      />
-      </div>
-
-      {/* Générateur de devis */}
+      {/* Générateur de devis, quel que soit l'écran : il s'ouvre depuis les
+          devis comme depuis un chantier. */}
       {peutChiffrer && token && devisInitial && (
         <DevisBuilder
           key={devisInitial.affectation_token ?? 'standalone'}
@@ -308,15 +353,7 @@ export function EspaceArtisanPage() {
         />
       )}
 
-      {/* Relevé détaillé : la commission n'était qu'un total agrégé. */}
-      {!vuePerdus && signe && token && (
-        <div className="mx-auto max-w-2xl">
-          <ReleveCommissions token={token} />
-        </div>
-      )}
 
-      {/* Contact, aide et mentions : totalement absents auparavant (audit §9). */}
-      {!vuePerdus && <PiedDePageArtisan />}
     </div>
   )
 }

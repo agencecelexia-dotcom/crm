@@ -236,6 +236,38 @@ export async function envoyerDevisPdfEmail(p: {
   })
 }
 
+/**
+ * Envoie le devis AU CLIENT : le HTML dans le corps du message, le PDF en
+ * pièce jointe.
+ *
+ * Le client lit le corps, souvent sur un téléphone, souvent sans ouvrir la
+ * pièce jointe. C'est donc le HTML qui décide si le devis est lu — mais c'est
+ * le PDF qui fait foi, et le message le dit.
+ */
+export async function envoyerDevisAuClient(p: {
+  email: string
+  numero: string
+  sujet: string
+  html: string
+  pdf: Blob
+}) {
+  const pdf_base64 = await blobToBase64(p.pdf)
+  await fetch(N8N_WEBHOOK_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event: 'envoyer_devis_client',
+      email: p.email,
+      numero: p.numero,
+      filename: `devis-${p.numero}.pdf`,
+      subject: p.sujet,
+      html: p.html,
+      pdf_base64,
+    }),
+  })
+}
+
 /** Une ligne telle qu'elle vit dans un modèle ou dans un devis dupliqué. */
 export interface LigneModele {
   designation: string
