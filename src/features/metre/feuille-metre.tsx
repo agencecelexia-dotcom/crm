@@ -17,7 +17,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { batimentsAutour, surfaceFacade, type Batiment } from './bati-ign'
+import { batimentsAutour, type Batiment } from './bati-ign'
+import { PanneauBatiment, type MesureAEnregistrer } from './panneau-batiment'
 import { CarteMetre, type FondCarte, type ModeCarte } from './carte-metre'
 import {
   aire,
@@ -26,7 +27,7 @@ import {
   formatM2,
   longueur,
   plusProche,
-  surfaceReelle,
+  type Mur,
   type Point,
 } from './geometrie'
 import {
@@ -37,9 +38,6 @@ import {
   useSupprimerMetre,
   type Adresse,
 } from './use-metres'
-
-/** Pentes courantes en couverture, en pourcentage. */
-const PENTES = [0, 30, 35, 40, 45]
 
 /**
  * Prendre un métré sans se déplacer.
@@ -71,7 +69,8 @@ export function FeuilleMetre({
   const [trace, setTrace] = useState<Point[]>([])
   const [batiments, setBatiments] = useState<Batiment[]>([])
   const [choisi, setChoisi] = useState<Batiment | null>(null)
-  const [pente, setPente] = useState(0)
+  // La façade en cours de chiffrage, surlignée sur la carte.
+  const [murChoisi, setMurChoisi] = useState<Mur | null>(null)
   const [nom, setNom] = useState('')
   const [recherche, setRecherche] = useState('')
   const [resultats, setResultats] = useState<Adresse[]>([])
@@ -142,55 +141,29 @@ export function FeuilleMetre({
     }
   }, [recherche])
 
-  // Les chiffres du moment : ceux du bâtiment touché, ou ceux du tracé.
-  const mesure = useMemo(() => {
-    if (choisi) {
-      return {
-        surface: choisi.emprise,
-        perimetre: choisi.perimetre,
-        hauteur: choisi.hauteur,
-        facade: surfaceFacade(choisi),
-        geometrie: choisi.contour,
-        type: 'surface' as const,
-        source: 'bati' as const,
-      }
-    }
+  // Le tracé à main levée — le recours, quand il n'y a pas de bâtiment : un
+  // terrain, une terrasse, une clôture.
+  const dessin = useMemo(() => {
     if (trace.length < 2) return null
-    const surface = mode === 'surface' && trace.length >= 3 ? aire(trace) : null
+    const estSurface = mode === 'surface' && trace.length >= 3
     return {
-      surface,
-      perimetre: surface != null ? longueur(trace, true) : null,
-      longueur: surface == null ? longueur(trace, false) : null,
-      hauteur: null,
-      facade: null,
-      geometrie: trace,
-      type: mode === 'surface' ? ('surface' as const) : ('longueur' as const),
-      source: 'dessin' as const,
+      surface: estSurface ? aire(trace) : null,
+      perimetre: estSurface ? longueur(trace, true) : null,
+      longueur: estSurface ? null : longueur(trace, false),
     }
-  }, [choisi, trace, mode])
-
-  const toiture = mesure?.surface != null ? surfaceReelle(mesure.surface, pente) : null
+  }, [trace, mode])
 
   function recommencer() {
     setTrace([])
     setChoisi(null)
+    setMurChoisi(null)
     setMode('apercu')
-    setPente(0)
     setNom('')
   }
 
-  function enregistrerMesure() {
-    if (!mesure) return
+  function garder(m: MesureAEnregistrer) {
     enregistrer.mutate(
-      {
-        affectation_token: affectationToken,
-        nom: nom.trim() || (mesure.type === 'surface' ? 'Surface' : 'Longueur'),
-        type: mesure.type,
-        geometrie: mesure.geometrie,
-        hauteur_m: mesure.hauteur,
-        pente_pct: pente > 0 ? pente : null,
-        source: mesure.source,
-      },
+      { affectation_token: affectationToken, source: 'bati', ...m },
       {
         onSuccess: (r) => {
           toast.success('Métré enregistré', {
@@ -224,6 +197,7 @@ export function FeuilleMetre({
             mode={mode}
             batiments={batiments}
             batimentChoisi={choisi?.id ?? null}
+            murChoisi={murChoisi}
             onChoisirBatiment={(b) => {
               setChoisi(b)
               setNom(b.nature && b.nature !== 'Indifférenciée' ? b.nature : 'Bâtiment')
@@ -318,61 +292,61 @@ export function FeuilleMetre({
 
         {/* Le panneau de mesure */}
         <div className="shrink-0 space-y-3 border-t border-border p-3">
-          {mesure ? (
+          {choisi ? (
+            <PanneauBatiment
+              token={token}
+              batiment={choisi}
+              enCours={enregistrer.isPending}
+              onEnregistrer={garder}
+              onMurChoisi={setMurChoisi}
+            />
+          ) : dessin ? (
             <>
               <div className="grid grid-cols-2 gap-2">
                 <Chiffre
-                  titre={mesure.type === 'surface' ? 'Emprise au sol' : 'Longueur'}
+                  titre={dessin.surface != null ? 'Surface' : 'Longueur'}
                   valeur={
-                    mesure.type === 'surface'
-                      ? formatM2(mesure.surface ?? 0)
-                      : formatM(mesure.longueur ?? 0)
+                    dessin.surface != null
+                      ? formatM2(dessin.surface)
+                      : formatM(dessin.longueur ?? 0)
                   }
                   fort
                 />
-                {mesure.type === 'surface' && (
-                  <Chiffre titre={`Toiture à ${pente} %`} valeur={formatM2(toiture ?? 0)} fort />
-                )}
-                {mesure.perimetre != null && (
-                  <Chiffre titre="Périmètre" valeur={formatM(mesure.perimetre)} />
-                )}
-                {mesure.facade != null && mesure.hauteur != null && (
-                  <Chiffre
-                    titre={`Façades (h. ${formatM(mesure.hauteur)})`}
-                    valeur={formatM2(mesure.facade)}
-                  />
+                {dessin.perimetre != null && (
+                  <Chiffre titre="Périmètre" valeur={formatM(dessin.perimetre)} />
                 )}
               </div>
-
-              {mesure.type === 'surface' && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">Pente&nbsp;:</span>
-                  {PENTES.map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setPente(p)}
-                      className={cn(
-                        'rounded-full border px-2.5 py-1 text-xs transition-colors',
-                        pente === p
-                          ? 'border-primary bg-primary/10 font-medium text-primary'
-                          : 'border-border bg-card hover:bg-accent',
-                      )}
-                    >
-                      {p === 0 ? 'plate' : `${p} %`}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <div className="flex gap-2">
                 <Input
                   className="h-10 flex-1"
-                  placeholder="Nom (ex. Toiture principale)"
+                  placeholder={dessin.surface != null ? 'Terrain, terrasse…' : 'Clôture, gouttière…'}
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
                 />
-                <Button onClick={enregistrerMesure} disabled={enregistrer.isPending}>
+                <Button
+                  disabled={enregistrer.isPending}
+                  onClick={() =>
+                    enregistrer.mutate(
+                      {
+                        affectation_token: affectationToken,
+                        nom: nom.trim() || (dessin.surface != null ? 'Surface' : 'Longueur'),
+                        type: dessin.surface != null ? 'surface' : 'longueur',
+                        geometrie: trace,
+                        source: 'dessin',
+                      },
+                      {
+                        onSuccess: () => {
+                          toast.success('Métré enregistré')
+                          recommencer()
+                        },
+                        onError: (e) =>
+                          toast.error('Échec', {
+                            description: e instanceof Error ? e.message : undefined,
+                          }),
+                      },
+                    )
+                  }
+                >
                   {enregistrer.isPending ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
@@ -453,7 +427,7 @@ export function FeuilleMetre({
           )}
 
           {/* Les métrés déjà pris sur ce chantier */}
-          {!!ctx?.metres?.length && !mesure && (
+          {!!ctx?.metres?.length && !choisi && !dessin && (
             <div className="space-y-1 border-t border-border pt-2">
               {ctx.metres.map((m) => (
                 <div key={m.id} className="flex items-center gap-2 text-xs">
@@ -461,9 +435,9 @@ export function FeuilleMetre({
                     {m.nom}
                     <span className="text-muted-foreground">
                       {' · '}
-                      {m.type === 'surface'
-                        ? formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))
-                        : formatM(Number(m.longueur_m ?? 0))}
+                      {m.type === 'longueur'
+                        ? formatM(Number(m.longueur_m ?? 0))
+                        : formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))}
                     </span>
                   </span>
                   <Button

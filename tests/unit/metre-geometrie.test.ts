@@ -110,3 +110,102 @@ describe('centre et formats', () => {
     expect(formatM(4.567)).toBe('4,57 m')
   })
 })
+
+import { cardinal, encombrement, murs, toitureDepuisAltitudes } from '../../src/features/metre/geometrie'
+
+/** Rectangle aligné nord-sud / est-ouest, parcouru dans le sens trigonométrique. */
+function batiment(lat = 46, lon = 5, largeur = 8, longueur = 12): Point[] {
+  const dLat = largeur / 111320
+  const dLon = longueur / (111320 * Math.cos((lat * Math.PI) / 180))
+  return [
+    [lon, lat],
+    [lon + dLon, lat],
+    [lon + dLon, lat + dLat],
+    [lon, lat + dLat],
+  ]
+}
+
+describe('murs — une façade, pas l’enveloppe entière', () => {
+  it('donne un mur par côté, avec sa longueur', () => {
+    const m = murs(batiment())
+    expect(m).toHaveLength(4)
+    expect(m[0].longueur).toBeCloseTo(12, 0)
+    expect(m[1].longueur).toBeCloseTo(8, 0)
+  })
+
+  it('nomme chaque façade par son orientation', () => {
+    // Contour parcouru vers l'est en bas : ce mur regarde le SUD.
+    const m = murs(batiment())
+    expect(m[0].orientation).toBe('sud')
+    expect(m[1].orientation).toBe('est')
+    expect(m[2].orientation).toBe('nord')
+    expect(m[3].orientation).toBe('ouest')
+  })
+
+  it('donne la même orientation quel que soit le sens de parcours', () => {
+    const inverse = murs([...batiment()].reverse())
+    expect(inverse.map((x) => x.orientation).sort()).toEqual(['est', 'nord', 'ouest', 'sud'])
+  })
+
+  it('écarte les décrochés de numérisation sous un mètre', () => {
+    const b = batiment()
+    const micro: Point[] = [...b, [b[0][0] + 0.000002, b[0][1] + 0.000002]]
+    expect(murs(micro).length).toBeLessThanOrEqual(5)
+    expect(murs(micro).every((m) => m.longueur >= 1)).toBe(true)
+  })
+
+  it('traduit un azimut en point cardinal', () => {
+    expect(cardinal(0)).toBe('nord')
+    expect(cardinal(90)).toBe('est')
+    expect(cardinal(180)).toBe('sud')
+    expect(cardinal(271)).toBe('ouest')
+    expect(cardinal(-45)).toBe('nord-ouest')
+  })
+})
+
+describe('encombrement — les dimensions hors tout', () => {
+  it('retrouve 12 × 8 sur un rectangle', () => {
+    const e = encombrement(batiment())!
+    expect(e.longueur).toBeCloseTo(12, 0)
+    expect(e.largeur).toBeCloseTo(8, 0)
+  })
+
+  it('suit le grand axe, ici est-ouest', () => {
+    const e = encombrement(batiment())!
+    // Un axe est-ouest a un azimut de 90 ou 270 degrés.
+    expect([90, 270].map((a) => Math.abs(e.azimutLong - a)).some((d) => d < 2)).toBe(true)
+  })
+
+  it('renvoie null sous trois sommets', () => {
+    expect(encombrement([[5, 46], [5.001, 46]])).toBeNull()
+  })
+})
+
+describe('toitureDepuisAltitudes — la pente qu’on ne voyait pas', () => {
+  it('déduit la pente du dénivelé et de la demi-largeur', () => {
+    // 2 m de dénivelé sur 4 m de demi-largeur : 50 %.
+    const t = toitureDepuisAltitudes({ emprise: 96, largeur: 8, toitMin: 442, toitMax: 444 })!
+    expect(t.pente).toBeCloseTo(50, 1)
+    expect(t.denivele).toBeCloseTo(2, 3)
+    expect(t.surface).toBeCloseTo(96 / Math.cos(Math.atan(0.5)), 0)
+  })
+
+  it('annonce l’incertitude, qui est grande sur une petite maison', () => {
+    const petite = toitureDepuisAltitudes({ emprise: 40, largeur: 6, toitMin: 442, toitMax: 443.5 })!
+    const grande = toitureDepuisAltitudes({ emprise: 400, largeur: 20, toitMin: 442, toitMax: 447 })!
+    // Un mètre d'erreur sur trois mètres de demi-largeur : ± 33 points.
+    expect(petite.incertitude).toBeCloseTo(33.3, 0)
+    expect(grande.incertitude).toBeCloseTo(10, 0)
+    expect(grande.incertitude).toBeLessThan(petite.incertitude)
+  })
+
+  it('traite un toit plat sans inventer de pente', () => {
+    const t = toitureDepuisAltitudes({ emprise: 200, largeur: 10, toitMin: 442, toitMax: 442.1 })!
+    expect(t.pente).toBe(0)
+    expect(t.surface).toBe(200)
+  })
+
+  it('renvoie null sans altitude de toit', () => {
+    expect(toitureDepuisAltitudes({ emprise: 96, largeur: 8, toitMin: null, toitMax: 444 })).toBeNull()
+  })
+})

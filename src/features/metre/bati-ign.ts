@@ -1,5 +1,5 @@
-import type { Point } from './geometrie'
-import { aire, centre, longueur } from './geometrie'
+import type { Encombrement, Mur, Point, Toiture } from './geometrie'
+import { aire, centre, encombrement, longueur, murs, toitureDepuisAltitudes } from './geometrie'
 
 /**
  * Le bâti de la BD TOPO, servi gratuitement par l'IGN.
@@ -23,6 +23,9 @@ const WFS = 'https://data.geopf.fr/wfs/ows'
 /** Un bâtiment, tel qu'on le montre à l'artisan. */
 export interface Batiment {
   id: string
+  /** Identifiant BD TOPO — la clé qui rattache ce bâtiment au RNB, à la BDNB
+   *  et au DPE. Sans elle, aucune fiche maison n'est possible. */
+  cleabs: string | null
   contour: Point[]
   /** Emprise au sol, en m² — l'ombre du bâtiment, pas la surface de toiture. */
   emprise: number
@@ -32,6 +35,22 @@ export interface Batiment {
   nature: string | null
   usage: string | null
   centre: Point | null
+  /** Un mur par côté, avec son orientation : c'est ce qu'on chiffre. */
+  murs: Mur[]
+  /** Dimensions hors tout, et axe du faîtage. */
+  encombrement: Encombrement | null
+  /**
+   * La toiture déduite des altitudes, quand la BD TOPO les donne — environ six
+   * bâtiments sur dix. Elle porte son incertitude : sur une petite maison, un
+   * mètre de précision altimétrique laisse une marge considérable.
+   */
+  toiture: Toiture | null
+  /** Ce que la BD TOPO sait d'autre, quand elle le sait. */
+  etages: number | null
+  logements: number | null
+  materiauMurs: string | null
+  materiauToiture: string | null
+  anneeSource: string | null
 }
 
 /** Convertit un degré de longitude en mètres à cette latitude. */
@@ -85,17 +104,42 @@ function lireBatiment(brut: unknown): Batiment | null {
   if (contour.length < 3) return null
 
   const p = f.properties ?? {}
-  const hauteur = typeof p.hauteur === 'number' ? p.hauteur : null
+  const nb = (k: string) => (typeof p[k] === 'number' ? (p[k] as number) : null)
+  const txt = (k: string) =>
+    typeof p[k] === 'string' && p[k] && p[k] !== 'Indifférenciée' && p[k] !== 'Indifférencié'
+      ? (p[k] as string)
+      : null
+
+  const hauteur = nb('hauteur')
+  const emprise = aire(contour)
+  const enc = encombrement(contour)
 
   return {
     id: String(f.id ?? p.cleabs ?? Math.random()),
+    cleabs: typeof p.cleabs === 'string' ? p.cleabs : null,
     contour,
-    emprise: aire(contour),
+    emprise,
     perimetre: longueur(contour, true),
     hauteur: hauteur && hauteur > 0 ? hauteur : null,
-    nature: typeof p.nature === 'string' && p.nature ? p.nature : null,
-    usage: typeof p.usage_1 === 'string' && p.usage_1 ? p.usage_1 : null,
+    nature: txt('nature'),
+    usage: txt('usage_1'),
     centre: centre(contour),
+    murs: murs(contour),
+    encombrement: enc,
+    toiture: enc
+      ? toitureDepuisAltitudes({
+          emprise,
+          largeur: enc.largeur,
+          toitMin: nb('altitude_minimale_toit'),
+          toitMax: nb('altitude_maximale_toit'),
+          precisionAltimetrique: nb('precision_altimetrique'),
+        })
+      : null,
+    etages: nb('nombre_d_etages'),
+    logements: nb('nombre_de_logements'),
+    materiauMurs: txt('materiaux_des_murs'),
+    materiauToiture: txt('materiaux_de_la_toiture'),
+    anneeSource: typeof p.date_d_apparition === 'string' ? p.date_d_apparition.slice(0, 4) : null,
   }
 }
 
@@ -124,7 +168,19 @@ function premierAnneau(g?: Geometrie): Point[] {
   return points
 }
 
-/** Surface de façade : le tour du bâtiment par sa hauteur. */
-export function surfaceFacade(b: Batiment): number | null {
+/**
+ * Surface d'UN mur, hauteur du bâtiment moins les ouvertures.
+ *
+ * Remplace l'ancien « périmètre × hauteur », qui donnait l'enveloppe entière du
+ * bâtiment : personne ne vend ça. Un façadier chiffre la façade sud, celle qui
+ * est décollée, et il en déduit les fenêtres.
+ */
+export function surfaceMur(mur: Mur, hauteur: number | null, ouvertures = 0): number | null {
+  if (!hauteur || hauteur <= 0) return null
+  return Math.max(0, mur.longueur * hauteur - Math.max(0, ouvertures))
+}
+
+/** L'enveloppe complète, quand il s'agit vraiment de tout traiter. */
+export function surfaceEnveloppe(b: Batiment): number | null {
   return b.hauteur ? b.perimetre * b.hauteur : null
 }
