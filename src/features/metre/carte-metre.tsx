@@ -127,6 +127,9 @@ export function CarteMetre({
       {cadastre && (
         <TileLayer
           key="cadastre"
+          // Sans rang explicite, la bascule photo/plan recrée le fond APRÈS le
+          // cadastre, qui disparaît alors sous lui.
+          zIndex={400}
           opacity={0.7}
           attribution={ATTRIB_IGN}
           url="https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELLAIRE_EXPRESS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"

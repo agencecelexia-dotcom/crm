@@ -1,5 +1,13 @@
 import type { Encombrement, Mur, Point, Toiture } from './geometrie'
-import { aire, centre, encombrement, longueur, murs, toitureDepuisAltitudes } from './geometrie'
+import { aire, centre, encombrement, estPignon, longueur, murs, toitureDepuisAltitudes } from './geometrie'
+
+/** Le dénivelé à ajouter à un mur pignon, ou null s'il n'en est pas un. */
+export function pignonDe(b: Batiment, mur: Mur): { denivele: number } | null {
+  if (!b.encombrement || !b.toiture || b.toiture.denivele <= 0) return null
+  return estPignon(mur.azimut, b.encombrement.azimutLong)
+    ? { denivele: b.toiture.denivele }
+    : null
+}
 
 /**
  * Le bâti de la BD TOPO, servi gratuitement par l'IGN.
@@ -86,7 +94,10 @@ export async function batimentsAutour(
   // interprète l'ordre des axes autrement et ne renvoie rien.
   url.searchParams.set('BBOX', `${bbox},CRS:84`)
   url.searchParams.set('OUTPUTFORMAT', 'application/json')
-  url.searchParams.set('COUNT', '60')
+  // Soixante ne suffisait pas : en lotissement, la fenêtre en contient jusqu'à
+  // deux cent vingt, et la maison du client pouvait ne PAS être tracée — donc
+  // impossible à toucher. Le service en rend deux cents sans peiner.
+  url.searchParams.set('COUNT', '200')
 
   const rep = await fetch(url, { signal })
   if (!rep.ok) throw new Error(`IGN ${rep.status}`)
@@ -175,9 +186,18 @@ function premierAnneau(g?: Geometrie): Point[] {
  * bâtiment : personne ne vend ça. Un façadier chiffre la façade sud, celle qui
  * est décollée, et il en déduit les fenêtres.
  */
-export function surfaceMur(mur: Mur, hauteur: number | null, ouvertures = 0): number | null {
+export function surfaceMur(
+  mur: Mur,
+  hauteur: number | null,
+  ouvertures = 0,
+  pignon?: { denivele: number } | null,
+): number | null {
   if (!hauteur || hauteur <= 0) return null
-  return Math.max(0, mur.longueur * hauteur - Math.max(0, ouvertures))
+  // La « hauteur » de la BD TOPO est celle de la GOUTTIÈRE, pas du faîtage :
+  // vérifié, elle vaut altitude_minimale_toit − altitude_minimale_sol. Un
+  // pignon monte plus haut, et le triangle sous la charpente s'ajoute.
+  const triangle = pignon && pignon.denivele > 0 ? (mur.longueur * pignon.denivele) / 2 : 0
+  return Math.max(0, mur.longueur * hauteur + triangle - Math.max(0, ouvertures))
 }
 
 /** L'enveloppe complète, quand il s'agit vraiment de tout traiter. */

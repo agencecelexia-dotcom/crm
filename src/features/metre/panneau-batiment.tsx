@@ -4,7 +4,7 @@ import { Check, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { surfaceMur, type Batiment } from './bati-ign'
+import { pignonDe, surfaceMur, type Batiment } from './bati-ign'
 import { formatM, formatM2, surfaceReelle, type Mur } from './geometrie'
 import { useFicheMaison } from './use-fiche-maison'
 
@@ -68,7 +68,10 @@ export function PanneauBatiment({
     ? parseFloat(hauteurSaisie.replace(',', '.'))
     : (batiment.hauteur ?? null)
   const ouvertures = nbOuvertures * OUVERTURE_TYPE
-  const surfaceFacade = mur ? surfaceMur(mur, hauteur, ouvertures) : null
+  // Un pignon monte plus haut que la gouttière : le triangle sous la
+  // charpente s'ajoute à « longueur × hauteur ».
+  const pignon = mur ? pignonDe(batiment, mur) : null
+  const surfaceFacade = mur ? surfaceMur(mur, hauteur, ouvertures, pignon) : null
   const toiture = surfaceReelle(batiment.emprise, pente)
 
   function choisirMur(m: Mur | null) {
@@ -125,22 +128,36 @@ export function PanneauBatiment({
               />
             )}
             {batiment.hauteur != null && (
-              <Chiffre titre="Hauteur au faîtage" valeur={formatM(batiment.hauteur)} />
+              <Chiffre titre="Hauteur à la gouttière" valeur={formatM(batiment.hauteur)} />
             )}
+            <Chiffre titre="Périmètre" valeur={formatM(batiment.perimetre)} />
           </div>
 
           {/* La pente, déduite des altitudes plutôt que devinée — avec son
               incertitude, qui est grande sur une petite maison. */}
-          {penteDeduite && batiment.toiture && (
-            <p className="text-xs text-muted-foreground">
+          {!batiment.toiture ? (
+            // Sans altitudes, l'écran affichait « Toiture à 0 % » et la surface
+            // au sol, en silence. Il faut le dire.
+            <p className="text-xs text-[#B45309]">
+              L’IGN ne donne pas les altitudes de ce toit&nbsp;: la pente est inconnue.
+              Choisissez-la ci-dessous, sans quoi la surface affichée est celle du sol.
+            </p>
+          ) : penteDeduite ? (
+            <p
+              className={cn(
+                'text-xs',
+                batiment.toiture.fiable ? 'text-muted-foreground' : 'text-[#B45309]',
+              )}
+            >
               Pente déduite des altitudes de l’IGN&nbsp;:{' '}
               <strong className="text-foreground">{Math.round(batiment.toiture.pente)} %</strong>
               {batiment.toiture.incertitude > 0 && ` ± ${Math.round(batiment.toiture.incertitude)}`}
-              {batiment.toiture.incertitude > 15
-                ? ' — marge large sur un bâtiment de cette taille, vérifiez.'
-                : '.'}
+              {batiment.toiture.fiable
+                ? '.'
+                : ' — le calcul suppose un toit à deux pans ; sur ce bâtiment il ne tient pas. ' +
+                  'Saisissez la pente.'}
             </p>
-          )}
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Pente&nbsp;:</span>
@@ -206,12 +223,17 @@ export function PanneauBatiment({
                   valeur={surfaceFacade != null ? formatM2(surfaceFacade) : '—'}
                   fort
                 />
-                <Chiffre titre="Longueur" valeur={formatM(mur.longueur)} />
+                <Chiffre
+                  titre={pignon ? 'Longueur (pignon)' : 'Longueur'}
+                  valeur={formatM(mur.longueur)}
+                />
               </div>
 
               <div className="flex items-end gap-2">
                 <label className="flex-1 space-y-1">
-                  <span className="text-xs text-muted-foreground">Hauteur</span>
+                  <span className="text-xs text-muted-foreground">
+                    Hauteur {pignon ? 'à la gouttière' : ''}
+                  </span>
                   <div className="relative">
                     <Input
                       className="h-10 pr-8"
@@ -332,8 +354,14 @@ function FicheMaison({
   if (b?.nb_niveau) lignes.push(['Niveaux', String(b.nb_niveau)])
   if (d?.surface_habitable_logement)
     lignes.push(['Surface habitable', `${d.surface_habitable_logement} m²`])
-  if (b?.mat_mur_txt) lignes.push(['Murs', b.mat_mur_txt])
-  if (b?.mat_toit_txt) lignes.push(['Toiture', b.mat_toit_txt])
+  // La BDNB écrit « INDETERMINE » quand elle ne sait pas : ce n'est pas une
+  // information, c'est une absence.
+  const materiau = (v?: string | null) =>
+    v && !/^ind[eé]termin/i.test(v) && !/^indiff/i.test(v) ? v : null
+  const murs = materiau(b?.mat_mur_txt)
+  const toit = materiau(b?.mat_toit_txt)
+  if (murs) lignes.push(['Murs', murs])
+  if (toit) lignes.push(['Toiture', toit])
   if (d?.qualite_isolation_murs) lignes.push(['Isolation des murs', d.qualite_isolation_murs])
   if (d?.isolation_toiture != null)
     lignes.push(['Toiture isolée', d.isolation_toiture ? 'oui' : 'non'])

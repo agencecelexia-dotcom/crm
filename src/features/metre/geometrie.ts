@@ -260,6 +260,15 @@ export function encombrement(contour: Point[]): Encombrement | null {
 export interface Toiture {
   /** Pente en pourcentage. */
   pente: number
+  /**
+   * La pente est-elle exploitable ?
+   *
+   * La formule suppose un toit à DEUX PANS dont le faîtage suit le grand axe.
+   * Sur un bâtiment large, un toit-terrasse à acrotère ou un volume composé,
+   * elle n'a plus de sens : un audit a relevé 88 % sur un commerce de 818 m²
+   * manifestement plat. On le dit plutôt que de laisser croire à une mesure.
+   */
+  fiable: boolean
   /** Dénivelé du toit, gouttière au faîtage, en mètres. */
   denivele: number
   /** Incertitude sur la pente, en points de pourcentage. */
@@ -299,7 +308,10 @@ export function toitureDepuisAltitudes(p: {
   if (denivele < 0.2) {
     // Toit-terrasse ou faible dénivelé : la pente n'a pas de sens, la surface
     // est celle de l'emprise.
-    return { pente: 0, denivele: Math.max(denivele, 0), incertitude: 0, surface: emprise }
+    return {
+      pente: 0, denivele: Math.max(denivele, 0), incertitude: 0,
+      surface: emprise, fiable: true,
+    }
   }
 
   const demiLargeur = largeur / 2
@@ -312,6 +324,25 @@ export function toitureDepuisAltitudes(p: {
     pente,
     denivele,
     incertitude,
+    // Trois motifs de défiance, chacun constaté : un bâtiment large n'a
+    // pratiquement jamais un seul faîtage central ; une marge supérieure à
+    // vingt-cinq points ne dit plus rien ; et au-delà de 120 % (50°) on sort
+    // de ce qui se construit en France hors cas particuliers.
+    fiable: largeur <= 20 && incertitude <= 25 && pente <= 120,
     surface: surfaceReelle(emprise, pente),
   }
+}
+
+/**
+ * Ce mur est-il un pignon ?
+ *
+ * Sur un toit à deux pans, le faîtage suit le grand axe du bâtiment. Les murs
+ * qui le referment — les pignons — regardent donc dans la direction de cet
+ * axe. Leur surface comporte en plus le triangle sous la charpente, que
+ * « longueur × hauteur » oublie.
+ */
+export function estPignon(azimutMur: number, azimutLong: number): boolean {
+  const ecart = Math.abs(((azimutMur - azimutLong + 540) % 360) - 180)
+  // À moins de trente degrés de l'axe du faîtage, ou de son opposé.
+  return Math.min(ecart, 180 - ecart) > 150 || Math.min(ecart, 180 - ecart) < 30
 }

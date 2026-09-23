@@ -209,3 +209,54 @@ describe('toitureDepuisAltitudes — la pente qu’on ne voyait pas', () => {
     expect(toitureDepuisAltitudes({ emprise: 96, largeur: 8, toitMin: null, toitMax: 444 })).toBeNull()
   })
 })
+
+import { estPignon } from '../../src/features/metre/geometrie'
+
+describe('estPignon — le triangle que « longueur × hauteur » oublie', () => {
+  it('reconnaît un mur qui referme le faîtage', () => {
+    // Faîtage est-ouest (azimut 90) : les pignons regardent est et ouest.
+    expect(estPignon(90, 90)).toBe(true)
+    expect(estPignon(270, 90)).toBe(true)
+  })
+
+  it('écarte les longs pans, perpendiculaires au faîtage', () => {
+    expect(estPignon(0, 90)).toBe(false)
+    expect(estPignon(180, 90)).toBe(false)
+  })
+
+  it('tolère une trentaine de degrés d’écart', () => {
+    expect(estPignon(110, 90)).toBe(true)
+    expect(estPignon(135, 90)).toBe(false)
+  })
+})
+
+describe('toitureDepuisAltitudes — dire quand le calcul ne vaut rien', () => {
+  it('juge fiable une petite maison à marge serrée', () => {
+    const t = toitureDepuisAltitudes({ emprise: 200, largeur: 20, toitMin: 442, toitMax: 445 })!
+    expect(t.fiable).toBe(true)
+  })
+
+  it('refuse de se prononcer sur un bâtiment large', () => {
+    // Un hangar de 818 m² recevait 88 % : la formule suppose deux pans et un
+    // faîtage central, ce qu'un bâtiment de cette taille n'a presque jamais.
+    const t = toitureDepuisAltitudes({ emprise: 818, largeur: 28, toitMin: 100, toitMax: 112 })!
+    expect(t.fiable).toBe(false)
+  })
+
+  it('refuse une marge supérieure à vingt-cinq points', () => {
+    const t = toitureDepuisAltitudes({ emprise: 60, largeur: 7, toitMin: 100, toitMax: 102 })!
+    expect(t.incertitude).toBeGreaterThan(25)
+    expect(t.fiable).toBe(false)
+  })
+
+  it('refuse une pente au-delà de 120 %', () => {
+    const t = toitureDepuisAltitudes({ emprise: 80, largeur: 8, toitMin: 100, toitMax: 106 })!
+    expect(t.pente).toBeCloseTo(150, 0)
+    expect(t.fiable).toBe(false)
+  })
+
+  it('tient un toit plat pour fiable', () => {
+    expect(toitureDepuisAltitudes({ emprise: 500, largeur: 30, toitMin: 100, toitMax: 100.1 })!.fiable)
+      .toBe(true)
+  })
+})
