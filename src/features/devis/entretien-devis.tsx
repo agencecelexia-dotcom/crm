@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
   useEntretienDevis,
+  usePrixArtisan,
   type LigneEntretien,
   type QuestionEntretien,
 } from './use-devis'
@@ -50,6 +51,11 @@ export function EntretienDevis({
   onAnnuler: () => void
 }) {
   const entretien = useEntretienDevis(token)
+  // La marge visée recalcule un prix de vente À PARTIR D'UN DÉBOURSÉ. Sans
+  // aucun déboursé en bibliothèque, le champ ne peut rien faire : l'afficher
+  // laisse croire à un réglage qui agit.
+  const { data: bibliotheque } = usePrixArtisan(token)
+  const margeUtile = (bibliotheque ?? []).some((p) => p.cout_unitaire != null)
   const [etape, setEtape] = useState<Etape>('description')
   const [description, setDescription] = useState(descriptionInitiale ?? '')
   const [questions, setQuestions] = useState<QuestionEntretien[]>([])
@@ -233,6 +239,7 @@ export function EntretienDevis({
 
             {/* La marge visée : elle ne s'applique qu'aux lignes dont le
                 déboursé est connu — sans coût, il n'y a pas de marge à viser. */}
+            {margeUtile && (
             <div className="space-y-1.5 rounded-xl border border-border bg-muted/30 p-3">
               <Label className="text-sm font-medium">Marge visée (facultatif)</Label>
               <p className="text-xs text-muted-foreground">
@@ -278,19 +285,36 @@ export function EntretienDevis({
                 </p>
               )}
             </div>
+            )}
           </>
         )}
 
         {etape === 'resultat' && (
           <>
+{/* Un devis entièrement sans prix n'est pas une panne : c'est ce que
+                donne un artisan dont la bibliothèque est encore vide, les
+                tarifs des autres entreprises lui étant fermés. Le dire évite
+                qu'il croie l'outil cassé. */}
             {aChiffrer > 0 && (
               <div className="flex items-start gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-3">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0 text-[#B45309]" />
-                <p className="text-xs text-[#B45309]">
-                  {aChiffrer} ligne{aChiffrer > 1 ? 's' : ''} sans prix : aucun tarif connu pour
-                  {aChiffrer > 1 ? ' ces prestations' : ' cette prestation'}. À vous de les
-                  chiffrer — rien n’a été inventé.
-                </p>
+                <div className="text-xs text-[#B45309]">
+                  {aChiffrer === lignes.length ? (
+                    <>
+                      <p className="font-medium">Aucun de vos tarifs ne couvre encore ce chantier.</p>
+                      <p className="mt-1">
+                        Les lignes et les quantités sont prêtes : il ne reste qu’à poser vos prix.
+                        Une fois ce devis enregistré, ils reviendront tout seuls sur les suivants.
+                      </p>
+                    </>
+                  ) : (
+                    <p>
+                      {aChiffrer} ligne{aChiffrer > 1 ? 's' : ''} sans prix : aucun tarif connu
+                      pour {aChiffrer > 1 ? 'ces prestations' : 'cette prestation'}. À vous de
+                      {aChiffrer > 1 ? ' les' : ' la'} chiffrer — rien n’a été inventé.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -361,7 +385,11 @@ export function EntretienDevis({
           </Button>
         )}
         {etape === 'questions' && (
-          <Button className="w-full" onClick={composer} disabled={entretien.isPending}>
+          <Button
+            className="w-full"
+            onClick={composer}
+            disabled={entretien.isPending || margeInvalide}
+          >
             {entretien.isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
@@ -370,7 +398,7 @@ export function EntretienDevis({
             Composer le devis
           </Button>
         )}
-        {etape === 'resultat' && (
+        {etape === 'resultat' && lignes.length > 0 && (
           <Button
             className="w-full"
             onClick={() => {

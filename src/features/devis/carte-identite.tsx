@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { Building2, Check, ImageUp, Loader2, RotateCcw, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -404,10 +404,16 @@ function Champ({
   placeholder?: string
   large?: boolean
 }) {
+  // Sans lien entre l’étiquette et le champ, un lecteur d’écran annonce
+  // « champ de saisie » sans dire lequel.
+  const id = useId()
   return (
     <div className={`space-y-1.5 ${large ? 'col-span-2' : ''}`}>
-      <Label className="text-xs">{label}</Label>
+      <Label className="text-xs" htmlFor={id}>
+        {label}
+      </Label>
       <Input
+        id={id}
         className="h-10"
         value={value}
         placeholder={placeholder}
