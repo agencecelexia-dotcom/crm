@@ -186,3 +186,23 @@ export function parseContrat(contenu: string): BlocContrat[] {
   if (sigG.length) blocs.push({ type: 'signature', gauche: sigG, droite: sigD })
   return blocs
 }
+
+/**
+ * Le message à montrer quand la signature est refusée par le serveur.
+ *
+ * `signer_contrat` exige un nom et une vraie image de signature, refuse un
+ * artisan écarté et un contrat déjà signé (migration 0162). « Signature
+ * impossible » laissait l'artisan deviner lequel.
+ */
+export function raisonRefusSignature(r: { ok?: boolean; error?: string } | null): string {
+  switch (r?.error) {
+    case 'nom_requis':
+      return 'Indiquez votre nom et votre prénom.'
+    case 'signature_requise':
+      return 'Signez dans le cadre avant de valider.'
+    case 'artisan_ecarte':
+      return 'Ce contrat n’est plus disponible. Contactez Celexia.'
+    default:
+      return 'Ce contrat est déjà signé, ou le lien n’est plus valable.'
+  }
+}

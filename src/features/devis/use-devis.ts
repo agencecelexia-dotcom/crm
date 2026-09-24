@@ -388,6 +388,8 @@ export interface ReponseQuestions {
 
 export interface LigneEntretien extends LigneModele {
   source: 'bibliotheque' | 'reference' | 'marge' | 'a_chiffrer'
+  /** Nombre de devis derrière un prix de référence (0163). */
+  observations?: number | null
 }
 
 export interface ReponseLignes {

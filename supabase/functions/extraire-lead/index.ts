@@ -171,12 +171,18 @@ Puis, seulement si l'information existe, ces blocs séparés par une ligne vide 
 Style : phrases courtes, factuelles, pas d'adjectif commercial, pas de "le client souhaite" répété.
 N'invente aucune information absente de la transcription.`
 
+import { jetonDe, membreActif } from '../_membre.ts'
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin')
   const CORS = cors(origin)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
+    // Payante (Claude) : réservée aux membres actifs de l'agence.
+    if (!(await membreActif(jetonDe(req)))) {
+      return json({ ok: false, error: 'non_autorise' }, 401, CORS)
+    }
     const { transcription, mode = 'extraction', donnees } = await req.json()
 
     if (typeof transcription !== 'string' || transcription.trim().length < 10) {

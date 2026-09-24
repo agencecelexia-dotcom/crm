@@ -75,7 +75,7 @@ export function useEnregistrerMetre(token: string | undefined) {
       ouvertures_m2?: number | null
       azimut?: number | null
       pente_source?: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
-      hauteur_source?: 'bati' | 'saisie' | null
+      hauteur_source?: 'bati' | 'saisie' | 'lidar' | null
       /** Débord de toiture, en mètres. Saisi, pas mesuré : le LiDAR ne le voit pas. */
       debord_m?: number | null
       /** Part du toit retenue, dans ]0,1] — un seul versant plutôt que l'ensemble. */

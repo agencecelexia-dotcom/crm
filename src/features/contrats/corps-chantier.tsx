@@ -114,6 +114,8 @@ export function CorpsChantier({
                   onChange={onChange}
                   statutActuel={projet.statut}
                   rappelLe={projet.rappel_le}
+                  montantDevis={projet.montant_devis}
+                  devisDepose={!!projet.devis_url}
                 />
               </div>
             </div>

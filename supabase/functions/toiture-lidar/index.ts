@@ -242,6 +242,136 @@ function calculer(
   }
 }
 
+
+// ---------- Les murs, un par un ----------
+//
+// POURQUOI ON NE PREND PLUS LA HAUTEUR DE LA BD TOPO
+//
+// Elle a été comparée au LiDAR sur quinze maisons : l'écart atteint +3,6 à
+// +4,8 m sur un tiers d'entre elles (11,7 m annoncés pour une gouttière à
+// 6,9 m ; 6,7 m pour un toit dont le faîtage culmine à 6,0 m). Multipliée par
+// la longueur, elle donnait des façades jusqu'à DEUX FOIS trop grandes. Et une
+// hauteur unique ne dit ni le pignon, ni le terrain en pente, ni le côté bas.
+//
+// LA MESURE
+//
+// Le long de chaque mur, tous les 25 cm, on lit la hauteur du toit au-dessus
+// du sol (MNH) juste à l'intérieur du contour. La surface du mur est
+// l'intégrale de ce profil : un pignon ressort de lui-même en triangle, une
+// maison sur un terrain en pente a un côté haut et un côté bas.
+//
+// Deux corrections :
+// 1. On lit à 75 cm et à 125 cm à l'intérieur, pas sur la ligne du mur : le
+//    bord du toit est flou d'un pixel. Sur un mur sous gouttière le toit
+//    MONTE vers l'intérieur ; on prolonge la droite jusqu'à la ligne du mur,
+//    sans quoi un toit à 100 % ajouterait 75 cm à la façade. Sur un pignon la
+//    pente est parallèle au mur, les deux lectures sont égales et la
+//    correction s'annule d'elle-même.
+// 2. On lit aussi à 125 cm À L'EXTÉRIEUR. Si c'est haut dehors comme dedans,
+//    le mur touche un autre volume — maison mitoyenne, garage accolé — et ce
+//    n'est probablement pas une façade à traiter. On le dit, sans décider.
+
+interface MurMesure {
+  /** Indice de l'arête dans le contour reçu : du sommet i au sommet i+1. */
+  i: number
+  longueur: number
+  /** Surface du mur, en m², ouvertures non déduites. */
+  surface: number
+  hauteur_moyenne: number
+  hauteur_min: number
+  hauteur_max: number
+  /** Part des points du mur où le toit a été trouvé. Sous 0,8, ne pas chiffrer. */
+  valide: number
+  /** Un autre volume touche ce mur sur la majeure partie de sa longueur. */
+  accole: boolean
+}
+
+function mesurerMurs(
+  mnh: Grille, poly: [number, number][], x0: number, y0: number, pas: number,
+): MurMesure[] {
+  const { w, h, px } = mnh
+  // Lecture bilinéaire sur les centres des pixels ; la ligne 0 est au nord.
+  const lire = (x: number, y: number): number | null => {
+    const fx = (x - x0) / pas - 0.5
+    const fy = (y0 + h * pas - y) / pas - 0.5
+    const c0 = Math.floor(fx), r0 = Math.floor(fy)
+    const tx = fx - c0, ty = fy - r0
+    let tot = 0, poids = 0
+    for (const [dr, dc, pw] of [[0, 0, (1 - tx) * (1 - ty)], [0, 1, tx * (1 - ty)], [1, 0, (1 - tx) * ty], [1, 1, tx * ty]]) {
+      const r = r0 + dr, c = c0 + dc
+      if (r >= 0 && r < h && c >= 0 && c < w && px[r * w + c] > -9998) { tot += px[r * w + c] * pw; poids += pw }
+    }
+    return poids > 0 ? tot / poids : null
+  }
+
+  let signe = 0
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length]
+    signe += a[0] * b[1] - b[0] * a[1]
+  }
+
+  const sortie: MurMesure[] = []
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length]
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (L < 0.3) continue
+    const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L
+    // Normale INTÉRIEURE : à gauche du parcours si le contour tourne dans le sens trigonométrique.
+    const nx = signe > 0 ? -uy : uy
+    const ny = signe > 0 ? ux : -ux
+
+    const k = Math.max(2, Math.round(L / 0.25))
+    let surface = 0, n = 0, dehors = 0, somme = 0
+    let hmin = Infinity, hmax = 0
+    for (let j = 0; j < k; j++) {
+      const t = (j + 0.5) / k
+      const mx = a[0] + (b[0] - a[0]) * t, my = a[1] + (b[1] - a[1]) * t
+      const h1 = lire(mx + nx * 0.75, my + ny * 0.75)
+      const h2 = lire(mx + nx * 1.25, my + ny * 1.25)
+      const ext = lire(mx - nx * 1.25, my - ny * 1.25)
+      if (ext != null && ext > 2.5) dehors++
+      if (h1 == null || h1 <= 1) continue
+      // Le toit monte vers l'intérieur : on ramène la lecture à la ligne du
+      // mur. Correction bornée à un mètre, pour qu'une lucarne ou un volume
+      // plus haut en retrait ne fasse pas plonger la façade.
+      const montee = h2 != null && h2 > h1 ? Math.min(1, ((h2 - h1) / 0.5) * 0.75) : 0
+      const h0 = Math.max(0, h1 - montee)
+      surface += h0 * (L / k)
+      somme += h0
+      n++
+      if (h0 < hmin) hmin = h0
+      if (h0 > hmax) hmax = h0
+    }
+    sortie.push({
+      i,
+      longueur: Math.round(L * 100) / 100,
+      surface: Math.round(surface * 10) / 10,
+      hauteur_moyenne: n ? Math.round((somme / n) * 10) / 10 : 0,
+      hauteur_min: n ? Math.round(hmin * 10) / 10 : 0,
+      hauteur_max: n ? Math.round(hmax * 10) / 10 : 0,
+      valide: Math.round((n / k) * 100) / 100,
+      accole: dehors / k >= 0.6,
+    })
+  }
+  return sortie
+}
+
+/** Hauteurs du bâtiment : gouttière (bas du toit) et faîtage (haut), lues sur les pixels de toit. */
+function hauteursToit(mnh: Grille, poly: [number, number][], x0: number, y0: number, pas: number) {
+  const { w, h, px } = mnh
+  const v: number[] = []
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    const val = px[r * w + c]
+    if (val > 1.5 && dedans(x0 + (c + 0.5) * pas, y0 + (h - r - 0.5) * pas, poly)) v.push(val)
+  }
+  if (v.length < 25) return null
+  v.sort((x, y) => x - y)
+  return {
+    gouttiere: Math.round(quantile(v, 0.08) * 10) / 10,
+    faitage: Math.round(quantile(v, 0.98) * 10) / 10,
+  }
+}
+
 const LIDAR = 'IGNF_LIDAR-HD_{C}_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93'
 
 Deno.serve(async (req) => {
@@ -262,10 +392,12 @@ Deno.serve(async (req) => {
     const cle = typeof cleabs === 'string' && cleabs.trim() ? cleabs.trim() : null
     if (cle && !rafraichir) {
       const c = await rpc('toiture_by_token', { p_token: token, p_cleabs: cle })
-      const v = c as { trouvee?: boolean; couvert?: boolean; motif?: string | null }
+      const v = c as { trouvee?: boolean; couvert?: boolean; motif?: string | null; version?: number }
       // Le cache garde `motif` mais pas `fiable` : c'est la même chose dite
       // autrement, et une colonne de moins à tenir cohérente.
-      if (v?.trouvee) {
+      // Une mesure antérieure aux murs (version 1) est refaite : la servir
+      // laisserait l'onglet Façades sur la hauteur de la BD TOPO.
+      if (v?.trouvee && (v.version ?? 1) >= 2) {
         return json({ ok: true, cache: true, ...(c as object), fiable: !!v.couvert && !v.motif }, 200, CORS)
       }
     }
@@ -296,6 +428,8 @@ Deno.serve(async (req) => {
     // seconde de vérifier qu'il a bien touché la maison. Les confondre, c'est
     // l'envoyer chercher au mauvais endroit.
     let aucuneDonnee = false
+    let murs: MurMesure[] | null = null
+    let hauteurs: { gouttiere: number; faitage: number } | null = null
 
     // ---- 1. Le LiDAR HD, quand il couvre : cinquante centimètres. ----
     {
@@ -310,6 +444,10 @@ Deno.serve(async (req) => {
       if (invalides <= W * H * 0.5) {
         mesure = calculer(mns, mnh.px, poly, x0, y0, pas, 25)
         source = 'LiDAR HD de l’IGN, grille de 50 cm'
+        // Les murs ne se mesurent qu'au LiDAR : à un mètre par pixel, la
+        // photogrammétrie ne sépare pas le bord du toit du sol.
+        murs = mesurerMurs(mnh, poly, x0, y0, pas)
+        hauteurs = hauteursToit(mnh, poly, x0, y0, pas)
       }
     }
 
@@ -380,11 +518,16 @@ Deno.serve(async (req) => {
       versants: mesure.versants,
       source,
       mesure_le: new Date().toISOString(),
+      murs,
+      hauteur_gouttiere: hauteurs?.gouttiere ?? null,
+      hauteur_faitage: hauteurs?.faitage ?? null,
     }
     if (cle) await rpc('enregistrer_toiture', {
       p_cleabs: cle, p_couvert: true, p_motif: sortie.motif,
       p_pente: sortie.pente, p_incertitude: sortie.incertitude,
       p_pixels: sortie.pixels, p_versants: sortie.versants, p_source: source,
+      p_murs: murs, p_hauteur_gouttiere: sortie.hauteur_gouttiere,
+      p_hauteur_faitage: sortie.hauteur_faitage, p_version: 2,
     }).catch(() => {})
 
     return json(sortie, 200, CORS)

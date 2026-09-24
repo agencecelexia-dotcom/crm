@@ -21,7 +21,12 @@ import {
 import { formatDate } from '@/lib/format'
 import { N8N_WEBHOOK_URL } from '@/lib/constants'
 import type { Artisan } from '@/types/database'
-import { useRegenererTokenArtisan, useSetContratExterne } from '@/features/artisans/hooks/use-artisans'
+import {
+  useJetonArtisan,
+  useRegenererTokenArtisan,
+  useSetContratExterne,
+} from '@/features/artisans/hooks/use-artisans'
+import { useAuth } from '@/lib/auth/use-auth'
 import { useContratArtisan } from './use-contrats'
 import { ContratGenerateur } from './contrat-generateur'
 import { telechargerContratPdf } from './contrat-pdf'
@@ -40,7 +45,11 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
     : ''
 
   // Lien UNIQUE de l'artisan : contrat + tous ses chantiers (le lien à envoyer).
-  const lienEspace = `${window.location.origin}/artisan/${artisan.token}`
+  // Le jeton n'est lisible que par le fondateur (migration 0159) : un
+  // commercial ne voit pas le lien, qui ouvre l'espace entier de l'artisan.
+  const { estFondateur } = useAuth()
+  const { data: jeton } = useJetonArtisan(artisan.id, estFondateur)
+  const lienEspace = jeton ? `${window.location.origin}/artisan/${jeton}` : ''
 
   function copier() {
     navigator.clipboard.writeText(lien).then(
@@ -105,7 +114,9 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
           ))}
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Lien unique de l'artisan — à lui envoyer (contrat + tous ses chantiers) */}
+        {/* Lien unique de l'artisan — à lui envoyer (contrat + tous ses chantiers).
+            Fondateur seulement : ce lien ouvre l'espace sans mot de passe. */}
+        {lienEspace && (
         <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
           <p className="text-sm font-medium">Lien de l'artisan (à lui envoyer)</p>
           <p className="text-xs text-muted-foreground">
@@ -167,6 +178,7 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
             </AlertDialogContent>
           </AlertDialog>
         </div>
+        )}
 
         {/* Contrat signé hors application (email) : by-pass de la signature dans l'espace */}
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">

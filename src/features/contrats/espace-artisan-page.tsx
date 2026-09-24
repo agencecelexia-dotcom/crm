@@ -12,6 +12,8 @@ import {
   Search,
   Rows3,
   Columns3,
+  RefreshCw,
+  WifiOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -28,7 +30,7 @@ import { supabase } from '@/lib/supabase/client'
 import { STATUTS_ORDRE, statutInfo } from '@/lib/constants'
 import { formatDate } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
-import { finaliserContenu } from './contrat-modele'
+import { finaliserContenu, raisonRefusSignature } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
 import { ChantiersPerdus } from './chantiers-perdus'
 import { PiedDePageArtisan } from './pied-de-page-artisan'
@@ -101,7 +103,35 @@ export function EspaceArtisanPage() {
         </div>
       </div>
     )
-  if (isError || !data)
+  // UNE COUPURE RÉSEAU N'EST PAS UN LIEN INVALIDE.
+  //
+  // L'écran « lien invalide ou expiré » s'affichait pour toute erreur : un
+  // artisan qui revenait sur l'onglet avec une 4G qui décroche voyait tout son
+  // espace remplacé par ce message — et perdait la note qu'il était en train
+  // d'écrire. Hors ligne au premier chargement, il croyait son lien mort et
+  // appelait l'agence. On distingue désormais :
+  //  - une erreur AVANT toute donnée : problème de connexion, bouton Réessayer ;
+  //  - une erreur APRÈS chargement : on garde l'écran, avec un bandeau ;
+  //  - une réponse vide du serveur : là seulement, le lien est invalide.
+  if (!data && isError)
+    return (
+      <Centre>
+        <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-card p-8 shadow-card">
+          <span className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+            <WifiOff className="size-6" />
+          </span>
+          <p className="font-display text-lg font-medium">Connexion impossible</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Votre espace n’a pas pu se charger. Vérifiez votre connexion, puis réessayez.
+          </p>
+          <Button className="mt-4 h-11 w-full" onClick={() => void refetch()}>
+            <RefreshCw className="size-4" />
+            Réessayer
+          </Button>
+        </div>
+      </Centre>
+    )
+  if (!data)
     return (
       <Centre>
         <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-card p-8 shadow-card">
@@ -109,7 +139,9 @@ export function EspaceArtisanPage() {
             <FileText className="size-6" />
           </span>
           <p className="font-display text-lg font-medium">Espace introuvable</p>
-          <p className="mt-1 text-sm text-muted-foreground">Le lien est invalide ou expiré.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ce lien n’est plus valable. Demandez à Celexia de vous renvoyer celui de votre espace.
+          </p>
         </div>
       </Centre>
     )
@@ -146,6 +178,18 @@ export function EspaceArtisanPage() {
       </div>
 
       <div className="mx-auto max-w-5xl px-4 py-7 sm:px-6 sm:py-12">
+        {isError && (
+          <div
+            role="status"
+            className="mx-auto mb-4 flex max-w-2xl items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          >
+            <WifiOff className="size-4 shrink-0" />
+            <span className="flex-1">Connexion perdue : les informations affichées peuvent dater.</span>
+            <Button size="sm" variant="outline" className="h-9" onClick={() => void refetch()}>
+              Réessayer
+            </Button>
+          </div>
+        )}
       <header className="mb-8 sm:mb-12">
         <div className="mb-6 flex justify-center">
           <BrandLogo className="h-10 mix-blend-multiply sm:h-11" />
@@ -696,7 +740,8 @@ function SignatureContrat({
         p_signature: signature,
       })
       const ok = (data as { ok?: boolean } | null)?.ok
-      if (error || !ok) throw new Error('Signature impossible (contrat déjà signé ?)')
+      if (error) throw new Error('Connexion impossible : réessayez dans un instant.')
+      if (!ok) throw new Error(raisonRefusSignature(data as { ok?: boolean; error?: string } | null))
       toast.success('Contrat signé. Merci !')
       onSigne()
     } catch (e) {

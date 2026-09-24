@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
-import type { Point } from './geometrie'
+import type { Facade, Point } from './geometrie'
 
 /**
  * La pente d'un toit, mesurée dans les données d'altitude de l'IGN.
@@ -42,6 +42,79 @@ export interface Toiture {
   versants?: { orientation: string; part: number }[]
   source?: string | null
   mesure_le?: string | null
+  /** Un profil par arête du contour — seulement quand le LiDAR couvre. */
+  murs?: MurMesure[] | null
+  /** Bas du toit, au-dessus du sol : le haut des murs sous gouttière. */
+  hauteur_gouttiere?: number | null
+  /** Point le plus haut du toit, au-dessus du sol. */
+  hauteur_faitage?: number | null
+}
+
+/** Ce que le relevé dit d'une arête du contour. */
+export interface MurMesure {
+  i: number
+  longueur: number
+  /** Surface brute du mur, ouvertures non déduites. */
+  surface: number
+  hauteur_moyenne: number
+  hauteur_min: number
+  hauteur_max: number
+  /** Part des points du mur où le toit a été trouvé. */
+  valide: number
+  /** Un autre volume touche ce mur sur la majeure partie de sa longueur. */
+  accole: boolean
+}
+
+/** Une façade mesurée : la somme de ses pans, et ce qu'on peut en dire. */
+export interface FacadeMesuree {
+  /** Surface brute, ouvertures non déduites. */
+  surface: number
+  hauteurMoyenne: number
+  hauteurMin: number
+  hauteurMax: number
+  /** Longueur de mur accolée à un autre volume, en mètres. */
+  longueurAccolee: number
+}
+
+/**
+ * La façade telle que le LiDAR l'a relevée, ou null si on ne peut pas s'y fier.
+ *
+ * Une façade est faite de pans, et un pan d'une ou plusieurs arêtes du
+ * contour ; le relevé rend un profil par arête. On additionne.
+ *
+ * ON REFUSE PLUTÔT QUE DE COMPLÉTER. Si une seule arête manque, ou si le toit
+ * n'a été trouvé que sur une partie du mur (moins de 80 % de ses points), la
+ * surface serait sous-estimée sans que rien ne le montre. On renvoie null, et
+ * l'écran demande la hauteur.
+ */
+export function mesureFacade(f: Facade, t: Toiture | null | undefined): FacadeMesuree | null {
+  const parArete = new Map((t?.murs ?? []).map((m) => [m.i, m]))
+  if (parArete.size === 0) return null
+
+  const releves: MurMesure[] = []
+  for (const pan of f.pans) {
+    for (const i of pan.aretes) {
+      const m = parArete.get(i)
+      // Le relevé et \`murs()\` écartent tous deux les arêtes de moins de 30 cm :
+      // une arête absente ici est une anomalie, pas un détail à ignorer.
+      if (!m) return null
+      releves.push(m)
+    }
+  }
+  if (releves.length === 0) return null
+
+  const longueur = releves.reduce((s, m) => s + m.longueur, 0)
+  const valide = releves.reduce((s, m) => s + m.valide * m.longueur, 0) / longueur
+  if (valide < 0.8) return null
+
+  const surface = releves.reduce((s, m) => s + m.surface, 0)
+  return {
+    surface,
+    hauteurMoyenne: surface / longueur,
+    hauteurMin: Math.min(...releves.map((m) => m.hauteur_min)),
+    hauteurMax: Math.max(...releves.map((m) => m.hauteur_max)),
+    longueurAccolee: releves.filter((m) => m.accole).reduce((s, m) => s + m.longueur, 0),
+  }
 }
 
 export function useToiture(

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { facades, type Point } from '@/features/metre/geometrie'
 import {
+  mesureFacade,
   partsNormalisees,
   penteRetenue,
   versantsLisibles,
@@ -131,5 +133,52 @@ describe('partsNormalisees — les versants qu’on ose proposer', () => {
     expect(partsNormalisees(null)).toEqual([])
     expect(partsNormalisees(undefined)).toEqual([])
     expect(partsNormalisees(mesure({ versants: [] }))).toEqual([])
+  })
+})
+
+describe('mesureFacade — la hauteur mesurée mur par mur', () => {
+  // Un rectangle de 20 m (est-ouest) sur 10 m (nord-sud), sens trigonométrique.
+  const lat = 46, lon = 5
+  const dLat = 10 / 111320
+  const dLon = 20 / (111320 * Math.cos((lat * Math.PI) / 180))
+  const contour: Point[] = [
+    [lon, lat], [lon + dLon, lat], [lon + dLon, lat + dLat], [lon, lat + dLat],
+  ]
+  const fac = facades(contour)
+  const releve = (surfaces: number[], valide = 1): Toiture =>
+    mesure({
+      murs: surfaces.map((s, i) => ({
+        i, longueur: i % 2 ? 10 : 20, surface: s, hauteur_moyenne: s / (i % 2 ? 10 : 20),
+        hauteur_min: 5, hauteur_max: 6, valide, accole: false,
+      })),
+    })
+
+  // Arête 0 : sud (20 m), 1 : est (10 m), 2 : nord (20 m), 3 : ouest (10 m).
+  it('rattache chaque façade à sa propre arête', () => {
+    const t = releve([120, 80, 110, 55])
+    const sud = fac.find((f) => f.orientation === 'sud')!
+    const est = fac.find((f) => f.orientation === 'est')!
+    expect(sud.pans.flatMap((p) => p.aretes)).toEqual([0])
+    expect(mesureFacade(sud, t)!.surface).toBe(120)
+    expect(mesureFacade(est, t)!.surface).toBe(80)
+    expect(mesureFacade(est, t)!.hauteurMoyenne).toBeCloseTo(8, 6)
+  })
+
+  it('refuse un relevé trouvé sur moins de 80 % du mur', () => {
+    const sud = fac.find((f) => f.orientation === 'sud')!
+    expect(mesureFacade(sud, releve([120, 80, 110, 55], 0.6))).toBeNull()
+  })
+
+  it('refuse plutôt que de compléter quand une arête manque', () => {
+    const sud = fac.find((f) => f.orientation === 'sud')!
+    const t = mesure({ murs: [] })
+    expect(mesureFacade(sud, t)).toBeNull()
+    const sansSud = releve([120, 80, 110, 55])
+    sansSud.murs = sansSud.murs!.filter((m) => m.i !== 0)
+    expect(mesureFacade(sud, sansSud)).toBeNull()
+  })
+
+  it('sans relevé LiDAR, rien', () => {
+    expect(mesureFacade(fac[0], null)).toBeNull()
   })
 })

@@ -11,6 +11,17 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { formatEuros } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { SUIVI_STATUTS } from '@/lib/constants'
@@ -29,6 +40,8 @@ export function SuiviArtisan({
   onChange,
   statutActuel,
   rappelLe,
+  montantDevis,
+  devisDepose,
 }: {
   token: string
   suivis: Suivi[]
@@ -37,6 +50,9 @@ export function SuiviArtisan({
   statutActuel?: string
   /** Rappel déjà posé, s'il y en a un. Co-statut : n'affecte pas l'étape. */
   rappelLe?: string | null
+  /** Montant du devis déposé : on le nomme avant de le faire disparaître. */
+  montantDevis?: number | null
+  devisDepose?: boolean
 }) {
   const [note, setNote] = useState('')
   const [envoi, setEnvoi] = useState(false)
@@ -59,6 +75,60 @@ export function SuiviArtisan({
   // alors que le chantier est redescendu à « devis envoyé ».
   const rangCourant = PARCOURS.indexOf(statutActuel as (typeof PARCOURS)[number])
   const rdvInfo = [...suivis].reverse().find((s) => s.statut === 'rdv_pris' && s.message)?.message
+
+  // UN APPUI NE DOIT PAS SUFFIRE À CHANGER L'ARGENT.
+  //
+  // Les étapes sont de grands boutons empilés, sur un téléphone, sur un
+  // chantier. L'audit a montré qu'un appui de travers :
+  //  - sur « Projet terminé » ou « Devis signé » déclarait l'affaire gagnée et
+  //    créait une commission due à Celexia (28 190 € signés d'un seul doigt) ;
+  //  - sur une étape antérieure au devis effaçait le devis déposé et son
+  //    montant, sans retour possible — la base les retire en redescendant.
+  // Ces deux gestes demandent maintenant une confirmation qui dit, en clair,
+  // ce qui va se passer.
+  const [aConfirmer, setAConfirmer] = useState<{
+    titre: string
+    texte: string
+    bouton: string
+    action: () => void
+  } | null>(null)
+  const rangDevisEnvoye = PARCOURS.indexOf('devis_envoye')
+  const devisEnJeu = rangCourant >= rangDevisEnvoye && (devisDepose || (montantDevis ?? 0) > 0)
+  const leDevis =
+    montantDevis && montantDevis > 0 ? `votre devis de ${formatEuros(montantDevis)}` : 'votre devis déposé'
+
+  /** Ce qu'il faut confirmer avant d'aller à cette étape, ou null. */
+  function confirmationPour(cle: string): { titre: string; texte: string; bouton: string } | null {
+    const cible = PARCOURS.indexOf(cle as (typeof PARCOURS)[number])
+    if ((cle === 'devis_signe' || cle === 'termine') && rangCourant < cible) {
+      return {
+        titre: cle === 'termine' ? 'Déclarer le chantier terminé ?' : 'Le client a-t-il signé ?',
+        texte:
+          (cle === 'termine'
+            ? 'Un chantier terminé est une affaire signée. '
+            : '') +
+          'Celexia facturera sa commission sur le montant signé' +
+          (montantDevis && montantDevis > 0 ? ` (${formatEuros(montantDevis)} aujourd’hui)` : '') +
+          '. Ne confirmez que si le client a bien signé le devis.',
+        bouton: cle === 'termine' ? 'Oui, chantier terminé' : 'Oui, le client a signé',
+      }
+    }
+    if (devisEnJeu && cible >= 0 && cible < rangDevisEnvoye) {
+      return {
+        titre: `Revenir à « ${SUIVI_STATUTS[cle as keyof typeof SUIVI_STATUTS]?.label ?? cle} » ?`,
+        texte: `Revenir avant le devis retire ${leDevis} du suivi : il faudra le déposer à nouveau. Pour noter un nouveau rendez-vous sans reculer, écrivez-le plutôt dans une note.`,
+        bouton: 'Revenir quand même',
+      }
+    }
+    return null
+  }
+
+  /** Aller à une étape, en demandant confirmation quand l'argent est en jeu. */
+  function allerA(cle: string, action: () => void) {
+    const c = confirmationPour(cle)
+    if (c) setAConfirmer({ ...c, action })
+    else action()
+  }
 
   async function poster(statut?: string, message?: string, dateRdv?: string): Promise<boolean> {
     setEnvoi(true)
@@ -127,10 +197,15 @@ export function SuiviArtisan({
     } else {
       dt.setHours(12, 0, 0, 0)
     }
-    if (await poster('rdv_pris', txt, dt.toISOString())) {
-      setRdvMode(false)
-      setRdvHeure('')
+    const envoyerRdv = async () => {
+      if (await poster('rdv_pris', txt, dt.toISOString())) {
+        setRdvMode(false)
+        setRdvHeure('')
+      }
     }
+    // Un second rendez-vous pris après le devis fait RECULER le chantier : on
+    // le dit avant que le devis ne disparaisse du suivi.
+    allerA('rdv_pris', () => void envoyerRdv())
   }
 
   // Logue une tentative d'appel (surtout « pas de réponse » : on saura qu'il a essayé).
@@ -161,6 +236,27 @@ export function SuiviArtisan({
           relancé inutilement.
         </p>
       </CardHeader>
+      <AlertDialog open={!!aConfirmer} onOpenChange={(o) => !o && setAConfirmer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{aConfirmer?.titre}</AlertDialogTitle>
+            <AlertDialogDescription>{aConfirmer?.texte}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-11">Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="h-11"
+              onClick={() => {
+                const a = aConfirmer?.action
+                setAConfirmer(null)
+                a?.()
+              }}
+            >
+              {aConfirmer?.bouton}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <CardContent className="space-y-5">
         {/* Parcours d'avancement */}
         <div role="group" aria-label="Avancement du chantier">
@@ -182,7 +278,7 @@ export function SuiviArtisan({
                   aria-current={active ? 'step' : undefined}
                   onClick={() => {
                     if (estRdv) setRdvMode((v) => !v)
-                    else if (!active) void poster(cle)
+                    else if (!active) allerA(cle, () => void poster(cle))
                   }}
                   className={cn(
                     'group flex w-full items-stretch gap-3 text-left',

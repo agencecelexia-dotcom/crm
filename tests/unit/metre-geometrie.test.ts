@@ -345,3 +345,17 @@ describe('empriseAvecDebord — le toit déborde des murs', () => {
     expect(empriseAvecDebord(80, 36, NaN)).toBe(80)
   })
 })
+
+describe('murs — chaque façade garde ses arêtes', () => {
+  it('une arête presque alignée est fusionnée, et ses deux indices sont gardés', () => {
+    // Un décroché de 2 cm sur le côté sud : deux arêtes, une seule façade.
+    const lat = 46, lon = 5, m = 1 / 111320, k = 1 / (111320 * Math.cos((lat * Math.PI) / 180))
+    const c: Point[] = [
+      [lon, lat], [lon + 10 * k, lat + 0.02 * m], [lon + 20 * k, lat],
+      [lon + 20 * k, lat + 10 * m], [lon, lat + 10 * m],
+    ]
+    const sud = murs(c).find((x) => x.orientation === 'sud')!
+    expect(sud.aretes).toEqual([0, 1])
+    expect(murs(c).flatMap((x) => x.aretes).sort()).toEqual([0, 1, 2, 3, 4])
+  })
+})

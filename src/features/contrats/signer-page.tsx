@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { supabase } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/format'
-import { finaliserContenu } from './contrat-modele'
+import { finaliserContenu, raisonRefusSignature } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
 import type { ContratPublic } from '@/types/database'
 
@@ -61,7 +61,8 @@ export function SignerPage() {
         p_signature: signature,
       })
       const ok = (data as { ok?: boolean } | null)?.ok
-      if (error || !ok) throw new Error('Signature impossible (contrat déjà signé ?)')
+      if (error) throw new Error('Connexion impossible : réessayez dans un instant.')
+      if (!ok) throw new Error(raisonRefusSignature(data as { ok?: boolean; error?: string } | null))
       setSigne(true)
       toast.success('Contrat signé. Merci !')
     } catch (e) {

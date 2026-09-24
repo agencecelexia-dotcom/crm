@@ -1,3 +1,4 @@
+import { arrondi, ventiler } from './calculs'
 import { formatDate } from '@/lib/format'
 import type { DevisLigne } from '@/types/database'
 
@@ -259,7 +260,8 @@ export async function construireDevis(data: DevisData) {
       y = margin
       drawHead()
     }
-    const ligneTotal = (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0)
+    // Arrondie comme dans les totaux : la colonne doit sommer au « Total HT ».
+    const ligneTotal = arrondi((Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0))
     doc.setFont(F, 'normal')
     doc.setFontSize(9.5)
     setColor(GRIS)
@@ -297,6 +299,9 @@ export async function construireDevis(data: DevisData) {
   const boxW = 80
   const bx = pageW - margin - boxW
   const franchise = (data.tvaMode ?? 'franchise') === 'franchise'
+  // Les totaux imprimés sortent du MÊME calcul que l'écran, et s'additionnent :
+  // lignes arrondies, TVA arrondie par taux, TTC = HT + TVA imprimées.
+  const vt = ventiler(data.lignes, !franchise)
   doc.setFont(F, 'normal')
   doc.setFontSize(9)
 
@@ -308,30 +313,26 @@ export async function construireDevis(data: DevisData) {
     setColor(GRIS)
     doc.setFontSize(9.5)
     doc.text('Total HT', bx + 3, y)
-    doc.text(eur(data.totalHt ?? data.total), pageW - margin - 3, y, { align: 'right' })
+    doc.text(eur(vt.ht), pageW - margin - 3, y, { align: 'right' })
     y += 5.5
 
     // Un devis mêlant 10 % et 20 % doit faire apparaître la base et la taxe de
     // CHAQUE taux : un total agrégé ne permet ni au client de vérifier, ni à
     // l'administration de contrôler.
-    const parTaux = new Map<number, number>()
-    for (const l of data.lignes) {
-      const taux = Number(l.tva_taux) || 0
-      const ht = (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0)
-      parTaux.set(taux, (parTaux.get(taux) ?? 0) + ht)
-    }
-    const taux = [...parTaux.entries()].filter(([t]) => t > 0).sort((a, b) => a[0] - b[0])
-
-    if (taux.length > 1) {
-      for (const [t, ht] of taux) {
-        doc.text(`TVA ${t.toLocaleString('fr-FR')} % sur ${eur(ht)}`, bx + 3, y)
-        doc.text(eur((ht * t) / 100), pageW - margin - 3, y, { align: 'right' })
+    if (vt.parTaux.length > 1) {
+      for (const { taux: t, base, tva } of vt.parTaux) {
+        doc.text(`TVA ${t.toLocaleString('fr-FR')} % sur ${eur(base)}`, bx + 3, y)
+        doc.text(eur(tva), pageW - margin - 3, y, { align: 'right' })
         y += 5
       }
       y += 1.5
     } else {
-      doc.text(taux.length === 1 ? `TVA ${taux[0][0].toLocaleString('fr-FR')} %` : 'TVA', bx + 3, y)
-      doc.text(eur(data.totalTva ?? 0), pageW - margin - 3, y, { align: 'right' })
+      doc.text(
+        vt.parTaux.length === 1 ? `TVA ${vt.parTaux[0].taux.toLocaleString('fr-FR')} %` : 'TVA',
+        bx + 3,
+        y,
+      )
+      doc.text(eur(vt.tva), pageW - margin - 3, y, { align: 'right' })
       y += 6.5
     }
   }
@@ -341,16 +342,16 @@ export async function construireDevis(data: DevisData) {
   doc.setFontSize(12)
   setColor(NAVY)
   doc.text(franchise ? 'NET À PAYER' : 'TOTAL TTC', bx + 3, y + 7)
-  doc.text(eur(data.total), pageW - margin - 3, y + 7, { align: 'right' })
+  doc.text(eur(vt.ttc), pageW - margin - 3, y + 7, { align: 'right' })
   y += 16
 
   if (data.acomptePct && data.acomptePct > 0) {
-    const ac = (data.total * data.acomptePct) / 100
+    const ac = arrondi((vt.ttc * data.acomptePct) / 100)
     doc.setFont(F, 'normal')
     doc.setFontSize(9.5)
     setColor(GRIS)
     doc.text(
-      `Acompte à la commande (${data.acomptePct}%) : ${eur(ac)} — Solde : ${eur(data.total - ac)}`,
+      `Acompte à la commande (${data.acomptePct}%) : ${eur(ac)} — Solde : ${eur(arrondi(vt.ttc - ac))}`,
       margin,
       y,
     )

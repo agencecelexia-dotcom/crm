@@ -241,6 +241,23 @@ Deno.serve(async (req) => {
     if (typeof description !== 'string' || description.trim().length < 10) {
       return json({ ok: false, error: 'description_trop_courte' }, 400, CORS)
     }
+    // Garde-fou de coût : une description n'est pas un roman.
+    if (description.length > 4000) {
+      return json({ ok: false, error: 'description_trop_longue' }, 400, CORS)
+    }
+
+    // CLAUDE EST PAYANT : ON NE L'APPELLE QUE POUR UN ARTISAN HABILITÉ.
+    //
+    // Avec un jeton invalide, les lectures du catalogue renvoyaient une liste
+    // vide sans erreur, et l'appel partait quand même : la seule clé publique
+    // du bundle suffisait à faire travailler le modèle aux frais de l'agence.
+    // Le jeton doit désigner un artisan actif ET autorisé à chiffrer (ses
+    // assurances déposées et validées) — la même règle que le générateur.
+    const etat = await rpc('etat_chiffrage_by_token', { p_token: token }) as
+      { peut_chiffrer?: boolean } | null
+    if (etat?.peut_chiffrer !== true) {
+      return json({ ok: false, error: 'non_autorise' }, 403, CORS)
+    }
 
     // Le dossier, quand le devis part d'un chantier : ce qui s'est dit pendant
     // les appels vaut mieux que la description initiale.

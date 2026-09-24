@@ -189,6 +189,12 @@ export interface Mur {
   /** Les deux extrémités, pour le tracé. */
   a: Point
   b: Point
+  /**
+   * Indices des arêtes du contour qui composent ce mur (l'arête i va du sommet
+   * i au sommet i+1). La fusion des pans alignés et la renumérotation perdaient
+   * ce lien ; or c'est par ces indices que le relevé LiDAR rend ses profils.
+   */
+  aretes: number[]
 }
 
 /**
@@ -220,7 +226,7 @@ export function murs(contour: Point[]): Mur[] {
     const [nEst, nNord] = trigo ? [nord, -est] : [-nord, est]
     const azimut = (((Math.atan2(nEst, nNord) * 180) / Math.PI) % 360 + 360) % 360
 
-    aretes.push({ index: i, longueur, azimut, orientation: cardinal(azimut), a, b })
+    aretes.push({ index: i, longueur, azimut, orientation: cardinal(azimut), a, b, aretes: [i] })
   }
   if (aretes.length < 2) return aretes
 
@@ -242,8 +248,9 @@ export function murs(contour: Point[]): Mur[] {
       prec.orientation = cardinal(prec.azimut)
       prec.longueur = total
       prec.b = arete.b
+      prec.aretes = [...prec.aretes, ...arete.aretes]
     } else {
-      fusion.push({ ...arete })
+      fusion.push({ ...arete, aretes: [...arete.aretes] })
     }
   }
 
@@ -257,6 +264,7 @@ export function murs(contour: Point[]): Mur[] {
       premier.orientation = cardinal(premier.azimut)
       premier.longueur += dernier.longueur
       premier.a = dernier.a
+      premier.aretes = [...dernier.aretes, ...premier.aretes]
       fusion.pop()
     }
   }

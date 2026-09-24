@@ -37,8 +37,26 @@ export async function supprimerPhoto(url: string): Promise<void> {
 const BUCKET_DEVIS = 'devis'
 
 /**
- * Téléverse un devis (PDF) dans le bucket dédié et renvoie son URL.
- * Chemin imprévisible préfixé par le token d'affectation → isolation par artisan.
+ * L'empreinte SHA-256 d'un jeton, en hexadécimal.
+ *
+ * JAMAIS DE JETON DANS UNE ADRESSE PUBLIQUE. Le bucket `devis` est public, et
+ * ses URL partent dans les e-mails envoyés aux clients : un jeton qui y figure
+ * est un jeton donné à un inconnu. Or c'était le cas — le logo et le PDF de
+ * chaque devis étaient rangés sous le jeton maître de l'artisan, qui ouvre son
+ * espace entier et les coordonnées de tous ses clients.
+ *
+ * On range donc sous l'empreinte : elle ne révèle rien, et la base retrouve le
+ * propriétaire en la recalculant (`public.empreinte`, migration 0158) — même
+ * algorithme, vérifié octet pour octet.
+ */
+export async function empreinte(jeton: string): Promise<string> {
+  const octets = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(jeton))
+  return Array.from(new Uint8Array(octets), (o) => o.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Téléverse un devis (PDF) déposé sur un chantier et renvoie son URL.
+ * Rangé sous l'empreinte du jeton d'affectation, jamais sous le jeton.
  */
 export async function uploaderDevis(
   token: string,
@@ -46,8 +64,7 @@ export async function uploaderDevis(
   file: File,
 ): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
-  const rand = Math.random().toString(36).slice(2)
-  const chemin = `${token}/${slot}-${rand}.${ext}`
+  const chemin = `chantier/${await empreinte(token)}/${slot}-${crypto.randomUUID()}.${ext}`
   const { error } = await supabase.storage
     .from(BUCKET_DEVIS)
     .upload(chemin, file, { contentType: file.type || 'application/pdf' })
@@ -55,14 +72,21 @@ export async function uploaderDevis(
   return supabase.storage.from(BUCKET_DEVIS).getPublicUrl(chemin).data.publicUrl
 }
 
-/** Téléverse un devis GÉNÉRÉ (PDF blob) dans le bucket public `devis` et renvoie son URL. */
+/**
+ * Téléverse un devis GÉNÉRÉ (PDF) dans le bucket public `devis` et renvoie son URL.
+ *
+ * Rangé sous l'empreinte du jeton ARTISAN. Il l'était sous le jeton lui-même,
+ * qui a) fuyait dans l'e-mail du client, b) n'était accepté par aucune
+ * politique en dépôt anonyme — depuis le 17 juillet, aucun artisan n'a pu
+ * enregistrer le PDF d'un devis généré (DEV-2026-0014 à 0016 restés en
+ * brouillon).
+ */
 export async function uploaderDevisGenere(
   token: string,
   numero: string,
   blob: Blob,
 ): Promise<string> {
-  const rand = Math.random().toString(36).slice(2)
-  const chemin = `${token}/genere-${numero}-${rand}.pdf`
+  const chemin = `genere/${await empreinte(token)}/${numero}-${crypto.randomUUID()}.pdf`
   const { error } = await supabase.storage
     .from(BUCKET_DEVIS)
     .upload(chemin, blob, { contentType: 'application/pdf' })
@@ -173,7 +197,8 @@ export async function uploaderAssurance(
 
 /**
  * Dépose le logo de l'entreprise dans le bucket public `devis`, sous
- * `logos/<jeton artisan>/`.
+ * `logos/<empreinte du jeton artisan>/` — le logo part dans chaque devis envoyé
+ * au client : le jeton, lui, ne doit jamais y figurer.
  *
  * Chaque dépôt porte un nom neuf : la politique de stockage (0139) n'autorise
  * que l'INSERT, jamais l'UPDATE — écraser un fichier existant ouvrirait la
@@ -181,7 +206,7 @@ export async function uploaderAssurance(
  */
 export async function uploaderLogo(tokenArtisan: string, file: File): Promise<string> {
   const ext = extensionDe(file.name) || 'png'
-  const chemin = `logos/${tokenArtisan}/${crypto.randomUUID()}.${ext}`
+  const chemin = `logos/${await empreinte(tokenArtisan)}/${crypto.randomUUID()}.${ext}`
   const { error } = await supabase.storage.from(BUCKET_DEVIS).upload(chemin, file, {
     contentType: file.type || 'image/png',
   })

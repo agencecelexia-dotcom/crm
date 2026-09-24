@@ -5,9 +5,22 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { pignonDe, surfaceMur, type Batiment } from './bati-ign'
-import { empriseAvecDebord, formatM, formatM2, surfaceReelle, type Facade } from './geometrie'
+import {
+  distance,
+  empriseAvecDebord,
+  formatM,
+  formatM2,
+  surfaceReelle,
+  type Facade,
+} from './geometrie'
 import { useFicheMaison } from './use-fiche-maison'
-import { partsNormalisees, penteRetenue, useToiture, versantsLisibles } from './use-toiture'
+import {
+  mesureFacade,
+  partsNormalisees,
+  penteRetenue,
+  useToiture,
+  versantsLisibles,
+} from './use-toiture'
 
 /** Pentes courantes, pour corriger d'un doigt ce que la BD TOPO propose. */
 const PENTES = [0, 30, 35, 40, 45, 60, 80]
@@ -21,6 +34,9 @@ const PENTES = [0, 30, 35, 40, 45, 60, 80]
  * — soit de quoi manquer de tuiles en fin de chantier.
  */
 const DEBORDS = [0, 30, 40, 50, 70]
+
+/** Une hauteur mesurée au LiDAR vaut ±0,3 m : une décimale, pas deux. */
+const formatHauteur = (n: number) => `${n.toFixed(1).replace('.', ',')} m`
 const DEBORD_DEFAUT = 40
 
 /** Surface moyenne d'une ouverture de maison : une fenêtre standard. */
@@ -38,7 +54,7 @@ export interface MesureAEnregistrer {
   debord_m?: number | null
   part_toiture?: number | null
   versant?: string | null
-  hauteur_source?: 'bati' | 'saisie' | null
+  hauteur_source?: 'bati' | 'saisie' | 'lidar' | null
 }
 
 /**
@@ -95,14 +111,41 @@ export function PanneauBatiment({
   const [hauteurSaisie, setHauteurSaisie] = useState('')
   const [nbOuvertures, setNbOuvertures] = useState(0)
 
-  const hauteur = hauteurSaisie.trim()
-    ? parseFloat(hauteurSaisie.replace(',', '.'))
-    : (batiment.hauteur ?? null)
+  // LA HAUTEUR D'UN MUR, PAR ORDRE DE CONFIANCE
+  //
+  // 1. celle que l'artisan tape — il a vu la maison, ou le client la lui a dite ;
+  // 2. celle MESURÉE au LiDAR le long du mur, point par point : elle suit le
+  //    pignon et le terrain, et chaque côté a la sienne ;
+  // 3. à défaut, celle de la BD TOPO. Comparée au LiDAR sur quinze maisons, elle
+  //    s'écarte de 3,6 à 4,8 m sur un tiers d'entre elles — l'écran le dit.
+  const tapee = hauteurSaisie.trim() ? parseFloat(hauteurSaisie.replace(',', '.')) : null
+  const hauteurTapee = tapee != null && Number.isFinite(tapee) && tapee > 0 ? tapee : null
   const ouvertures = nbOuvertures * OUVERTURE_TYPE
-  // Un pignon monte plus haut que la gouttière : le triangle sous la
-  // charpente s'ajoute à « longueur × hauteur ».
+  const mesureMur = mur ? mesureFacade(mur, toitureIgn) : null
+  // Un pignon monte plus haut que la gouttière : avec une hauteur unique, le
+  // triangle sous la charpente s'ajoute à « longueur × hauteur ». Le profil
+  // mesuré, lui, le contient déjà.
   const pignon = mur ? pignonDe(batiment, mur) : null
-  const surfaceFacade = mur ? surfaceMur(mur, hauteur, ouvertures, pignon) : null
+  const origineHauteur: 'saisie' | 'lidar' | 'bati' | null =
+    hauteurTapee != null ? 'saisie' : mesureMur ? 'lidar' : batiment.hauteur ? 'bati' : null
+  const surfaceBrute = !mur
+    ? null
+    : origineHauteur === 'saisie'
+      ? surfaceMur(mur, hauteurTapee, 0, pignon)
+      : origineHauteur === 'lidar'
+        ? mesureMur!.surface
+        : origineHauteur === 'bati'
+          ? surfaceMur(mur, batiment.hauteur, 0, pignon)
+          : null
+  const surfaceFacade = surfaceBrute != null ? Math.max(0, surfaceBrute - ouvertures) : null
+  // Le serveur recalcule « longueur des pans × hauteur ». Pour qu'il retrouve
+  // la surface affichée — profil mesuré ou pignon compris — on lui envoie la
+  // hauteur ÉQUIVALENTE, rapportée à la longueur qu'il mesure lui-même : la
+  // somme des pans d'un bout à l'autre. Sans cela l'écran montrait 49 m² sur
+  // un pignon quand la base en gardait 44,8.
+  const longueurServeur = mur ? mur.pans.reduce((s, p) => s + distance(p.a, p.b), 0) : 0
+  const hauteurEquivalente =
+    surfaceBrute != null && longueurServeur > 0 ? surfaceBrute / longueurServeur : null
   // LE TOIT DÉBORDE DES MURS, et le contour ne le montre pas : vérifié contre
   // le cadastre, celui de la BD TOPO est bien celui du bâtiment au sol. Le
   // débord n'est pas mesurable — le LiDAR a une maille de 50 cm et son bord de
@@ -180,8 +223,13 @@ export function PanneauBatiment({
                 valeur={`${formatM(batiment.encombrement.longueur)} × ${formatM(batiment.encombrement.largeur)}`}
               />
             )}
-            {batiment.hauteur != null && (
-              <Chiffre titre="Hauteur à la gouttière" valeur={formatM(batiment.hauteur)} />
+            {toitureIgn?.hauteur_gouttiere != null ? (
+              <Chiffre
+                titre="Gouttière · faîtage (mesurés)"
+                valeur={`${formatHauteur(toitureIgn.hauteur_gouttiere)} · ${formatHauteur(toitureIgn.hauteur_faitage ?? 0)}`}
+              />
+            ) : batiment.hauteur != null && (
+              <Chiffre titre="Hauteur (IGN, non mesurée)" valeur={formatM(batiment.hauteur)} />
             )}
             <Chiffre titre="Périmètre" valeur={formatM(batiment.perimetre)} />
           </div>
@@ -394,21 +442,69 @@ export function PanneauBatiment({
                   fort
                 />
                 <Chiffre
-                  titre={pignon ? 'Longueur (pignon)' : 'Longueur'}
+                  // « Pignon » vient d'une supposition géométrique (côté court,
+                  // perpendiculaire au faîtage). Quand le mur est MESURÉ, c'est
+                  // son profil qui parle : sur un toit en croupe il est plat, et
+                  // l'étiquette aurait menti.
+                  titre={origineHauteur !== 'lidar' && pignon ? 'Longueur (pignon)' : 'Longueur'}
                   valeur={formatM(mur.longueur)}
                 />
               </div>
 
+              {/* D'OÙ VIENT LA HAUTEUR — jamais un chiffre sans sa provenance.
+                  Avant, 6,8 m s'affichait en gris dans un champ vide : on le
+                  lisait comme « pas de hauteur », et c'était une valeur de la
+                  BD TOPO fausse de plusieurs mètres une fois sur trois. */}
+              {toitureEnCours && !hauteurTapee ? (
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin" />
+                  Mesure de la hauteur du mur dans les altitudes de l’IGN…
+                </p>
+              ) : origineHauteur === 'saisie' ? (
+                <p className="text-xs text-muted-foreground">
+                  Hauteur saisie par vos soins&nbsp;: {formatM(hauteurTapee!)}
+                  {pignon ? ' à la gouttière, pignon ajouté.' : '.'}
+                </p>
+              ) : origineHauteur === 'lidar' ? (
+                <p className="text-xs text-muted-foreground">
+                  Hauteur <strong className="text-foreground">mesurée</strong> le long du mur au
+                  LiDAR de l’IGN&nbsp;:{' '}
+                  <strong className="text-foreground">{formatHauteur(mesureMur!.hauteurMoyenne)}</strong> en
+                  moyenne, de {formatHauteur(mesureMur!.hauteurMin)} à {formatHauteur(mesureMur!.hauteurMax)}.
+                  {mesureMur!.hauteurMax - mesureMur!.hauteurMin > 1.5 &&
+                    ' Le mur n’a pas partout la même hauteur (pignon ou terrain en pente) : la surface en tient compte.'}
+                </p>
+              ) : origineHauteur === 'bati' ? (
+                <p className="text-xs text-[#B45309]">
+                  Hauteur <strong>non mesurée</strong> ici&nbsp;: {formatM(batiment.hauteur!)} selon
+                  la BD TOPO de l’IGN, qui s’écarte de plusieurs mètres sur une maison sur trois.
+                  Vérifiez-la et corrigez-la ci-dessous.
+                </p>
+              ) : (
+                <p className="text-xs text-[#B45309]">
+                  Hauteur inconnue&nbsp;: saisissez-la pour obtenir la surface.
+                </p>
+              )}
+              {origineHauteur === 'lidar' &&
+                mesureMur!.longueurAccolee > 0.5 * longueurServeur && (
+                  <p className="text-xs text-[#B45309]">
+                    Sur {formatM(mesureMur!.longueurAccolee)}, ce mur touche un autre volume —
+                    maison mitoyenne ou annexe accolée. Cette partie n’est peut-être pas à traiter.
+                  </p>
+                )}
+
               <div className="flex items-end gap-2">
                 <label className="flex-1 space-y-1">
                   <span className="text-xs text-muted-foreground">
-                    Hauteur {pignon ? 'à la gouttière' : ''}
+                    {origineHauteur === 'lidar' || origineHauteur === 'bati'
+                      ? 'Corriger la hauteur'
+                      : `Hauteur${pignon ? ' à la gouttière' : ''}`}
                   </span>
                   <div className="relative">
                     <Input
                       className="h-10 pr-8"
                       inputMode="decimal"
-                      placeholder={batiment.hauteur ? String(batiment.hauteur) : 'à saisir'}
+                      placeholder="ex. 5,8"
                       value={hauteurSaisie}
                       onChange={(e) => setHauteurSaisie(e.target.value)}
                     />
@@ -447,13 +543,6 @@ export function PanneauBatiment({
                 </div>
               </div>
 
-              {!batiment.hauteur && !hauteurSaisie.trim() && (
-                <p className="text-xs text-[#B45309]">
-                  L’IGN ne donne pas la hauteur de ce bâtiment : saisissez-la pour obtenir la
-                  surface.
-                </p>
-              )}
-
               <Garder
                 enCours={enCours}
                 defaut={`Façade ${mur.orientation}`}
@@ -463,10 +552,10 @@ export function PanneauBatiment({
                     nom,
                     type: 'facade',
                     geometrie: mur.pans.flatMap((p) => [p.a, p.b]),
-                    hauteur_m: hauteur,
+                    hauteur_m: hauteurEquivalente,
                     ouvertures_m2: ouvertures > 0 ? ouvertures : null,
                     azimut: mur.azimut,
-                    hauteur_source: hauteurSaisie.trim() ? 'saisie' : 'bati',
+                    hauteur_source: origineHauteur,
                   })
                 }
               />
