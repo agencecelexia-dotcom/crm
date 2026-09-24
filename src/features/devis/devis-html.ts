@@ -1,3 +1,4 @@
+import { arrondi, ventiler, type LigneVentilable } from './calculs'
 import type { DevisData } from './devis-pdf'
 
 /**
@@ -60,16 +61,13 @@ export function devisEnHtml(data: DevisData): string {
   const v = data.vendeur
   const franchise = (data.tvaMode ?? 'franchise') === 'franchise'
   const lignes = data.lignes ?? []
+  // Même calcul que l'écran et le PDF : ce que le client lit s'additionne.
+  const vt = ventiler(lignes as LigneVentilable[], !franchise)
   const acompte =
-    data.acomptePct && data.acomptePct > 0 ? (data.total * data.acomptePct) / 100 : null
+    data.acomptePct && data.acomptePct > 0 ? arrondi((vt.ttc * data.acomptePct) / 100) : null
 
   // La TVA par taux : le client doit pouvoir rapprocher chaque base de sa taxe.
-  const parTaux = new Map<number, number>()
-  for (const l of lignes) {
-    const t = Number((l as { tva_taux?: number | null }).tva_taux) || 0
-    parTaux.set(t, (parTaux.get(t) ?? 0) + (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0))
-  }
-  const taux = [...parTaux.entries()].filter(([t]) => t > 0).sort((a, b) => a[0] - b[0])
+  const taux: [number, number][] = vt.parTaux.map((x) => [x.taux, x.base])
 
   const coordonnees = [
     v.adresse,
@@ -191,7 +189,7 @@ export function devisEnHtml(data: DevisData): string {
       </tr>
       ${lignes
         .map((l) => {
-          const t = (Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0)
+          const t = arrondi((Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0))
           return `<tr>
             <td style="padding:12px 0;border-bottom:1px solid ${BORD};font:400 14px/1.5 ${POLICE};color:${ENCRE};">${esc(
               l.designation,
@@ -220,17 +218,17 @@ export function devisEnHtml(data: DevisData): string {
           ${
             franchise
               ? ''
-              : ligneTotal('Total HT', eur(data.totalHt ?? data.total)) +
+              : ligneTotal('Total HT', eur(vt.ht)) +
                 (taux.length
-                  ? taux
-                      .map(([t, ht]) =>
+                  ? vt.parTaux
+                      .map(({ taux: t, base, tva }) =>
                         ligneTotal(
-                          `TVA ${t.toLocaleString('fr-FR')}&nbsp;% sur ${eur(ht)}`,
-                          eur((ht * t) / 100),
+                          `TVA ${t.toLocaleString('fr-FR')}&nbsp;% sur ${eur(base)}`,
+                          eur(tva),
                         ),
                       )
                       .join('')
-                  : ligneTotal('TVA', eur(data.totalTva ?? 0)))
+                  : ligneTotal('TVA', eur(vt.tva)))
           }
         </table>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
@@ -239,9 +237,7 @@ export function devisEnHtml(data: DevisData): string {
             <td style="padding:14px 16px;font:600 13px/1.3 ${POLICE};color:#C8D4E6;letter-spacing:.4px;text-transform:uppercase;">${
               franchise ? 'Net à payer' : 'Total TTC'
             }</td>
-            <td align="right" style="padding:14px 16px;font:700 22px/1.2 ${POLICE};color:#FFFFFF;white-space:nowrap;">${eur(
-              data.total,
-            )}</td>
+            <td align="right" style="padding:14px 16px;font:700 22px/1.2 ${POLICE};color:#FFFFFF;white-space:nowrap;">${eur(vt.ttc)}</td>
           </tr>
         </table>
         ${
@@ -260,7 +256,7 @@ export function devisEnHtml(data: DevisData): string {
                   style="background:#FFF7ED;border-left:3px solid ${ACCENT};border-radius:0 8px 8px 0;">
              <tr><td style="padding:12px 16px;font:400 13px/1.6 ${POLICE};color:#9A3412;">
                Acompte à la commande (${esc(data.acomptePct)}&nbsp;%) :
-               <strong>${eur(acompte)}</strong> — solde de <strong>${eur(data.total - acompte)}</strong> à la fin des travaux.
+               <strong>${eur(acompte)}</strong> — solde de <strong>${eur(arrondi(vt.ttc - acompte))}</strong> à la fin des travaux.
              </td></tr>
            </table>
          </td></tr>`

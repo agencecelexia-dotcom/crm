@@ -23,6 +23,68 @@ export interface TotauxDevis {
 }
 
 /**
+ * Arrondi commercial au centime, demi vers l'extérieur (1,005 → 1,01).
+ *
+ * `Math.round(x * 100) / 100` se trompe sur les nombres flottants : 1,005 × 100
+ * vaut 100,4999… et donnait 1,00. Le décalage de 1e-7 corrige ce bruit sans
+ * jamais changer un vrai montant (il est mille fois plus petit qu'un centime).
+ */
+export function arrondi(x: number): number {
+  if (!Number.isFinite(x) || x === 0) return 0
+  return (Math.sign(x) * Math.round(Math.abs(x) * 100 + 1e-7)) / 100
+}
+
+export interface LigneVentilable {
+  quantite: number
+  prix_unitaire: number
+  tva_taux?: number | null
+}
+
+export interface Ventilation {
+  /** Le total de chaque ligne, arrondi au centime — celui qu'on imprime. */
+  lignes: number[]
+  ht: number
+  /** Base et taxe de chaque taux strictement positif, dans l'ordre croissant. */
+  parTaux: { taux: number; base: number; tva: number }[]
+  tva: number
+  ttc: number
+}
+
+/**
+ * HT, TVA et TTC tels qu'ils s'IMPRIMENT, et s'additionnent.
+ *
+ * LE DÉFAUT QU'ELLE CORRIGE. Le devis additionnait des montants non arrondis,
+ * puis arrondissait chaque total à l'affichage. Sur 5 × 33,33 € à 10 %, le PDF
+ * imprimait « HT 166,65 € — TVA 16,67 € — TTC 183,31 € » : un client qui fait
+ * l'addition trouve 183,32. En multi-taux, les TVA imprimées ne sommaient pas
+ * non plus au TTC. Un devis dont les totaux ne se vérifient pas est contestable.
+ *
+ * La règle, unique, appliquée par l'écran, le PDF et l'e-mail :
+ *   1. chaque ligne est arrondie au centime ;
+ *   2. le HT est la somme des lignes arrondies ;
+ *   3. la TVA est calculée PAR TAUX, sur la base de ce taux, puis arrondie ;
+ *   4. le TTC est le HT plus la somme des TVA arrondies.
+ */
+export function ventiler(lignes: LigneVentilable[], tvaApplicable: boolean): Ventilation {
+  const totaux = lignes.map((l) => arrondi((Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0)))
+  const ht = arrondi(totaux.reduce((s, m) => s + m, 0))
+
+  const bases = new Map<number, number>()
+  if (tvaApplicable) {
+    lignes.forEach((l, i) => {
+      const t = Number(l.tva_taux) || 0
+      if (t > 0) bases.set(t, (bases.get(t) ?? 0) + totaux[i])
+    })
+  }
+  const parTaux = [...bases.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([taux, base]) => ({ taux, base: arrondi(base), tva: arrondi((base * taux) / 100) }))
+  const tva = arrondi(parTaux.reduce((s, x) => s + x.tva, 0))
+
+  return { lignes: totaux, ht, parTaux, tva, ttc: arrondi(ht + tva) }
+}
+
+/**
  * @param tvaApplicable faux pour la franchise (art. 293 B du CGI) : les taux
  *   saisis sur les lignes sont alors ignorés plutôt qu'effacés, pour qu'un
  *   aller-retour entre les deux régimes ne perde rien.
@@ -33,18 +95,10 @@ export function calculerTotaux(
   tvaApplicable: boolean,
   tauxCommission = 0,
 ): TotauxDevis {
-  let ht = 0
-  let tva = 0
+  // Les montants affichés à l'artisan sont ceux qui s'imprimeront.
+  const { ht, tva, ttc } = ventiler(lignes, tvaApplicable)
   let cout = 0
-
-  for (const l of lignes) {
-    const montant = l.quantite * l.prix_unitaire
-    ht += montant
-    if (tvaApplicable) tva += (montant * l.tva_taux) / 100
-    cout += l.quantite * l.cout_unitaire
-  }
-
-  const ttc = ht + tva
+  for (const l of lignes) cout += l.quantite * l.cout_unitaire
   // La marge se calcule sur le HT : la TVA n'est qu'encaissée pour l'État,
   // elle ne rentre jamais dans la poche de l'artisan.
   const marge = ht - cout
