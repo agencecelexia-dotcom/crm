@@ -150,10 +150,16 @@ export function DevisBuilder({
   ])
   // Par défaut la franchise : c'est le régime en place jusqu'ici, et basculer
   // tout le monde en TVA ajouterait 10 % aux devis du jour au lendemain.
-  const [tvaMode, setTvaMode] = useState<'franchise' | 'normal'>(
-    identite?.tva_mode_defaut ?? 'franchise',
-  )
-  const [acompte, setAcompte] = useState(String(identite?.acompte_defaut ?? 30))
+  // LE RÉGIME DE TVA ET L'ACOMPTE SUIVENT LA FICHE DE L'ARTISAN tant qu'il
+  // n'y a pas touché. Ils étaient lus UNE fois, à l'ouverture — avant que la
+  // fiche n'ait fini de charger : un artisan à la TVA qui ouvrait directement
+  // le générateur voyait son devis partir en « TVA non applicable, art. 293 B »
+  // avec 30 % d'acompte. La valeur affichée est donc DÉRIVÉE : son choix s'il
+  // en a fait un, sinon celle de sa fiche dès qu'elle arrive.
+  const [tvaChoisi, setTvaMode] = useState<'franchise' | 'normal' | null>(null)
+  const tvaMode = tvaChoisi ?? identite?.tva_mode_defaut ?? 'franchise'
+  const [acompteSaisi, setAcompte] = useState<string | null>(null)
+  const acompte = acompteSaisi ?? String(identite?.acompte_defaut ?? 30)
   const [conditions, setConditions] = useState(
     'Devis gratuit, valable 1 mois. Acompte à la commande, solde à la fin des travaux.',
   )
