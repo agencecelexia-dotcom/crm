@@ -30,7 +30,7 @@ import { supabase } from '@/lib/supabase/client'
 import { STATUTS_ORDRE, statutInfo } from '@/lib/constants'
 import { formatDate } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
-import { finaliserContenu } from './contrat-modele'
+import { finaliserContenu, raisonRefusSignature } from './contrat-modele'
 import { ContratFormate } from './contrat-format'
 import { ChantiersPerdus } from './chantiers-perdus'
 import { PiedDePageArtisan } from './pied-de-page-artisan'
@@ -740,7 +740,8 @@ function SignatureContrat({
         p_signature: signature,
       })
       const ok = (data as { ok?: boolean } | null)?.ok
-      if (error || !ok) throw new Error('Signature impossible (contrat déjà signé ?)')
+      if (error) throw new Error('Connexion impossible : réessayez dans un instant.')
+      if (!ok) throw new Error(raisonRefusSignature(data as { ok?: boolean; error?: string } | null))
       toast.success('Contrat signé. Merci !')
       onSigne()
     } catch (e) {

@@ -15,7 +15,7 @@ import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pa
 import { composerAdresse, geocoder } from '@/lib/geocoding'
 import { formatTel } from '@/lib/format'
 import { ContratFormate } from '@/features/contrats/contrat-format'
-import { finaliserContenu } from '@/features/contrats/contrat-modele'
+import { finaliserContenu, raisonRefusSignature } from '@/features/contrats/contrat-modele'
 import { ArtisanForm } from '../components/artisan-form'
 import type { ArtisanInput, ContratPublic } from '@/types/database'
 
@@ -310,7 +310,8 @@ function EtapeContrat({ token, onSigned }: { token: string; onSigned: () => void
         p_signature: padRef.current!.toDataURL(),
       })
       const ok = (data as { ok?: boolean } | null)?.ok
-      if (error || !ok) throw new Error('Signature impossible')
+      if (error) throw new Error('Connexion impossible : réessayez dans un instant.')
+      if (!ok) throw new Error(raisonRefusSignature(data as { ok?: boolean; error?: string } | null))
       toast.success('Contrat signé. Merci !')
       onSigned()
     } catch (e) {
