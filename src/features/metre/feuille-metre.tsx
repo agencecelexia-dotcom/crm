@@ -360,7 +360,14 @@ export function FeuilleMetre({
               >
                 Ce n’est pas le bon bâtiment — en choisir un autre
               </button>
+            {/* LA CLÉ N'EST PAS DÉCORATIVE. Sans elle, React réutilise le même
+                panneau d'un bâtiment à l'autre et garde son état : la pente
+                saisie pour la maison A restait affichée sur la maison B, ainsi
+                que le débord, le mur choisi et le versant retenu. Des chiffres
+                justes sur la mauvaise maison — exactement ce que l'audit avait
+                trouvé ailleurs. */}
             <PanneauBatiment
+              key={choisi.id}
               token={token}
               batiment={choisi}
               enCours={enregistrer.isPending}
