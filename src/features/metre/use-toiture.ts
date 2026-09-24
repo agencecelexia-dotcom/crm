@@ -113,7 +113,13 @@ export function penteRetenue(p: {
  * ont la même pente — ce qu'ils ont sur un toit courant. D'où le « environ »
  * à l'écran.
  */
-export function partsNormalisees(v: Toiture['versants']): { orientation: string; part: number }[] {
+export function partsNormalisees(t: Toiture | null | undefined): { orientation: string; part: number }[] {
+  // SI LA MESURE N'EST PAS FIABLE, IL N'Y A PAS DE VERSANTS À PROPOSER. L'écran
+  // dirait autrement « ce toit est trop découpé pour qu'une pente unique ait un
+  // sens », puis offrirait dans la foulée « nord-est · 47 m² » — un chiffre
+  // calculé sur la pente qu'il vient de refuser.
+  if (!t?.couvert || !t.fiable) return []
+  const v = t.versants
   if (!v || v.length === 0) return []
   const total = v.reduce((s, x) => s + x.part, 0)
   if (total <= 0) return []

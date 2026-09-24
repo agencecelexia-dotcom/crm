@@ -116,7 +116,7 @@ export function PanneauBatiment({
   // UN COUVREUR NE REFAIT PAS TOUJOURS TOUT LE TOIT. Le relevé sépare les
   // versants par leur exposition ; l'artisan en choisit un et lit sa surface,
   // au lieu de diviser le total par deux de tête.
-  const versants = partsNormalisees(toitureIgn?.versants)
+  const versants = partsNormalisees(toitureIgn)
   const [versantChoisi, setVersantChoisi] = useState<string | null>(null)
   const partRetenue = versantChoisi
     ? (versants.find((v) => v.orientation === versantChoisi)?.part ?? 1)
