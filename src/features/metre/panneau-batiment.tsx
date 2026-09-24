@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { pignonDe, surfaceMur, type Batiment } from './bati-ign'
 import { formatM, formatM2, surfaceReelle, type Facade } from './geometrie'
 import { useFicheMaison } from './use-fiche-maison'
+import { penteRetenue, useToiture, versantsLisibles } from './use-toiture'
 
 /** Pentes courantes, pour corriger d'un doigt ce que la BD TOPO propose. */
 const PENTES = [0, 30, 35, 40, 45, 60, 80]
@@ -22,7 +23,7 @@ export interface MesureAEnregistrer {
   pente_pct?: number | null
   ouvertures_m2?: number | null
   azimut?: number | null
-  pente_source?: 'altitudes' | 'saisie' | null
+  pente_source?: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
   hauteur_source?: 'bati' | 'saisie' | null
 }
 
@@ -54,11 +55,27 @@ export function PanneauBatiment({
     batiment.centre?.[0] ?? null,
   )
 
-  // La pente vient des altitudes de la BD TOPO ; l'artisan peut la corriger,
-  // et on retient alors qu'elle est saisie et non déduite.
+  // LA PENTE, PAR ORDRE DE CONFIANCE
+  //
+  // 1. ce que l'artisan saisit — il est sur le terrain, pas nous ;
+  // 2. ce qu'on MESURE dans la grille d'altitudes de l'IGN, à 50 cm : ±2 à ±10
+  //    points sur des maisons réelles ;
+  // 3. ce qu'on DÉDUIT des altitudes de la BD TOPO, faute de mieux : ±27 à ±61
+  //    points, que l'écran doit annoncer comme tels.
   const [penteSaisie, setPenteSaisie] = useState<number | null>(null)
-  const pente = penteSaisie ?? Math.round(batiment.toiture?.pente ?? 0)
-  const penteDeduite = penteSaisie == null && batiment.toiture != null
+  const { data: toitureIgn, isLoading: toitureEnCours } = useToiture(
+    token,
+    batiment.cleabs,
+    batiment.contour,
+  )
+  const penteDeduite = batiment.toiture ? Math.round(batiment.toiture.pente) : null
+  const { pente, source: origine } = penteRetenue({
+    saisie: penteSaisie,
+    mesuree: toitureIgn,
+    deduite: penteDeduite,
+  })
+  const penteMesuree = origine === 'lidar' || origine === 'photogrammetrie' ? pente : null
+  const parLiDAR = origine === 'lidar'
 
   const [mur, setMur] = useState<Facade | null>(null)
   const [hauteurSaisie, setHauteurSaisie] = useState('')
@@ -133,43 +150,68 @@ export function PanneauBatiment({
             <Chiffre titre="Périmètre" valeur={formatM(batiment.perimetre)} />
           </div>
 
-          {/* La pente, déduite des altitudes plutôt que devinée — avec son
-              incertitude, qui est grande sur une petite maison. */}
-          {!batiment.toiture ? (
+          {/* D'OÙ VIENT LA PENTE — jamais un chiffre sans sa provenance. */}
+          {toitureEnCours ? (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              Mesure de la pente dans les altitudes de l’IGN…
+            </p>
+          ) : penteSaisie != null ? (
+            <p className="text-xs text-muted-foreground">Pente saisie par vos soins.</p>
+          ) : penteMesuree != null ? (
+            <p className="text-xs text-muted-foreground">
+              Pente <strong className="text-foreground">mesurée</strong> sur {toitureIgn?.pixels}{' '}
+              points du toit&nbsp;:{' '}
+              <strong className="text-foreground">{penteMesuree} %</strong>
+              {toitureIgn?.incertitude ? ` ± ${toitureIgn.incertitude}` : ''}.{' '}
+              {parLiDAR
+                ? 'Relevé LiDAR de l’IGN, grille de 50 cm.'
+                : 'Photogrammétrie de l’IGN, grille de 1 m — moins fine que le LiDAR, absent ici.'}
+              {versantsLisibles(toitureIgn?.versants) &&
+                ` Deux versants, ${versantsLisibles(toitureIgn?.versants)}.`}
+            </p>
+          ) : toitureIgn && toitureIgn.couvert && !toitureIgn.fiable ? (
+            // Un îlot urbain n'a pas de pan dominant : servir une médiane et son
+            // écart interquartile reviendrait à habiller du bruit en mesure.
+            <p className="text-xs text-[#B45309]">
+              Les altitudes de ce toit ne montrent pas deux versants nets&nbsp;: il est trop
+              découpé pour qu’une pente unique ait un sens. Saisissez-la.
+            </p>
+          ) : toitureIgn && !toitureIgn.couvert ? (
+            <p className="text-xs text-[#B45309]">
+              {toitureIgn.motif === 'trop_peu_de_toit'
+                ? 'Ce bâtiment est trop petit pour que la pente se lise dans les altitudes.'
+                : 'Aucun relevé d’altitude ne couvre ce bâtiment.'}{' '}
+              Saisissez la pente.
+            </p>
+          ) : !batiment.toiture ? (
             // Sans altitudes, l'écran affichait « Toiture à 0 % » et la surface
             // au sol, en silence. Il faut le dire.
             <p className="text-xs text-[#B45309]">
               L’IGN ne donne pas les altitudes de ce toit&nbsp;: la pente est inconnue.
               Choisissez-la ci-dessous, sans quoi la surface affichée est celle du sol.
             </p>
-          ) : penteDeduite ? (
-            <p
-              className={cn(
-                'text-xs',
-                batiment.toiture.fiable ? 'text-muted-foreground' : 'text-[#B45309]',
-              )}
-            >
-              Pente déduite des altitudes de l’IGN&nbsp;:{' '}
-              <strong className="text-foreground">{Math.round(batiment.toiture.pente)} %</strong>
+          ) : (
+            <p className="text-xs text-[#B45309]">
+              Pente seulement <strong>déduite</strong> de deux altitudes&nbsp;:{' '}
+              <strong className="text-foreground">{penteDeduite} %</strong>
               {batiment.toiture.incertitude > 0 && ` ± ${Math.round(batiment.toiture.incertitude)}`}
-              {batiment.toiture.fiable
-                ? '.'
-                : ' — le calcul suppose un toit à deux pans ; sur ce bâtiment il ne tient pas. ' +
-                  'Saisissez la pente.'}
+              . Le calcul suppose un toit à deux pans et n’a pas la précision d’un relevé&nbsp;:
+              vérifiez-la.
             </p>
-          ) : null}
+          )}
 
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Pente&nbsp;:</span>
             {/* Revenir à la valeur de l'IGN : une fois une pastille touchée,
                 elle était perdue. */}
-            {penteSaisie != null && batiment.toiture && (
+            {penteSaisie != null && (penteMesuree ?? penteDeduite) != null && (
               <button
                 type="button"
                 onClick={() => setPenteSaisie(null)}
                 className="rounded-full border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
               >
-                IGN&nbsp;: {Math.round(batiment.toiture.pente)} %
+                IGN&nbsp;: {penteMesuree ?? penteDeduite} %
               </button>
             )}
             {PENTES.map((p) => (
@@ -199,7 +241,7 @@ export function PanneauBatiment({
                 geometrie: batiment.contour,
                 hauteur_m: batiment.hauteur,
                 pente_pct: pente > 0 ? pente : null,
-                pente_source: penteDeduite ? 'altitudes' : 'saisie',
+                pente_source: origine,
                 hauteur_source: 'bati',
               })
             }

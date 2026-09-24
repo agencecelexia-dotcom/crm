@@ -16,7 +16,7 @@ export interface Metre {
   surface_reelle_m2: number | null
   ouvertures_m2: number | null
   azimut: number | null
-  pente_source: 'altitudes' | 'saisie' | null
+  pente_source: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
   hauteur_source: 'bati' | 'saisie' | null
   source: 'bati' | 'dessin'
   created_at: string
@@ -71,7 +71,7 @@ export function useEnregistrerMetre(token: string | undefined) {
       source?: 'bati' | 'dessin'
       ouvertures_m2?: number | null
       azimut?: number | null
-      pente_source?: 'altitudes' | 'saisie' | null
+      pente_source?: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
       hauteur_source?: 'bati' | 'saisie' | null
     }) => {
       const { data, error } = await supabase.rpc('enregistrer_metre_by_token', {
