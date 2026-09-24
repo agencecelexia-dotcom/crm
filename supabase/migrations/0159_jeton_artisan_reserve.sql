@@ -19,41 +19,10 @@
 -- `anon` n'avait aucune raison de détenir des droits sur cette table (seule la
 -- RLS le bloquait) : il n'en a plus. L'inscription passe par `inscrire_artisan`.
 
-revoke all on public.artisans from anon;
-revoke select, update on public.artisans from authenticated;
-
-grant select (
-  id, nom, prenom, societe, telephone, email, metiers, zone_intervention,
-  rayon_km, adresse, ville, code_postal, latitude, longitude, specificites,
-  created_at, updated_at, sous_metiers, forme_juridique, capital_social,
-  siren, ville_immatriculation, representant, qualite_representant,
-  taux_commission, contrat_externe, ecarte_at, ecarte_motif,
-  departements_couverts, source, nb_salaries, annees_experience,
-  assurance_rc_pro, assurance_decennale, zones_couvertes, note_elocution,
-  note_communication_agence, partenaire_at, assurance_decennale_url,
-  assurance_decennale_assureur, assurance_decennale_police,
-  assurance_decennale_echeance, assurance_rc_pro_url,
-  assurance_rc_pro_assureur, assurance_rc_pro_police,
-  assurance_rc_pro_echeance, assurances_validees_at, assurances_validees_par,
-  logo_url, tva_intracom, code_ape, iban, bic, mediateur_nom, mediateur_url,
-  cgv, conditions_paiement, garantie_zone, acompte_defaut, tva_mode_defaut
-) on public.artisans to authenticated;
-
-grant update (
-  nom, prenom, societe, telephone, email, metiers, zone_intervention,
-  rayon_km, adresse, ville, code_postal, latitude, longitude, specificites,
-  updated_at, sous_metiers, forme_juridique, capital_social, siren,
-  ville_immatriculation, representant, qualite_representant, taux_commission,
-  contrat_externe, ecarte_at, ecarte_motif, departements_couverts, source,
-  nb_salaries, annees_experience, assurance_rc_pro, assurance_decennale,
-  zones_couvertes, note_elocution, note_communication_agence, partenaire_at,
-  assurance_decennale_url, assurance_decennale_assureur,
-  assurance_decennale_police, assurance_decennale_echeance,
-  assurance_rc_pro_url, assurance_rc_pro_assureur, assurance_rc_pro_police,
-  assurance_rc_pro_echeance, assurances_validees_at, assurances_validees_par,
-  logo_url, tva_intracom, code_ape, iban, bic, mediateur_nom, mediateur_url,
-  cgv, conditions_paiement, garantie_zone, acompte_defaut, tva_mode_defaut
-) on public.artisans to authenticated;
+-- Cette migration ne crée que les deux fonctions : elle est additive, sans
+-- effet sur l'écran en ligne. Le retrait du jeton des privilèges de colonne
+-- (0161) ne s'applique qu'une fois le front qui les utilise déployé — sinon
+-- ses `select('*')` sur `artisans` échoueraient pour tout le monde.
 
 create or replace function public.jeton_espace_artisan(p_artisan_id uuid)
 returns text
