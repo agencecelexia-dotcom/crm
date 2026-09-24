@@ -4,6 +4,7 @@ import {
   centre,
   degresEnPct,
   distance,
+  empriseAvecDebord,
   formatM,
   formatM2,
   longueur,
@@ -111,7 +112,7 @@ describe('centre et formats', () => {
   })
 })
 
-import { cardinal, encombrement, murs, toitureDepuisAltitudes } from '../../src/features/metre/geometrie'
+import { cardinal, encombrement, facades, murs, toitureDepuisAltitudes } from '../../src/features/metre/geometrie'
 
 /** Rectangle aligné nord-sud / est-ouest, parcouru dans le sens trigonométrique. */
 function batiment(lat = 46, lon = 5, largeur = 8, longueur = 12): Point[] {
@@ -207,5 +208,140 @@ describe('toitureDepuisAltitudes — la pente qu’on ne voyait pas', () => {
 
   it('renvoie null sans altitude de toit', () => {
     expect(toitureDepuisAltitudes({ emprise: 96, largeur: 8, toitMin: null, toitMax: 444 })).toBeNull()
+  })
+})
+
+import { estPignon } from '../../src/features/metre/geometrie'
+
+describe('estPignon — le triangle que « longueur × hauteur » oublie', () => {
+  it('reconnaît un mur qui referme le faîtage', () => {
+    // Faîtage est-ouest (azimut 90) : les pignons regardent est et ouest.
+    expect(estPignon(90, 90)).toBe(true)
+    expect(estPignon(270, 90)).toBe(true)
+  })
+
+  it('écarte les longs pans, perpendiculaires au faîtage', () => {
+    expect(estPignon(0, 90)).toBe(false)
+    expect(estPignon(180, 90)).toBe(false)
+  })
+
+  it('tolère une trentaine de degrés d’écart', () => {
+    expect(estPignon(110, 90)).toBe(true)
+    expect(estPignon(135, 90)).toBe(false)
+  })
+})
+
+describe('toitureDepuisAltitudes — dire quand le calcul ne vaut rien', () => {
+  it('juge fiable une petite maison à marge serrée', () => {
+    const t = toitureDepuisAltitudes({ emprise: 200, largeur: 20, toitMin: 442, toitMax: 445 })!
+    expect(t.fiable).toBe(true)
+  })
+
+  it('refuse de se prononcer sur un bâtiment large', () => {
+    // Un hangar de 818 m² recevait 88 % : la formule suppose deux pans et un
+    // faîtage central, ce qu'un bâtiment de cette taille n'a presque jamais.
+    const t = toitureDepuisAltitudes({ emprise: 818, largeur: 28, toitMin: 100, toitMax: 112 })!
+    expect(t.fiable).toBe(false)
+  })
+
+  it('refuse une marge supérieure à vingt-cinq points', () => {
+    const t = toitureDepuisAltitudes({ emprise: 60, largeur: 7, toitMin: 100, toitMax: 102 })!
+    expect(t.incertitude).toBeGreaterThan(25)
+    expect(t.fiable).toBe(false)
+  })
+
+  it('refuse une pente au-delà de 120 %', () => {
+    const t = toitureDepuisAltitudes({ emprise: 80, largeur: 8, toitMin: 100, toitMax: 106 })!
+    expect(t.pente).toBeCloseTo(150, 0)
+    expect(t.fiable).toBe(false)
+  })
+
+  it('tient un toit plat pour fiable', () => {
+    expect(toitureDepuisAltitudes({ emprise: 500, largeur: 30, toitMin: 100, toitMax: 100.1 })!.fiable)
+      .toBe(true)
+  })
+})
+
+describe('murs — recoller ce que la numérisation a morcelé', () => {
+  it('ramène un contour en escalier à quatre façades', () => {
+    // Un rectangle dont un côté est découpé en trois petits segments alignés :
+    // la BD TOPO fait cela, et l'artisan n'y voit qu'un mur.
+    const lat = 46
+    const dLat = 8 / 111320
+    const dLon = 12 / (111320 * Math.cos((lat * Math.PI) / 180))
+    const morcele: Point[] = [
+      [5, lat],
+      [5 + dLon / 3, lat],
+      [5 + (2 * dLon) / 3, lat],
+      [5 + dLon, lat],
+      [5 + dLon, lat + dLat],
+      [5, lat + dLat],
+    ]
+    const m = murs(morcele)
+    expect(m).toHaveLength(4)
+    expect(m[0].longueur).toBeCloseTo(12, 0)
+    expect(m[0].orientation).toBe('sud')
+  })
+
+  it('écarte les décrochés sous un mètre', () => {
+    const m = murs(batiment())
+    expect(m.every((x) => x.longueur >= 1)).toBe(true)
+  })
+
+  it('ne recolle pas deux murs perpendiculaires', () => {
+    expect(murs(batiment())).toHaveLength(4)
+  })
+})
+
+describe('facades — regrouper comme parle un artisan', () => {
+  it('donne quatre façades sur un rectangle', () => {
+    const f = facades(batiment())
+    expect(f).toHaveLength(4)
+    expect(f.map((x) => x.orientation).sort()).toEqual(['est', 'nord', 'ouest', 'sud'])
+  })
+
+  it('additionne les pans de même orientation', () => {
+    // Un contour en L : deux pans regardent le sud, séparés par un décroché.
+    const lat = 46
+    const dy = 8 / 111320
+    const dx = 12 / (111320 * Math.cos((lat * Math.PI) / 180))
+    const enL: Point[] = [
+      [5, lat],
+      [5 + dx, lat],
+      [5 + dx, lat + dy / 2],
+      [5 + dx / 2, lat + dy / 2],
+      [5 + dx / 2, lat + dy],
+      [5, lat + dy],
+    ]
+    const sud = facades(enL).find((x) => x.orientation === 'sud')!
+    expect(sud.pans.length).toBeGreaterThanOrEqual(1)
+    expect(sud.longueur).toBeGreaterThan(10)
+  })
+
+  it('classe la plus longue en tête', () => {
+    const f = facades(batiment())
+    expect(f[0].longueur).toBeGreaterThanOrEqual(f[f.length - 1].longueur)
+  })
+})
+
+describe('empriseAvecDebord — le toit déborde des murs', () => {
+  // Une maison de 10 × 8 m : 80 m² au sol, 36 m de périmètre.
+  it('quarante centimètres de débord ajoutent quinze mètres carrés', () => {
+    const a = empriseAvecDebord(80, 36, 0.4)
+    expect(a).toBeCloseTo(80 + 36 * 0.4 + Math.PI * 0.16, 2)
+    expect(a).toBeGreaterThan(94)
+    expect(a).toBeLessThan(96)
+  })
+
+  // Le contrôle exact : un carré de 10 m dilaté de 1 m fait 12 × 12 moins les
+  // quatre coins carrés, plus le disque — soit 144 − 4 + π.
+  it('retrouve l’aire exacte du dilaté d’un carré', () => {
+    expect(empriseAvecDebord(100, 40, 1)).toBeCloseTo(100 + 40 + Math.PI, 6)
+  })
+
+  it('sans débord, rien ne change', () => {
+    expect(empriseAvecDebord(80, 36, 0)).toBe(80)
+    expect(empriseAvecDebord(80, 36, -1)).toBe(80)
+    expect(empriseAvecDebord(80, 36, NaN)).toBe(80)
   })
 })

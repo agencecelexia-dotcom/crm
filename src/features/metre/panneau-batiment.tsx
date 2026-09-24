@@ -4,12 +4,24 @@ import { Check, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { surfaceMur, type Batiment } from './bati-ign'
-import { formatM, formatM2, surfaceReelle, type Mur } from './geometrie'
+import { pignonDe, surfaceMur, type Batiment } from './bati-ign'
+import { empriseAvecDebord, formatM, formatM2, surfaceReelle, type Facade } from './geometrie'
 import { useFicheMaison } from './use-fiche-maison'
+import { partsNormalisees, penteRetenue, useToiture, versantsLisibles } from './use-toiture'
 
 /** Pentes courantes, pour corriger d'un doigt ce que la BD TOPO propose. */
 const PENTES = [0, 30, 35, 40, 45, 60, 80]
+
+/**
+ * Débords de toiture courants, en centimètres.
+ *
+ * Quarante centimètres par défaut : c'est la valeur de construction la plus
+ * répandue, et l'erreur qu'elle évite va dans le sens qui compte. Sur une
+ * maison de 80 m² au sol, l'oublier retire quinze mètres carrés de couverture
+ * — soit de quoi manquer de tuiles en fin de chantier.
+ */
+const DEBORDS = [0, 30, 40, 50, 70]
+const DEBORD_DEFAUT = 40
 
 /** Surface moyenne d'une ouverture de maison : une fenêtre standard. */
 const OUVERTURE_TYPE = 1.8
@@ -22,7 +34,10 @@ export interface MesureAEnregistrer {
   pente_pct?: number | null
   ouvertures_m2?: number | null
   azimut?: number | null
-  pente_source?: 'altitudes' | 'saisie' | null
+  pente_source?: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
+  debord_m?: number | null
+  part_toiture?: number | null
+  versant?: string | null
   hauteur_source?: 'bati' | 'saisie' | null
 }
 
@@ -43,7 +58,7 @@ export function PanneauBatiment({
   batiment: Batiment
   onEnregistrer: (m: MesureAEnregistrer) => void
   enCours: boolean
-  onMurChoisi: (m: Mur | null) => void
+  onMurChoisi: (f: Facade | null) => void
   token: string
 }) {
   const [onglet, setOnglet] = useState<'toiture' | 'facades' | 'maison'>('toiture')
@@ -54,13 +69,29 @@ export function PanneauBatiment({
     batiment.centre?.[0] ?? null,
   )
 
-  // La pente vient des altitudes de la BD TOPO ; l'artisan peut la corriger,
-  // et on retient alors qu'elle est saisie et non déduite.
+  // LA PENTE, PAR ORDRE DE CONFIANCE
+  //
+  // 1. ce que l'artisan saisit — il est sur le terrain, pas nous ;
+  // 2. ce qu'on MESURE dans la grille d'altitudes de l'IGN, à 50 cm : ±2 à ±10
+  //    points sur des maisons réelles ;
+  // 3. ce qu'on DÉDUIT des altitudes de la BD TOPO, faute de mieux : ±27 à ±61
+  //    points, que l'écran doit annoncer comme tels.
   const [penteSaisie, setPenteSaisie] = useState<number | null>(null)
-  const pente = penteSaisie ?? Math.round(batiment.toiture?.pente ?? 0)
-  const penteDeduite = penteSaisie == null && batiment.toiture != null
+  const { data: toitureIgn, isLoading: toitureEnCours } = useToiture(
+    token,
+    batiment.cleabs,
+    batiment.contour,
+  )
+  const penteDeduite = batiment.toiture ? Math.round(batiment.toiture.pente) : null
+  const { pente, source: origine } = penteRetenue({
+    saisie: penteSaisie,
+    mesuree: toitureIgn,
+    deduite: penteDeduite,
+  })
+  const penteMesuree = origine === 'lidar' || origine === 'photogrammetrie' ? pente : null
+  const parLiDAR = origine === 'lidar'
 
-  const [mur, setMur] = useState<Mur | null>(null)
+  const [mur, setMur] = useState<Facade | null>(null)
   const [hauteurSaisie, setHauteurSaisie] = useState('')
   const [nbOuvertures, setNbOuvertures] = useState(0)
 
@@ -68,10 +99,31 @@ export function PanneauBatiment({
     ? parseFloat(hauteurSaisie.replace(',', '.'))
     : (batiment.hauteur ?? null)
   const ouvertures = nbOuvertures * OUVERTURE_TYPE
-  const surfaceFacade = mur ? surfaceMur(mur, hauteur, ouvertures) : null
-  const toiture = surfaceReelle(batiment.emprise, pente)
+  // Un pignon monte plus haut que la gouttière : le triangle sous la
+  // charpente s'ajoute à « longueur × hauteur ».
+  const pignon = mur ? pignonDe(batiment, mur) : null
+  const surfaceFacade = mur ? surfaceMur(mur, hauteur, ouvertures, pignon) : null
+  // LE TOIT DÉBORDE DES MURS, et le contour ne le montre pas : vérifié contre
+  // le cadastre, celui de la BD TOPO est bien celui du bâtiment au sol. Le
+  // débord n'est pas mesurable — le LiDAR a une maille de 50 cm et son bord de
+  // toit est flou d'autant — donc on ne l'annonce pas comme mesuré : on le
+  // montre, chiffré à part, et l'artisan le corrige d'un doigt.
+  const [debordCm, setDebordCm] = useState(DEBORD_DEFAUT)
+  const empriseToit = empriseAvecDebord(batiment.emprise, batiment.perimetre, debordCm / 100)
+  const toiture = surfaceReelle(empriseToit, pente)
+  const gainDebord = toiture - surfaceReelle(batiment.emprise, pente)
 
-  function choisirMur(m: Mur | null) {
+  // UN COUVREUR NE REFAIT PAS TOUJOURS TOUT LE TOIT. Le relevé sépare les
+  // versants par leur exposition ; l'artisan en choisit un et lit sa surface,
+  // au lieu de diviser le total par deux de tête.
+  const versants = partsNormalisees(toitureIgn?.versants)
+  const [versantChoisi, setVersantChoisi] = useState<string | null>(null)
+  const partRetenue = versantChoisi
+    ? (versants.find((v) => v.orientation === versantChoisi)?.part ?? 1)
+    : 1
+  const surfaceRetenue = toiture * partRetenue
+
+  function choisirMur(m: Facade | null) {
     setMur(m)
     onMurChoisi(m)
   }
@@ -117,7 +169,11 @@ export function PanneauBatiment({
         <>
           <div className="grid grid-cols-2 gap-2">
             <Chiffre titre="Emprise au sol" valeur={formatM2(batiment.emprise)} />
-            <Chiffre titre={`Toiture à ${pente} %`} valeur={formatM2(toiture)} fort />
+            <Chiffre
+              titre={versantChoisi ? `Versant ${versantChoisi} à ${pente} %` : `Toiture à ${pente} %`}
+              valeur={formatM2(surfaceRetenue)}
+              fort
+            />
             {batiment.encombrement && (
               <Chiffre
                 titre="Dimensions"
@@ -125,32 +181,83 @@ export function PanneauBatiment({
               />
             )}
             {batiment.hauteur != null && (
-              <Chiffre titre="Hauteur au faîtage" valeur={formatM(batiment.hauteur)} />
+              <Chiffre titre="Hauteur à la gouttière" valeur={formatM(batiment.hauteur)} />
             )}
+            <Chiffre titre="Périmètre" valeur={formatM(batiment.perimetre)} />
           </div>
 
-          {/* La pente, déduite des altitudes plutôt que devinée — avec son
-              incertitude, qui est grande sur une petite maison. */}
-          {penteDeduite && batiment.toiture && (
+          {/* D'OÙ VIENT LA PENTE — jamais un chiffre sans sa provenance. */}
+          {toitureEnCours ? (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              Mesure de la pente dans les altitudes de l’IGN…
+            </p>
+          ) : penteSaisie != null ? (
+            <p className="text-xs text-muted-foreground">Pente saisie par vos soins.</p>
+          ) : penteMesuree != null ? (
             <p className="text-xs text-muted-foreground">
-              Pente déduite des altitudes de l’IGN&nbsp;:{' '}
-              <strong className="text-foreground">{Math.round(batiment.toiture.pente)} %</strong>
+              Pente <strong className="text-foreground">mesurée</strong> sur {toitureIgn?.pixels}{' '}
+              points du toit&nbsp;:{' '}
+              <strong className="text-foreground">{penteMesuree} %</strong>
+              {toitureIgn?.incertitude ? ` ± ${toitureIgn.incertitude}` : ''}.{' '}
+              {parLiDAR
+                ? 'Relevé LiDAR de l’IGN, grille de 50 cm.'
+                : 'Photogrammétrie de l’IGN, grille de 1 m — moins fine que le LiDAR, absent ici.'}
+              {versantsLisibles(toitureIgn?.versants) &&
+                ` Deux versants, ${versantsLisibles(toitureIgn?.versants)}.`}
+            </p>
+          ) : toitureIgn && toitureIgn.couvert && !toitureIgn.fiable ? (
+            // Un îlot urbain n'a pas de pan dominant : servir une médiane et son
+            // écart interquartile reviendrait à habiller du bruit en mesure.
+            <p className="text-xs text-[#B45309]">
+              Les altitudes de ce toit ne montrent pas deux versants nets&nbsp;: il est trop
+              découpé pour qu’une pente unique ait un sens. Saisissez-la.
+            </p>
+          ) : toitureIgn && !toitureIgn.couvert ? (
+            <p className="text-xs text-[#B45309]">
+              {toitureIgn.motif === 'hors_couverture'
+                ? 'Aucun relevé d’altitude de l’IGN ne couvre ce bâtiment.'
+                : 'Ce bâtiment est trop petit pour que sa pente se lise dans les altitudes — ' +
+                  'vérifiez que c’est bien la maison, et non un abri.'}{' '}
+              Saisissez la pente.
+            </p>
+          ) : !batiment.toiture ? (
+            // Sans altitudes, l'écran affichait « Toiture à 0 % » et la surface
+            // au sol, en silence. Il faut le dire.
+            <p className="text-xs text-[#B45309]">
+              L’IGN ne donne pas les altitudes de ce toit&nbsp;: la pente est inconnue.
+              Choisissez-la ci-dessous, sans quoi la surface affichée est celle du sol.
+            </p>
+          ) : (
+            <p className="text-xs text-[#B45309]">
+              Pente seulement <strong>déduite</strong> de deux altitudes&nbsp;:{' '}
+              <strong className="text-foreground">{penteDeduite} %</strong>
               {batiment.toiture.incertitude > 0 && ` ± ${Math.round(batiment.toiture.incertitude)}`}
-              {batiment.toiture.incertitude > 15
-                ? ' — marge large sur un bâtiment de cette taille, vérifiez.'
-                : '.'}
+              . Le calcul suppose un toit à deux pans et n’a pas la précision d’un relevé&nbsp;:
+              vérifiez-la.
             </p>
           )}
 
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Pente&nbsp;:</span>
+            {/* Revenir à la valeur de l'IGN : une fois une pastille touchée,
+                elle était perdue. */}
+            {penteSaisie != null && (penteMesuree ?? penteDeduite) != null && (
+              <button
+                type="button"
+                onClick={() => setPenteSaisie(null)}
+                className="rounded-full border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
+              >
+                IGN&nbsp;: {penteMesuree ?? penteDeduite} %
+              </button>
+            )}
             {PENTES.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setPenteSaisie(p)}
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                  'rounded-full border px-3 py-1.5 text-xs transition-colors',
                   pente === p
                     ? 'border-primary bg-primary/10 font-medium text-primary'
                     : 'border-border bg-card hover:bg-accent',
@@ -161,9 +268,83 @@ export function PanneauBatiment({
             ))}
           </div>
 
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Débord&nbsp;:</span>
+            {DEBORDS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDebordCm(d)}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-xs transition-colors',
+                  debordCm === d
+                    ? 'border-primary bg-primary/10 font-medium text-primary'
+                    : 'border-border bg-card hover:bg-accent',
+                )}
+              >
+                {d === 0 ? 'aucun' : `${d} cm`}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {debordCm > 0 ? (
+              <>
+                Le contour est celui des murs&nbsp;; le toit dépasse de {debordCm} cm à l’égout,
+                soit <strong className="text-foreground">{formatM2(gainDebord)}</strong> en plus.
+                Ce débord n’est pas mesurable sur les données de l’IGN&nbsp;: à vous de le régler.
+              </>
+            ) : (
+              <>
+                Sans débord, la surface est celle du toit à l’aplomb des murs — en général{' '}
+                {formatM2(surfaceReelle(empriseAvecDebord(batiment.emprise, batiment.perimetre, 0.4), pente) - toiture)}{' '}
+                de moins que le toit réel.
+              </>
+            )}
+          </p>
+
+          {/* Les versants, quand le relevé en distingue. Toucher un versant le
+              met seul en avant ; le retoucher rend tout le toit. */}
+          {versants.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Versant&nbsp;:</span>
+              {versants.map((v) => (
+                <button
+                  key={v.orientation}
+                  type="button"
+                  onClick={() =>
+                    setVersantChoisi(versantChoisi === v.orientation ? null : v.orientation)
+                  }
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-xs transition-colors',
+                    versantChoisi === v.orientation
+                      ? 'border-primary bg-primary/10 font-medium text-primary'
+                      : 'border-border bg-card hover:bg-accent',
+                  )}
+                >
+                  {v.orientation} · {formatM2(toiture * v.part)}
+                </button>
+              ))}
+              {versantChoisi && (
+                <button
+                  type="button"
+                  onClick={() => setVersantChoisi(null)}
+                  className="rounded-full border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
+                >
+                  tout le toit
+                </button>
+              )}
+            </div>
+          )}
+          {versants.length > 1 && (
+            <p className="text-xs text-muted-foreground">
+              Surfaces de versant approchées&nbsp;: elles supposent la même pente de chaque côté,
+              ce qui est le cas courant.
+            </p>
+          )}
+
           <Garder
             enCours={enCours}
-            defaut={batiment.nature || 'Toiture'}
+            defaut={versantChoisi ? `Toiture versant ${versantChoisi}` : batiment.nature || 'Toiture'}
             onGarder={(nom) =>
               onEnregistrer({
                 nom,
@@ -171,8 +352,11 @@ export function PanneauBatiment({
                 geometrie: batiment.contour,
                 hauteur_m: batiment.hauteur,
                 pente_pct: pente > 0 ? pente : null,
-                pente_source: penteDeduite ? 'altitudes' : 'saisie',
+                pente_source: origine,
                 hauteur_source: 'bati',
+                debord_m: debordCm / 100,
+                part_toiture: partRetenue,
+                versant: versantChoisi,
               })
             }
           />
@@ -181,19 +365,22 @@ export function PanneauBatiment({
         <>
           {/* Un côté du bâtiment = une façade, nommée par son orientation. */}
           <div className="flex flex-wrap gap-1.5">
-            {batiment.murs.map((m) => (
+            {batiment.facades.map((m) => (
               <button
-                key={m.index}
+                key={m.orientation}
                 type="button"
-                onClick={() => choisirMur(mur?.index === m.index ? null : m)}
+                onClick={() => choisirMur(mur?.orientation === m.orientation ? null : m)}
                 className={cn(
-                  'rounded-full border px-2.5 py-1 text-xs transition-colors',
-                  mur?.index === m.index
+                  'rounded-full border px-3 py-1.5 text-xs transition-colors',
+                  mur?.orientation === m.orientation
                     ? 'border-primary bg-primary/10 font-medium text-primary'
                     : 'border-border bg-card hover:bg-accent',
                 )}
               >
                 {m.orientation} · {formatM(m.longueur)}
+                {m.pans.length > 1 && (
+                  <span className="ml-1 opacity-70">({m.pans.length} pans)</span>
+                )}
               </button>
             ))}
           </div>
@@ -206,12 +393,17 @@ export function PanneauBatiment({
                   valeur={surfaceFacade != null ? formatM2(surfaceFacade) : '—'}
                   fort
                 />
-                <Chiffre titre="Longueur" valeur={formatM(mur.longueur)} />
+                <Chiffre
+                  titre={pignon ? 'Longueur (pignon)' : 'Longueur'}
+                  valeur={formatM(mur.longueur)}
+                />
               </div>
 
               <div className="flex items-end gap-2">
                 <label className="flex-1 space-y-1">
-                  <span className="text-xs text-muted-foreground">Hauteur</span>
+                  <span className="text-xs text-muted-foreground">
+                    Hauteur {pignon ? 'à la gouttière' : ''}
+                  </span>
                   <div className="relative">
                     <Input
                       className="h-10 pr-8"
@@ -270,7 +462,7 @@ export function PanneauBatiment({
                   onEnregistrer({
                     nom,
                     type: 'facade',
-                    geometrie: [mur.a, mur.b],
+                    geometrie: mur.pans.flatMap((p) => [p.a, p.b]),
                     hauteur_m: hauteur,
                     ouvertures_m2: ouvertures > 0 ? ouvertures : null,
                     azimut: mur.azimut,
@@ -332,8 +524,14 @@ function FicheMaison({
   if (b?.nb_niveau) lignes.push(['Niveaux', String(b.nb_niveau)])
   if (d?.surface_habitable_logement)
     lignes.push(['Surface habitable', `${d.surface_habitable_logement} m²`])
-  if (b?.mat_mur_txt) lignes.push(['Murs', b.mat_mur_txt])
-  if (b?.mat_toit_txt) lignes.push(['Toiture', b.mat_toit_txt])
+  // La BDNB écrit « INDETERMINE » quand elle ne sait pas : ce n'est pas une
+  // information, c'est une absence.
+  const materiau = (v?: string | null) =>
+    v && !/^ind[eé]termin/i.test(v) && !/^indiff/i.test(v) ? v : null
+  const murs = materiau(b?.mat_mur_txt)
+  const toit = materiau(b?.mat_toit_txt)
+  if (murs) lignes.push(['Murs', murs])
+  if (toit) lignes.push(['Toiture', toit])
   if (d?.qualite_isolation_murs) lignes.push(['Isolation des murs', d.qualite_isolation_murs])
   if (d?.isolation_toiture != null)
     lignes.push(['Toiture isolée', d.isolation_toiture ? 'oui' : 'non'])
@@ -342,7 +540,10 @@ function FicheMaison({
   if (d?.etiquette_dpe) lignes.push(['Étiquette énergie', d.etiquette_dpe])
   if (fiche.urbanisme?.zonage) lignes.push(['Zone du PLU', fiche.urbanisme.zonage])
   if (fiche.cadastre?.contenance) lignes.push(['Terrain', `${fiche.cadastre.contenance} m²`])
-  if (fiche.risques?.argile) lignes.push(['Retrait-gonflement argile', fiche.risques.argile])
+  // Géorisques répond parfois 200 avec un corps vide — trois fiches sur sept
+  // lors de l'audit. La BDNB porte le même aléa : on s'en sert en secours.
+  const argile = fiche.risques?.argile ?? b?.alea_argile ?? null
+  if (argile) lignes.push(['Retrait-gonflement argile', argile])
 
   if (lignes.length === 0) {
     return (

@@ -27,9 +27,10 @@ import {
   formatM2,
   longueur,
   plusProche,
-  type Mur,
+  type Facade,
   type Point,
 } from './geometrie'
+import { useQuery } from '@tanstack/react-query'
 import {
   chercherAdresse,
   useContexteMetre,
@@ -38,6 +39,7 @@ import {
   useSupprimerMetre,
   type Adresse,
 } from './use-metres'
+import { situerChantier } from './position'
 
 /**
  * Prendre un métré sans se déplacer.
@@ -70,7 +72,7 @@ export function FeuilleMetre({
   const [batiments, setBatiments] = useState<Batiment[]>([])
   const [choisi, setChoisi] = useState<Batiment | null>(null)
   // La façade en cours de chiffrage, surlignée sur la carte.
-  const [murChoisi, setMurChoisi] = useState<Mur | null>(null)
+  const [murChoisi, setMurChoisi] = useState<Facade | null>(null)
   const [nom, setNom] = useState('')
   const [recherche, setRecherche] = useState('')
   const [resultats, setResultats] = useState<Adresse[]>([])
@@ -86,14 +88,33 @@ export function FeuilleMetre({
   const [recadrage, setRecadrage] = useState<Point | null>(null)
   const centreCarte = useRef<Point | null>(null)
 
+  // Où est vraiment ce chantier ? La position enregistrée vient d'un géocodage
+  // fait à la création, qui retombe sur la ville faute d'adresse — sur
+  // trente-quatre chantiers, deux seulement tombaient à moins de quatre-vingts
+  // mètres. On confronte donc la position à l'adresse avant toute mesure.
+  const { data: situation } = useQuery({
+    queryKey: ['situer', ctx?.projet_id, ctx?.client_adresse, ctx?.client_ville],
+    enabled: !!ctx?.ok,
+    staleTime: 1000 * 60 * 30,
+    queryFn: ({ signal }) =>
+      situerChantier(
+        {
+          adresse: ctx?.client_adresse,
+          codePostal: ctx?.client_code_postal,
+          ville: ctx?.client_ville,
+          latitude: ctx?.latitude,
+          longitude: ctx?.longitude,
+        },
+        signal,
+      ),
+  })
+
   // Les coordonnées vivent en SCALAIRES, pas en tableau : un tableau est
   // recréé à chaque rendu, et l'effet qui charge le bâti se relançait alors
   // sans fin — des centaines d'appels à l'IGN pour une seule ouverture.
-  const lon = recadrage?.[0] ?? ctx?.longitude ?? null
-  const lat = recadrage?.[1] ?? ctx?.latitude ?? null
+  const lon = recadrage?.[0] ?? situation?.point?.[0] ?? null
+  const lat = recadrage?.[1] ?? situation?.point?.[1] ?? null
   const centre: Point | null = lon != null && lat != null ? [lon, lat] : null
-  const position: Point | null =
-    ctx?.latitude != null && ctx.longitude != null ? [ctx.longitude, ctx.latitude] : null
 
   // Le bâti se recharge autour du centre à chaque déplacement.
   //
@@ -101,6 +122,7 @@ export function FeuilleMetre({
   // position est présélectionné : l'artisan ouvre l'écran et lit ses mesures
   // sans toucher à rien. C'est tout l'objet de l'outil.
   const premierCadrage = useRef(true)
+  const fiable = situation?.fiable === true
   useEffect(() => {
     if (lon == null || lat == null) return
     const p: Point = [lon, lat]
@@ -111,10 +133,14 @@ export function FeuilleMetre({
         if (!premierCadrage.current) return
         premierCadrage.current = false
         const proche = plusProche(bats, p, (b) => b.centre)
-        // Au-delà de vingt-cinq mètres, ce n'est plus forcément la maison du
-        // client mais celle du voisin — et le géocodage vise souvent la rue.
-        // Désigner le mauvais bâtiment est pire que n'en désigner aucun :
-        // l'artisan lirait des mesures fausses sans s'en apercevoir.
+        // Présélectionner suppose de savoir SUR QUELLE MAISON on est. Tant que
+        // la position n'est pas confirmée par l'adresse, on ne désigne rien :
+        // des chiffres justes sur la maison d'un autre sont pires que pas de
+        // chiffres, et c'est précisément ce que faisait l'outil.
+        if (!fiable) {
+          setZoom(18)
+          return
+        }
         if (proche?.centre && distance(proche.centre, p) < 25) {
           setChoisi(proche)
           setNom(proche.nature && proche.nature !== 'Indifférenciée' ? proche.nature : 'Bâtiment')
@@ -124,7 +150,7 @@ export function FeuilleMetre({
       })
       .catch(() => undefined)
     return () => ctrl.abort()
-  }, [lon, lat])
+  }, [lon, lat, fiable])
 
   useEffect(() => {
     const q = recherche.trim()
@@ -166,8 +192,11 @@ export function FeuilleMetre({
       { affectation_token: affectationToken, source: 'bati', ...m },
       {
         onSuccess: (r) => {
+          // La surface RÉELLE quand elle existe : annoncer l'emprise au sol
+          // après avoir affiché la toiture prêtait à confusion.
+          const retenue = r.surface_reelle_m2 ?? r.surface_m2
           toast.success('Métré enregistré', {
-            description: r.surface_m2 != null ? formatM2(Number(r.surface_m2)) : undefined,
+            description: retenue != null ? formatM2(Number(retenue)) : undefined,
           })
           recommencer()
         },
@@ -262,6 +291,10 @@ export function FeuilleMetre({
                     key={a.label}
                     type="button"
                     onClick={() => {
+                      // Sans remise à zéro, l'emprise, la pente et l'alerte
+                      // ABF de l'ancien bâtiment restaient à l'écran.
+                      recommencer()
+                      premierCadrage.current = true
                       setRecadrage([a.lon, a.lat])
                       setChercheOuverte(false)
                       setRecherche('')
@@ -284,7 +317,7 @@ export function FeuilleMetre({
                 onClick={() => setChercheOuverte(true)}
               >
                 <Search className="size-4" />
-                {position ? 'Autre adresse' : 'Chercher l’adresse'}
+                {fiable ? 'Autre adresse' : 'Chercher l’adresse'}
               </Button>
             )}
           </div>
@@ -292,7 +325,41 @@ export function FeuilleMetre({
 
         {/* Le panneau de mesure */}
         <div className="shrink-0 space-y-3 border-t border-border p-3">
+          {/* Ce qu'on sait — ou pas — de l'endroit où l'on est. */}
+          {situation?.message && (
+            <div
+              className={cn(
+                'flex items-start gap-2 rounded-xl border p-2.5',
+                situation.fiabilite === 'discordante'
+                  ? 'border-destructive/40 bg-destructive/5'
+                  : 'border-[#F59E0B]/30 bg-[#F59E0B]/5',
+              )}
+            >
+              <MapPin
+                className={cn(
+                  'mt-0.5 size-4 shrink-0',
+                  situation.fiabilite === 'discordante' ? 'text-destructive' : 'text-[#B45309]',
+                )}
+              />
+              <p
+                className={cn(
+                  'text-xs',
+                  situation.fiabilite === 'discordante' ? 'text-destructive' : 'text-[#B45309]',
+                )}
+              >
+                {situation.message}
+              </p>
+            </div>
+          )}
           {choisi ? (
+            <>
+              <button
+                type="button"
+                onClick={recommencer}
+                className="w-full text-left text-xs text-muted-foreground underline underline-offset-2"
+              >
+                Ce n’est pas le bon bâtiment — en choisir un autre
+              </button>
             <PanneauBatiment
               token={token}
               batiment={choisi}
@@ -300,6 +367,7 @@ export function FeuilleMetre({
               onEnregistrer={garder}
               onMurChoisi={setMurChoisi}
             />
+            </>
           ) : dessin ? (
             <>
               <div className="grid grid-cols-2 gap-2">
@@ -316,6 +384,14 @@ export function FeuilleMetre({
                   <Chiffre titre="Périmètre" valeur={formatM(dessin.perimetre)} />
                 )}
               </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setTrace((t) => t.slice(0, -1))}
+              >
+                <Undo2 className="size-4" />
+                Défaire le dernier point
+              </Button>
               <div className="flex gap-2">
                 <Input
                   className="h-10 flex-1"

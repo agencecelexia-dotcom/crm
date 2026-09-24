@@ -72,6 +72,35 @@ export function surfaceReelle(surfaceProjetee: number, pentePct: number): number
   return surfaceProjetee / Math.cos(Math.atan(pentePct / 100))
 }
 
+/**
+ * L'emprise du TOIT, qui déborde des murs.
+ *
+ * POURQUOI CE N'EST PAS UN DÉTAIL
+ *
+ * Le contour de la BD TOPO est celui du bâtiment au sol. Vérifié contre le
+ * cadastre sur trois maisons : les deux coïncident à 1 % près. Le toit, lui,
+ * dépasse des murs à l'égout — trente à cinquante centimètres en construction
+ * courante. Sur une maison de 80 m², quarante centimètres ajoutent quinze
+ * mètres carrés, soit près de vingt pour cent. Dans le sens qui fait commander
+ * TROP PEU de tuiles.
+ *
+ * ET POURQUOI ON NE LE MESURE PAS
+ *
+ * Le LiDAR de l'IGN a une maille de cinquante centimètres, et son bord de toit
+ * est flou sur un à deux pixels. Chercher un débord de quarante centimètres
+ * là-dedans revient à mesurer sous la résolution : l'essai donne 1,00 à 1,50 m,
+ * ce qui est le flou, pas le débord. On refuse donc de l'annoncer comme mesuré.
+ * L'artisan le pose, il connaît ses toits, et l'écran montre le mètre carré que
+ * ça représente.
+ *
+ * La formule est celle du dilaté d'un polygone : l'aire gagne le périmètre fois
+ * la distance, plus un disque aux angles.
+ */
+export function empriseAvecDebord(emprise: number, perimetre: number, debordM: number): number {
+  if (!Number.isFinite(debordM) || debordM <= 0) return emprise
+  return emprise + perimetre * debordM + Math.PI * debordM * debordM
+}
+
 /** Une pente s'annonce en pourcentage sur un chantier, en degrés sur un plan. */
 export const pctEnDegres = (pct: number) => (Math.atan(pct / 100) * 180) / Math.PI
 export const degresEnPct = (deg: number) => Math.tan(rad(deg)) * 100
@@ -177,22 +206,123 @@ export function murs(contour: Point[]): Mur[] {
   if (!contour || contour.length < 3) return []
   // Sens de parcours : il dit de quel côté est l'extérieur.
   const trigo = aireSignee(contour) > 0
-  const out: Mur[] = []
 
+  // 1) Une arête par côté du contour.
+  const aretes: Mur[] = []
   for (let i = 0; i < contour.length; i++) {
     const a = contour[i]
     const b = contour[(i + 1) % contour.length]
     const [est, nord] = enMetres(a, b)
     const longueur = Math.hypot(est, nord)
-    if (longueur < 1) continue
+    if (longueur < 0.3) continue
 
     // Normale extérieure : à droite de l'arête si le contour est trigonométrique.
     const [nEst, nNord] = trigo ? [nord, -est] : [-nord, est]
     const azimut = (((Math.atan2(nEst, nNord) * 180) / Math.PI) % 360 + 360) % 360
 
-    out.push({ index: i, longueur, azimut, orientation: cardinal(azimut), a, b })
+    aretes.push({ index: i, longueur, azimut, orientation: cardinal(azimut), a, b })
   }
-  return out
+  if (aretes.length < 2) return aretes
+
+  // 2) Les arêtes presque alignées forment UNE façade.
+  //
+  // Un contour de la BD TOPO suit les décrochés de numérisation : une maison
+  // ordinaire y compte onze côtés, dont un de 1,21 m. L'artisan, lui, voit
+  // quatre façades et les nomme par leur orientation. On recolle donc les
+  // arêtes dont la direction ne varie pas de plus de douze degrés.
+  const ECART_MAX = 12
+  const fusion: Mur[] = []
+  for (const arete of aretes) {
+    const prec = fusion[fusion.length - 1]
+    if (prec && ecartAngulaire(arete.azimut, prec.azimut) < ECART_MAX) {
+      // On prolonge la façade : sa direction devient la moyenne pondérée par
+      // les longueurs, et elle va du premier point au dernier.
+      const total = prec.longueur + arete.longueur
+      prec.azimut = moyenneAngles(prec.azimut, prec.longueur, arete.azimut, arete.longueur)
+      prec.orientation = cardinal(prec.azimut)
+      prec.longueur = total
+      prec.b = arete.b
+    } else {
+      fusion.push({ ...arete })
+    }
+  }
+
+  // Le contour est fermé : la dernière façade peut prolonger la première.
+  if (fusion.length > 2) {
+    const premier = fusion[0]
+    const dernier = fusion[fusion.length - 1]
+    if (ecartAngulaire(dernier.azimut, premier.azimut) < ECART_MAX) {
+      premier.azimut = moyenneAngles(
+        premier.azimut, premier.longueur, dernier.azimut, dernier.longueur)
+      premier.orientation = cardinal(premier.azimut)
+      premier.longueur += dernier.longueur
+      premier.a = dernier.a
+      fusion.pop()
+    }
+  }
+
+  // 3) Un pan de moins d'un mètre n'est pas une façade à chiffrer.
+  return fusion.filter((m) => m.longueur >= 1).map((m, i) => ({ ...m, index: i }))
+}
+
+/**
+ * Les façades d'un bâtiment, telles qu'un artisan les nomme.
+ *
+ * Recoller les pans presque alignés ne suffisait pas : un contour de la BD
+ * TOPO garde de vrais décrochés, et une maison ordinaire y compte encore huit
+ * à onze côtés après fusion. Or un façadier ne dit jamais « le mur n° 3 » : il
+ * dit « LA FAÇADE SUD », et elle peut être faite de trois pans.
+ *
+ * On regroupe donc par orientation cardinale. Une maison en L peut avoir deux
+ * pans au sud, séparés par un décroché : ils se traitent ensemble, au même
+ * prix, et se chiffrent ensemble.
+ */
+export interface Facade {
+  orientation: string
+  /** Somme des pans qui regardent dans cette direction. */
+  longueur: number
+  /** Direction moyenne, pour savoir si c'est un pignon. */
+  azimut: number
+  pans: Mur[]
+}
+
+export function facades(contour: Point[]): Facade[] {
+  const groupes = new Map<string, Mur[]>()
+  for (const m of murs(contour)) {
+    const l = groupes.get(m.orientation)
+    if (l) l.push(m)
+    else groupes.set(m.orientation, [m])
+  }
+
+  return [...groupes.entries()]
+    .map(([orientation, pans]) => {
+      const longueur = pans.reduce((s, m) => s + m.longueur, 0)
+      let x = 0
+      let y = 0
+      for (const m of pans) {
+        x += Math.cos(rad(m.azimut)) * m.longueur
+        y += Math.sin(rad(m.azimut)) * m.longueur
+      }
+      return {
+        orientation,
+        longueur,
+        azimut: (((Math.atan2(y, x) * 180) / Math.PI) % 360 + 360) % 360,
+        pans,
+      }
+    })
+    .sort((a, b) => b.longueur - a.longueur)
+}
+
+/** Écart entre deux directions, de 0 (identiques) à 180 (opposées). */
+function ecartAngulaire(a: number, b: number): number {
+  return Math.abs(((a - b + 180) % 360 + 360) % 360 - 180)
+}
+
+/** Moyenne de deux directions, pondérée — une moyenne arithmétique franchirait mal le nord. */
+function moyenneAngles(a: number, pa: number, b: number, pb: number): number {
+  const x = Math.cos(rad(a)) * pa + Math.cos(rad(b)) * pb
+  const y = Math.sin(rad(a)) * pa + Math.sin(rad(b)) * pb
+  return (((Math.atan2(y, x) * 180) / Math.PI) % 360 + 360) % 360
 }
 
 /** Les dimensions hors tout d'un bâtiment, et l'axe de son faîtage. */
@@ -260,6 +390,15 @@ export function encombrement(contour: Point[]): Encombrement | null {
 export interface Toiture {
   /** Pente en pourcentage. */
   pente: number
+  /**
+   * La pente est-elle exploitable ?
+   *
+   * La formule suppose un toit à DEUX PANS dont le faîtage suit le grand axe.
+   * Sur un bâtiment large, un toit-terrasse à acrotère ou un volume composé,
+   * elle n'a plus de sens : un audit a relevé 88 % sur un commerce de 818 m²
+   * manifestement plat. On le dit plutôt que de laisser croire à une mesure.
+   */
+  fiable: boolean
   /** Dénivelé du toit, gouttière au faîtage, en mètres. */
   denivele: number
   /** Incertitude sur la pente, en points de pourcentage. */
@@ -299,7 +438,10 @@ export function toitureDepuisAltitudes(p: {
   if (denivele < 0.2) {
     // Toit-terrasse ou faible dénivelé : la pente n'a pas de sens, la surface
     // est celle de l'emprise.
-    return { pente: 0, denivele: Math.max(denivele, 0), incertitude: 0, surface: emprise }
+    return {
+      pente: 0, denivele: Math.max(denivele, 0), incertitude: 0,
+      surface: emprise, fiable: true,
+    }
   }
 
   const demiLargeur = largeur / 2
@@ -312,6 +454,25 @@ export function toitureDepuisAltitudes(p: {
     pente,
     denivele,
     incertitude,
+    // Trois motifs de défiance, chacun constaté : un bâtiment large n'a
+    // pratiquement jamais un seul faîtage central ; une marge supérieure à
+    // vingt-cinq points ne dit plus rien ; et au-delà de 120 % (50°) on sort
+    // de ce qui se construit en France hors cas particuliers.
+    fiable: largeur <= 20 && incertitude <= 25 && pente <= 120,
     surface: surfaceReelle(emprise, pente),
   }
+}
+
+/**
+ * Ce mur est-il un pignon ?
+ *
+ * Sur un toit à deux pans, le faîtage suit le grand axe du bâtiment. Les murs
+ * qui le referment — les pignons — regardent donc dans la direction de cet
+ * axe. Leur surface comporte en plus le triangle sous la charpente, que
+ * « longueur × hauteur » oublie.
+ */
+export function estPignon(azimutMur: number, azimutLong: number): boolean {
+  const ecart = Math.abs(((azimutMur - azimutLong + 540) % 360) - 180)
+  // À moins de trente degrés de l'axe du faîtage, ou de son opposé.
+  return Math.min(ecart, 180 - ecart) > 150 || Math.min(ecart, 180 - ecart) < 30
 }

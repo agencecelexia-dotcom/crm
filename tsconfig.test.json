@@ -2,7 +2,9 @@
   "extends": "./tsconfig.app.json",
   "include": ["tests", "playwright.config.ts"],
   "compilerOptions": {
-    "types": ["node"],
+    // Les tests tournent sous Vitest, qui sert `import.meta.env` comme Vite :
+    // sans ce type, tout test important un module qui le lit casse la compilation.
+    "types": ["node", "vite/client"],
     "noEmit": true
   }
 }

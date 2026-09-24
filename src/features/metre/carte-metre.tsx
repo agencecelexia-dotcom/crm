@@ -4,7 +4,7 @@ import type { LatLngExpression } from 'leaflet'
 
 import { cn } from '@/lib/utils'
 import type { Batiment } from './bati-ign'
-import type { Mur, Point } from './geometrie'
+import type { Facade, Point } from './geometrie'
 
 /**
  * La carte de métré.
@@ -84,7 +84,7 @@ export function CarteMetre({
   mode: ModeCarte
   batiments: Batiment[]
   batimentChoisi: string | null
-  murChoisi?: Mur | null
+  murChoisi?: Facade | null
   onChoisirBatiment: (b: Batiment) => void
   trace: Point[]
   onPoserSommet: (p: Point) => void
@@ -127,6 +127,9 @@ export function CarteMetre({
       {cadastre && (
         <TileLayer
           key="cadastre"
+          // Sans rang explicite, la bascule photo/plan recrée le fond APRÈS le
+          // cadastre, qui disparaît alors sous lui.
+          zIndex={400}
           opacity={0.7}
           attribution={ATTRIB_IGN}
           url="https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELLAIRE_EXPRESS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
@@ -159,13 +162,15 @@ export function CarteMetre({
           )
         })}
 
-      {/* La façade en cours de chiffrage : un trait épais sur son côté. */}
-      {murChoisi && (
+      {/* La façade en cours de chiffrage. Elle peut compter plusieurs pans —
+          une maison en L a deux murs au sud — et tous s'allument. */}
+      {murChoisi?.pans.map((pan, i) => (
         <Polyline
-          positions={[versLeaflet(murChoisi.a), versLeaflet(murChoisi.b)]}
+          key={i}
+          positions={[versLeaflet(pan.a), versLeaflet(pan.b)]}
           pathOptions={{ color: '#EA580C', weight: 6, opacity: 0.95 }}
         />
-      )}
+      ))}
 
       {/* Le tracé en cours */}
       {trace.length >= 2 &&
