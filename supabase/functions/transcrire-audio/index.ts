@@ -60,6 +60,8 @@ function params(streaming: boolean, sr?: string | null) {
   return p
 }
 
+import { jetonDe, membreActif } from '../_membre.ts'
+
 Deno.serve(async (req) => {
   const CORS = cors(req.headers.get('origin'))
   const cle = Deno.env.get('DEEPGRAM_API_KEY')
@@ -68,7 +70,14 @@ Deno.serve(async (req) => {
   if (req.headers.get('upgrade')?.toLowerCase() === 'websocket') {
     if (!cle) return new Response('Deepgram non configuré', { status: 501 })
 
-    const { socket: client, response } = Deno.upgradeWebSocket(req)
+    // Un navigateur ne peut pas poser d'en-tête Authorization sur un
+    // WebSocket : le jeton de session voyage dans le sous-protocole
+    // (« jwt, <jeton> ») plutôt que dans l'URL, qui finirait dans les journaux.
+    const protocoles = (req.headers.get('sec-websocket-protocol') ?? '').split(',').map((x) => x.trim())
+    const jeton = protocoles[0] === 'jwt' ? protocoles[1] : null
+    if (!(await membreActif(jeton))) return new Response('non autorisé', { status: 401 })
+
+    const { socket: client, response } = Deno.upgradeWebSocket(req, { protocol: 'jwt' })
 
     const sr = new URL(req.url).searchParams.get('sr')
     const amont = new WebSocket(
@@ -115,6 +124,9 @@ Deno.serve(async (req) => {
 
   try {
     if (!cle) return json({ ok: false, error: 'Deepgram non configuré' }, 501, CORS)
+    if (!(await membreActif(jetonDe(req)))) {
+      return json({ ok: false, error: 'non_autorise' }, 401, CORS)
+    }
 
     const type = req.headers.get('x-audio-type') ?? 'audio/webm'
     const audio = new Uint8Array(await req.arrayBuffer())

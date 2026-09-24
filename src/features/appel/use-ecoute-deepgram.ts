@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase/client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { EtatEcoute } from './use-ecoute-appel'
@@ -101,7 +102,12 @@ export function useEcouteDeepgram() {
 
       const base = import.meta.env.VITE_SUPABASE_URL as string
       const url = `${base.replace(/^http/, 'ws')}/functions/v1/transcrire-audio?sr=${audio.sampleRate}`
-      const socket = new WebSocket(url)
+      // La fonction n'accepte qu'un membre connecté : le jeton de session
+      // voyage dans le sous-protocole, un WebSocket ne portant pas d'en-tête.
+      const { data: sess } = await supabase.auth.getSession()
+      const jwt = sess.session?.access_token
+      if (!jwt) throw new Error('Session expirée : reconnectez-vous.')
+      const socket = new WebSocket(url, ['jwt', jwt])
       socket.binaryType = 'arraybuffer'
       ws.current = socket
 
