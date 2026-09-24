@@ -39,19 +39,49 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
   }
 
   function enregistrer() {
+    // N'ENVOYER QUE CE QUI A CHANGÉ.
+    //
+    // La carte renvoyait tous ses champs. Or ils sont initialisés à l'ouverture
+    // de la fiche : si l'artisan déclarait sa signature entre-temps (depuis son
+    // espace), corriger l'« estimation interne » réécrivait `montant_devis_signe`
+    // et `date_signature` à vide — et la commission tombait à zéro. Ne partir
+    // que des différences avec le projet tel qu'il est rend ce cas impossible.
+    const valeurs = {
+      montant_devis: toNum(devis),
+      montant_devis_signe: toNum(devisSigne),
+      estimation_interne: toNum(estim),
+      date_signature: dateSign ? format(dateSign, 'yyyy-MM-dd') : null,
+      taux_commission: (() => {
+        const t = parseFloat(taux.replace(',', '.'))
+        return Number.isFinite(t) && t >= 0 ? t / 100 : 0.1
+      })(),
+    }
+    const origine = {
+      montant_devis: projet.montant_devis ?? null,
+      montant_devis_signe: projet.montant_devis_signe ?? null,
+      estimation_interne: projet.estimation_interne ?? null,
+      date_signature: projet.date_signature ? projet.date_signature.slice(0, 10) : null,
+      // Le champ affiche le taux arrondi au point : c'est à CETTE valeur qu'on
+      // compare, sans quoi un taux de 12,5 % affiché « 13 » serait réécrit à
+      // 13 % par un simple enregistrement.
+      taux_commission: Math.round((projet.taux_commission ?? 0.1) * 100) / 100,
+    }
+    const modifie = Object.fromEntries(
+      Object.entries(valeurs).filter(([k, v]) => {
+        const avant = origine[k as keyof typeof origine]
+        return typeof v === 'number' && typeof avant === 'number'
+          ? Math.abs(v - avant) > 1e-9
+          : v !== avant
+      }),
+    )
+    if (Object.keys(modifie).length === 0) {
+      toast.info('Aucune modification à enregistrer')
+      return
+    }
     patch.mutate(
       {
         id: projet.id,
-        patch: {
-          montant_devis: toNum(devis),
-          montant_devis_signe: toNum(devisSigne),
-          estimation_interne: toNum(estim),
-          date_signature: dateSign ? format(dateSign, 'yyyy-MM-dd') : null,
-          taux_commission: (() => {
-            const t = parseFloat(taux.replace(',', '.'))
-            return Number.isFinite(t) && t >= 0 ? t / 100 : 0.1
-          })(),
-        },
+        patch: modifie,
       },
       {
         onSuccess: () => toast.success('Montants enregistrés'),

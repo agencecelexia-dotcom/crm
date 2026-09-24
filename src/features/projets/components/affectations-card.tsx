@@ -13,6 +13,17 @@ import { useAffectations, useRetirerAffectation } from '../hooks/use-affectation
 import { AssignArtisan } from './assign-artisan'
 import { MessageArtisan } from './message-artisan'
 import type { ProjetAvecArtisan } from '@/types/database'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 // Liste des artisans assignés à un projet (multi-assignation), avec pour chacun :
 // contrat signé ?, statut individuel, montants + devis, et retrait.
@@ -64,27 +75,55 @@ export function AffectationsCard({ projet }: { projet: ProjetAvecArtisan }) {
                     </p>
                   </Link>
                   <StatutBadge statut={af.statut} />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7 shrink-0 text-destructive"
-                    aria-label="Retirer"
-                    disabled={retirer.isPending}
-                    onClick={() =>
-                      retirer.mutate(
-                        { id: af.id, projetId: projet.id },
-                        {
-                          onSuccess: () => toast.success('Artisan retiré du projet'),
-                          onError: (e) =>
-                            toast.error('Retrait impossible', {
-                              description: e instanceof Error ? e.message : undefined,
-                            }),
-                        },
-                      )
-                    }
-                  >
-                    <X className="size-4" />
-                  </Button>
+                  {/* Retirer un artisan SUPPRIME son affectation et, en cascade,
+                      tout son historique sur ce chantier (suivis, relances,
+                      devis lus). Un clic de travers détruisait 17 suivis lors de
+                      l'audit : on le dit avant de le faire. */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 shrink-0 text-destructive"
+                        aria-label="Retirer"
+                        disabled={retirer.isPending}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Retirer cet artisan du projet ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Le chantier quittera son espace, et tout son historique ici sera
+                          effacé définitivement : échanges, relances et devis déposés
+                          {af.montant_devis ? ` (devis de ${formatEuros(af.montant_devis)})` : ''}.
+                          Si l’affaire est simplement perdue pour lui, marquez-la plutôt comme
+                          perdue.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive text-white hover:bg-destructive/90"
+                          onClick={() =>
+                            retirer.mutate(
+                              { id: af.id, projetId: projet.id },
+                              {
+                                onSuccess: () => toast.success('Artisan retiré du projet'),
+                                onError: (e) =>
+                                  toast.error('Retrait impossible', {
+                                    description: e instanceof Error ? e.message : undefined,
+                                  }),
+                              },
+                            )
+                          }
+                        >
+                          Retirer et effacer
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
 
                 {/* Montants + devis déposés par cet artisan */}

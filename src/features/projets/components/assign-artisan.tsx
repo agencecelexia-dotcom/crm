@@ -78,6 +78,15 @@ export function AssignArtisan({ projet }: { projet: ProjetAvecArtisan }) {
   async function enregistrer() {
     const toAdd = [...selection].filter((id) => !assignedIds.has(id))
     const toRemove = (affectations ?? []).filter((a) => !selection.has(a.artisan_id))
+    // Décocher un artisan supprime son affectation et tout son historique sur
+    // ce chantier : ce n'est pas un détail de sélection, on le demande.
+    if (
+      toRemove.length > 0 &&
+      !window.confirm(
+        `Retirer ${toRemove.length > 1 ? `${toRemove.length} artisans` : 'cet artisan'} du projet effacera définitivement son historique ici (échanges, relances, devis déposés). Continuer ?`,
+      )
+    )
+      return
     try {
       if (toAdd.length) await affecter.mutateAsync({ projetId: projet.id, artisanIds: toAdd })
       for (const a of toRemove) await retirer.mutateAsync({ id: a.id, projetId: projet.id })

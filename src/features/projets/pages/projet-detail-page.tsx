@@ -7,6 +7,7 @@ import { Pencil, Trash2, Phone, Mail, MapPin, Map, UserCheck } from 'lucide-reac
 
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth/use-auth'
+import { useDroits } from '@/lib/auth/use-droits'
 import { PageHeader } from '@/components/page-header'
 import { StatutBadge } from '@/components/statut-badge'
 import { CardTitre } from '@/components/card-titre'
@@ -59,6 +60,7 @@ export function ProjetDetailPage() {
   const { data: projet, isLoading } = useProjet(id)
   const { data: repreneurs } = useRepreneurs()
   const { estFondateur, session } = useAuth()
+  const { peutVoirCommissions } = useDroits()
   const qc = useQueryClient()
 
   // Rendre le chantier à l'équipe : le fondateur peut libérer n'importe quel
@@ -308,8 +310,15 @@ export function ProjetDetailPage() {
       {/* Devis générés par l'artisan, rattachés à ce dossier */}
       <DevisProjetCard projetId={projet.id} />
 
-      {/* Argent / commission */}
-      <MontantsCard projet={projet} />
+      {/* Argent / commission. La clé suit la dernière modification du projet :
+          sans elle, les champs gardaient la valeur lue à l'ouverture de la
+          fiche, et passer d'une fiche à une autre déjà en cache écrivait les
+          montants de la première sur la seconde. Réservée aux membres qui
+          voient les commissions : un commercial pouvait sinon y déclarer un
+          montant signé et se créer une rétrocession. */}
+      {peutVoirCommissions && (
+        <MontantsCard key={`${projet.id}:${projet.updated_at}`} projet={projet} />
+      )}
 
       {/* Documents */}
       <Card className="mb-4 rounded-2xl border-border/70 shadow-card">

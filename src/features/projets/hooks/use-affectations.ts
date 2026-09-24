@@ -145,7 +145,12 @@ export function useRetirerAffectation() {
         .limit(1)
       const principal = reste && reste.length ? reste[0].artisan_id : null
       const patch: Record<string, unknown> = { artisan_id: principal }
-      if (!principal) patch.statut = 'nouveau'
+      // Un projet ne recule à « nouveau » que s'il n'avait pas dépassé
+      // l'attribution : retirer le dernier artisan d'un chantier SIGNÉ le
+      // ramenait à « nouveau » en gardant son montant signé.
+      const { data: p } = await supabase.from('projets').select('statut').eq('id', projetId).single()
+      if (!principal && p && ['nouveau', 'a_rappeler', 'a_reattribuer', 'artisan_assigne'].includes(p.statut))
+        patch.statut = 'nouveau'
       await supabase.from('projets').update(patch).eq('id', projetId)
     },
     onSuccess: (_d, { projetId }) => {
