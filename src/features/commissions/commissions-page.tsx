@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { BadgeEuro, Check, Loader2, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
@@ -10,18 +11,36 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatEuros, formatDate } from '@/lib/format'
 import { useProjets, usePatchProjet } from '@/features/projets/hooks/use-projets'
+import { supabase } from '@/lib/supabase/client'
 
 // Suivi de l'argent : devis signés dont la commission n'est pas encore encaissée.
 export function CommissionsPage() {
   const { data: projets, isLoading } = useProjets()
   const patch = usePatchProjet()
+  const qc = useQueryClient()
+
+  // CE QUI EST DÛ, SELON LA MÊME DÉFINITION QUE LES INDICATEURS.
+  //
+  // La page listait tout projet portant un montant signé non encaissé : un
+  // dossier « en attente », saisi à 60 000 € sans aucune signature, y figurait
+  // pour 6 000 € de commission due, avec un bouton « Encaissée » — de quoi
+  // facturer un artisan pour un chantier jamais signé. On ne liste plus que
+  // les affaires réellement gagnées par un artisan (`commissions_dues`, 0166).
+  const { data: dues } = useQuery({
+    queryKey: ['commissions-dues'],
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase.rpc('commissions_dues')
+      if (error) throw error
+      return new Set(((data as { projet_id: string }[]) ?? []).map((d) => d.projet_id))
+    },
+  })
 
   const aEncaisser = useMemo(
     () =>
       (projets ?? [])
-        .filter((p) => p.montant_devis_signe != null && !p.commission_encaissee)
+        .filter((p) => dues?.has(p.id))
         .sort((a, b) => (b.commission ?? 0) - (a.commission ?? 0)),
-    [projets],
+    [projets, dues],
   )
 
   const totalDu = aEncaisser.reduce((s, p) => s + (p.commission ?? 0), 0)
@@ -30,7 +49,11 @@ export function CommissionsPage() {
     patch.mutate(
       { id, patch: { commission_encaissee: true } },
       {
-        onSuccess: () => toast.success('Commission encaissée'),
+        onSuccess: () => {
+          toast.success('Commission encaissée')
+          // La liste vient de `commissions_dues` : sans ceci, la ligne restait.
+          void qc.invalidateQueries({ queryKey: ['commissions-dues'] })
+        },
         onError: (e) =>
           toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
       },

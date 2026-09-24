@@ -105,3 +105,23 @@ export function useKpiParArtisan(debut?: string, fin?: string) {
     },
   })
 }
+
+/**
+ * Chiffre d'affaires signé et commission, rangés au mois de la SIGNATURE
+ * (`ca_signe_par_mois`, migration 0165) — même définition que `kpi_agence`,
+ * dont le total retombe exactement.
+ *
+ * Le graphique lisait `projets.date_signature`, renseignée sur 3 dossiers
+ * signés sur 15 : la courbe tombait à zéro en juillet, août et septembre, alors
+ * qu'on avait signé 35 000 € en juillet et autant en août.
+ */
+export function useCaParMois(mois = 6) {
+  return useQuery({
+    queryKey: ['ca-signe-par-mois', mois],
+    queryFn: async (): Promise<{ mois: string; ca: number; commission: number }[]> => {
+      const { data, error } = await supabase.rpc('ca_signe_par_mois', { p_mois: mois })
+      if (error) throw error
+      return (data as { mois: string; ca: number; commission: number }[]) ?? []
+    },
+  })
+}

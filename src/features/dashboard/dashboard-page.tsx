@@ -1,6 +1,7 @@
+import { useCaParMois, useKpiAgence, useKpiParArtisan } from './use-kpi'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { isSameMonth, parseISO, subMonths, format } from 'date-fns'
+import { isSameMonth, parseISO, format, startOfMonth } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { FolderKanban, Users, Euro, Wallet, PhoneCall, Trophy, Clock, FileText, XCircle } from 'lucide-react'
 
@@ -33,7 +34,6 @@ const GraphiqueCa = lazy(() =>
 function GraphiqueEnAttente({ h }: { h: number }) {
   return <Skeleton className="w-full rounded-xl" style={{ height: h }} />
 }
-import { StatsGlobales } from './stats-globales'
 import { PanneauKpi } from './panneau-kpi'
 import { QualiteLeads } from './qualite-leads'
 
@@ -41,6 +41,19 @@ export function DashboardPage() {
   const { data: projets, isLoading } = useProjets()
   const { data: artisans } = useArtisans()
   const [periode, setPeriode] = useState<'mois' | 'total'>('mois')
+
+  // L'ARGENT NE SE CALCULE PLUS DANS LE NAVIGATEUR.
+  //
+  // Ces tuiles additionnaient `projets.montant_devis_signe` sans vérifier
+  // qu'une signature existe : un dossier « en attente » saisi à 60 000 € y
+  // comptait pour 60 000 € de ventes et 6 000 € de commission. Le même écran
+  // affichait ainsi jusqu'à trois valeurs pour un même indicateur (CA signé
+  // 78 858 € ici, 138 858 € là). Tout ce qui est argent vient désormais de
+  // `kpi_agence()`, qui ne compte que les affectations réellement gagnées —
+  // bornée au mois en cours ou à tout l'historique, selon l'onglet.
+  const debutPeriode = periode === 'mois' ? format(startOfMonth(new Date()), 'yyyy-MM-dd') : undefined
+  const { data: kpi } = useKpiAgence(debutPeriode)
+  const { data: kpiArtisans } = useKpiParArtisan(debutPeriode)
 
   // Filtre période sur la date de création du projet.
   const projetsPeriode = useMemo(() => {
@@ -52,11 +65,9 @@ export function DashboardPage() {
 
   // Agrégats.
   const stats = useMemo(() => {
-    const ca = projetsPeriode.reduce((s, p) => s + (p.montant_devis_signe ?? 0), 0)
-    const commission = projetsPeriode.reduce((s, p) => s + (p.commission ?? 0), 0)
-    const encaissee = projetsPeriode
-      .filter((p) => p.commission_encaissee)
-      .reduce((s, p) => s + (p.commission ?? 0), 0)
+    const ca = kpi?.ca_signe ?? 0
+    const commission = kpi?.commission_acquise ?? 0
+    const encaissee = kpi?.commission_encaissee ?? 0
 
     const enAttente = projetsPeriode.filter((p) => p.statut === 'en_attente')
     const devisEnvoyes = projetsPeriode.filter((p) => p.statut === 'devis_envoye')
@@ -74,13 +85,13 @@ export function DashboardPage() {
       ca,
       commission,
       encaissee,
-      aEncaisser: commission - encaissee,
+      aEncaisser: kpi?.commission_a_encaisser ?? 0,
       enAttenteCount: enAttente.length,
       devisEnvoyesCount: devisEnvoyes.length,
       devisEnvoyesMontant,
       parStatut,
     }
-  }, [projetsPeriode])
+  }, [projetsPeriode, kpi])
 
   // Pertes, indépendant de la période : « perdu » (lâché par un artisan, le
   // chantier reste réattribuable) + « mort » (client parti ailleurs, agence).
@@ -98,52 +109,26 @@ export function DashboardPage() {
     [projets],
   )
 
-  // CA + commissions par mois (6 derniers mois, basé sur la date de signature).
-  const moisData = useMemo(() => {
-    const now = new Date()
-    const buckets = Array.from({ length: 6 }, (_, i) => {
-      const d = subMonths(now, 5 - i)
-      return { key: format(d, 'yyyy-MM'), label: format(d, 'MMM', { locale: fr }), ca: 0, commission: 0 }
-    })
-    const idx = new Map(buckets.map((b, i) => [b.key, i]))
-    for (const p of projets ?? []) {
-      if (!p.date_signature) continue
-      const i = idx.get(p.date_signature.slice(0, 7))
-      if (i != null) {
-        buckets[i].ca += p.montant_devis_signe ?? 0
-        buckets[i].commission += p.commission ?? 0
-      }
-    }
-    return buckets
-  }, [projets])
+  // CA + commissions par mois de SIGNATURE, sur les 6 derniers mois.
+  const { data: parMois } = useCaParMois(6)
+  const moisData = (parMois ?? []).map((m) => ({
+    key: m.mois,
+    label: format(parseISO(`${m.mois}-01`), 'MMM', { locale: fr }),
+    ca: Number(m.ca) || 0,
+    commission: Number(m.commission) || 0,
+  }))
 
-  // Top artisans par commission rapportée (sur la période).
-  const topArtisans = useMemo(() => {
-    const m = new Map<string, { name: string; total: number }>()
-    for (const p of projetsPeriode) {
-      if (!p.artisan_id || !p.commission) continue
-      const name = p.artisan
-        ? p.artisan.societe || `${p.artisan.prenom ?? ''} ${p.artisan.nom}`.trim()
-        : 'Inconnu'
-      const cur = m.get(p.artisan_id) ?? { name, total: 0 }
-      cur.total += p.commission ?? 0
-      m.set(p.artisan_id, cur)
-    }
-    return [...m.values()].sort((a, b) => b.total - a.total).slice(0, 5)
-  }, [projetsPeriode])
-
-  // Entonnoir de conversion (sur la période).
-  const funnel = useMemo(() => {
-    const leads = projetsPeriode.filter((p) => !STATUTS_PERTE.includes(p.statut)).length
-    const assignes = projetsPeriode.filter((p) =>
-      ['artisan_assigne', 'devis_envoye', 'devis_signe'].includes(p.statut),
-    ).length
-    const devis = projetsPeriode.filter((p) =>
-      ['devis_envoye', 'devis_signe'].includes(p.statut),
-    ).length
-    const signes = projetsPeriode.filter((p) => p.statut === 'devis_signe').length
-    return { leads, assignes, devis, signes }
-  }, [projetsPeriode])
+  // Top artisans : chiffre d'affaires RÉELLEMENT signé sur la période. Le
+  // classement par commission lisait les projets, dossier fantôme compris.
+  const topArtisans = useMemo(
+    () =>
+      (kpiArtisans ?? [])
+        .filter((a) => (a.ca_signe ?? 0) > 0)
+        .sort((a, b) => b.ca_signe - a.ca_signe)
+        .slice(0, 5)
+        .map((a) => ({ name: a.artisan_nom, total: a.ca_signe })),
+    [kpiArtisans],
+  )
 
   // Potentiel du pipeline (estimation INTERNE, jamais visible des artisans) :
   // somme des estimations des projets encore en cours.
@@ -175,8 +160,6 @@ export function DashboardPage() {
           chiffres différents sur le même écran. */}
       <PanneauKpi />
 
-      {/* Vue cumulée historique, conservée le temps de la transition. */}
-      <StatsGlobales />
 
       <QualiteLeads />
 
@@ -187,8 +170,11 @@ export function DashboardPage() {
         className="mb-4"
       >
         <TabsList className="w-full">
+          {/* Les indicateurs rangent par date d'arrivée du LEAD (cohorte) : ce
+              que sont devenus les chantiers reçus ce mois-ci. Le graphique, lui,
+              range par date de signature. */}
           <TabsTrigger value="mois" className="flex-1">
-            Ce mois
+            Leads du mois
           </TabsTrigger>
           <TabsTrigger value="total" className="flex-1">
             Total
@@ -268,8 +254,8 @@ export function DashboardPage() {
             <KpiTile icon={Euro} label="Valeur perdue" valeur={formatEuros(perdus.valeur)} tone="danger" />
           </div>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            Un projet « Perdu » est supprimé automatiquement 48 h après son passage à ce statut — ces
-            chiffres ne reflètent donc que les pertes très récentes.
+            Cumul depuis le début : projets perdus par un artisan ou abandonnés par le client. Ils ne
+            sont plus supprimés automatiquement.
           </p>
 
           {/* Commissions */}
@@ -336,43 +322,6 @@ export function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Entonnoir de conversion */}
-            <Card className="rounded-2xl border-border/70 shadow-card">
-              <CardHeader>
-                <CardTitre>Conversion</CardTitre>
-              </CardHeader>
-              <CardContent className="space-y-2.5">
-                {[
-                  { label: 'Leads', n: funnel.leads, color: '#64748B' },
-                  { label: 'Assignés', n: funnel.assignes, color: '#3B82F6' },
-                  { label: 'Devis envoyés', n: funnel.devis, color: '#F59E0B' },
-                  { label: 'Devis signés', n: funnel.signes, color: '#22C55E' },
-                ].map((row) => (
-                  <div key={row.label}>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span>{row.label}</span>
-                      <span className="text-muted-foreground">{row.n}</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-secondary">
-                      <div
-                        className="h-2 rounded-full"
-                        style={{
-                          width: `${funnel.leads ? Math.max(4, (row.n / funnel.leads) * 100) : 0}%`,
-                          background: row.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-                <p className="pt-1 text-xs text-muted-foreground">
-                  Taux de conversion (leads → signés) :{' '}
-                  <strong className="text-foreground">
-                    {funnel.leads ? Math.round((funnel.signes / funnel.leads) * 100) : 0}%
-                  </strong>
-                </p>
-              </CardContent>
-            </Card>
-
             {/* Répartition par statut */}
             <Card className="rounded-2xl border-border/70 shadow-card">
               <CardHeader>
@@ -396,7 +345,7 @@ export function DashboardPage() {
               <CardContent className="space-y-2">
                 {topArtisans.length === 0 ? (
                   <p className="py-1 text-sm text-muted-foreground">
-                    Aucune commission sur la période.
+                    Aucun chantier signé sur la période.
                   </p>
                 ) : (
                   topArtisans.map((a, i) => (
