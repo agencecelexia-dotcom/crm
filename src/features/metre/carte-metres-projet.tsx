@@ -7,6 +7,21 @@ import { formatM, formatM2 } from './geometrie'
 import type { Metre } from './use-metres'
 
 /**
+ * D'où vient la pente — la question que l'agence doit pouvoir se poser.
+ *
+ * Une pente MESURÉE au LiDAR vaut ±2 points ; une pente DÉDUITE de deux
+ * altitudes de la BD TOPO en vaut ±30. Les afficher pareil reviendrait à dire
+ * que les deux se valent, alors que l'une permet de commander des tuiles et
+ * l'autre pas.
+ */
+const PROVENANCE: Record<string, string> = {
+  lidar: 'mesurée au LiDAR',
+  photogrammetrie: 'mesurée par photogrammétrie',
+  altitudes: 'déduite, ±30',
+  saisie: 'saisie',
+}
+
+/**
  * Les métrés d'un chantier, vus de l'agence.
  *
  * Antoine qualifie au téléphone : savoir qu'une toiture fait 140 m² avant
@@ -23,7 +38,7 @@ export function CarteMetresProjet({ projetId }: { projetId: string }) {
       const { data, error } = await supabase
         .from('metres')
         .select(
-          'id, nom, type, geometrie, surface_m2, perimetre_m, longueur_m, hauteur_m, pente_pct, surface_reelle_m2, source, created_at',
+          'id, nom, type, geometrie, surface_m2, perimetre_m, longueur_m, hauteur_m, pente_pct, pente_source, surface_reelle_m2, source, debord_m, part_toiture, versant, created_at',
         )
         .eq('projet_id', projetId)
         .order('created_at', { ascending: false })
@@ -48,7 +63,23 @@ export function CarteMetresProjet({ projetId }: { projetId: string }) {
             <span className="min-w-0 flex-1 truncate">
               {m.nom}
               {m.pente_pct ? (
-                <span className="text-muted-foreground"> · pente {m.pente_pct} %</span>
+                <span className="text-muted-foreground">
+                  {' '}
+                  · pente {m.pente_pct} %
+                  {m.pente_source ? ` (${PROVENANCE[m.pente_source] ?? m.pente_source})` : ''}
+                </span>
+              ) : null}
+              {/* Le débord et le versant sont des CHOIX de l'artisan, pas des
+                  mesures : l'agence doit pouvoir les retrouver si un devis
+                  surprend. */}
+              {m.versant ? (
+                <span className="text-muted-foreground"> · versant {m.versant}</span>
+              ) : null}
+              {m.debord_m ? (
+                <span className="text-muted-foreground">
+                  {' '}
+                  · débord {Math.round(Number(m.debord_m) * 100)} cm
+                </span>
               ) : null}
               {m.hauteur_m ? (
                 <span className="text-muted-foreground"> · h. {formatM(Number(m.hauteur_m))}</span>
