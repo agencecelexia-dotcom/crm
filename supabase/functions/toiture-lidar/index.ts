@@ -291,6 +291,11 @@ Deno.serve(async (req) => {
     let mesure: Mesure | null = null
     let source: string | null = null
     let incertitudeMin = 0
+    // « Aucune donnée ici » et « bâtiment trop petit » appellent des réponses
+    // opposées de l'artisan : la première lui dit de saisir la pente, la
+    // seconde de vérifier qu'il a bien touché la maison. Les confondre, c'est
+    // l'envoyer chercher au mauvais endroit.
+    let aucuneDonnee = false
 
     // ---- 1. Le LiDAR HD, quand il couvre : cinquante centimètres. ----
     {
@@ -333,7 +338,9 @@ Deno.serve(async (req) => {
       // cent dix mètres carrés au sol. En dessous, la photogrammétrie ne sait
       // pas lire un toit, et l'on préfère le dire : c'est le cas d'à peu près
       // une maison sur vingt, qui garde la saisie à la main qu'elle a déjà.
-      mesure = calculer(mns, hauteur, poly, x0, y0, pas, 70)
+      const vides = mns.px.reduce((n, v) => n + (v <= -9998 ? 1 : 0), 0)
+      aucuneDonnee = vides > W * H * 0.5
+      if (!aucuneDonnee) mesure = calculer(mns, hauteur, poly, x0, y0, pas, 70)
       source = 'Photogrammétrie de l’IGN, grille de 1 m'
       // Sous cette barre des soixante-dix pixels, l'écart observé ne dépasse
       // jamais huit points : dix est une annonce que la mesure tient.
@@ -341,9 +348,10 @@ Deno.serve(async (req) => {
     }
 
     if (!mesure) {
-      const r = { ok: true, couvert: false, motif: 'trop_peu_de_toit' }
+      const motif = aucuneDonnee ? 'hors_couverture' : 'trop_peu_de_toit'
+      const r = { ok: true, couvert: false, motif }
       if (cle) await rpc('enregistrer_toiture', {
-        p_cleabs: cle, p_couvert: false, p_motif: 'trop_peu_de_toit',
+        p_cleabs: cle, p_couvert: false, p_motif: motif,
         p_pente: null, p_incertitude: null, p_pixels: null, p_versants: [], p_source: null,
       }).catch(() => {})
       return json(r, 200, CORS)

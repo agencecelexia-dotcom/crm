@@ -215,9 +215,10 @@ export function PanneauBatiment({
             </p>
           ) : toitureIgn && !toitureIgn.couvert ? (
             <p className="text-xs text-[#B45309]">
-              {toitureIgn.motif === 'trop_peu_de_toit'
-                ? 'Ce bâtiment est trop petit pour que la pente se lise dans les altitudes.'
-                : 'Aucun relevé d’altitude ne couvre ce bâtiment.'}{' '}
+              {toitureIgn.motif === 'hors_couverture'
+                ? 'Aucun relevé d’altitude de l’IGN ne couvre ce bâtiment.'
+                : 'Ce bâtiment est trop petit pour que sa pente se lise dans les altitudes — ' +
+                  'vérifiez que c’est bien la maison, et non un abri.'}{' '}
               Saisissez la pente.
             </p>
           ) : !batiment.toiture ? (
