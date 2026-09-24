@@ -337,7 +337,11 @@ export function EntretienDevis({
                             ? '· votre prix'
                             : l.source === 'marge'
                               ? '· calculé sur votre marge'
-                              : '· prix observé'}
+                              : // Un prix vu sur 3 devis ne pèse pas comme un prix vu sur 40 :
+                                // l'artisan doit savoir sur quoi il repose.
+                                l.observations
+                                ? `· prix observé sur ${l.observations} devis`
+                                : '· prix observé'}
                         </span>
                       </>
                     ) : (
