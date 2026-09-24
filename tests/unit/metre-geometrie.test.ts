@@ -4,6 +4,7 @@ import {
   centre,
   degresEnPct,
   distance,
+  empriseAvecDebord,
   formatM,
   formatM2,
   longueur,
@@ -320,5 +321,27 @@ describe('facades — regrouper comme parle un artisan', () => {
   it('classe la plus longue en tête', () => {
     const f = facades(batiment())
     expect(f[0].longueur).toBeGreaterThanOrEqual(f[f.length - 1].longueur)
+  })
+})
+
+describe('empriseAvecDebord — le toit déborde des murs', () => {
+  // Une maison de 10 × 8 m : 80 m² au sol, 36 m de périmètre.
+  it('quarante centimètres de débord ajoutent quinze mètres carrés', () => {
+    const a = empriseAvecDebord(80, 36, 0.4)
+    expect(a).toBeCloseTo(80 + 36 * 0.4 + Math.PI * 0.16, 2)
+    expect(a).toBeGreaterThan(94)
+    expect(a).toBeLessThan(96)
+  })
+
+  // Le contrôle exact : un carré de 10 m dilaté de 1 m fait 12 × 12 moins les
+  // quatre coins carrés, plus le disque — soit 144 − 4 + π.
+  it('retrouve l’aire exacte du dilaté d’un carré', () => {
+    expect(empriseAvecDebord(100, 40, 1)).toBeCloseTo(100 + 40 + Math.PI, 6)
+  })
+
+  it('sans débord, rien ne change', () => {
+    expect(empriseAvecDebord(80, 36, 0)).toBe(80)
+    expect(empriseAvecDebord(80, 36, -1)).toBe(80)
+    expect(empriseAvecDebord(80, 36, NaN)).toBe(80)
   })
 })

@@ -100,6 +100,26 @@ export function penteRetenue(p: {
   return { pente: 0, source: null }
 }
 
+/**
+ * La part de toiture que représente un versant.
+ *
+ * Les parts renvoyées sont celles des PIXELS EN PENTE, et l'on ne garde que les
+ * versants au-dessus de dix pour cent : elles ne somment donc pas à un. On les
+ * renormalise sur ce qui a été retenu, sans quoi un versant à 53 % d'un total
+ * de 83 % serait annoncé pour la moitié du toit alors qu'il en fait les deux
+ * tiers.
+ *
+ * C'est une PROPORTION DE SURFACE PROJETÉE, exacte seulement si les versants
+ * ont la même pente — ce qu'ils ont sur un toit courant. D'où le « environ »
+ * à l'écran.
+ */
+export function partsNormalisees(v: Toiture['versants']): { orientation: string; part: number }[] {
+  if (!v || v.length === 0) return []
+  const total = v.reduce((s, x) => s + x.part, 0)
+  if (total <= 0) return []
+  return v.map((x) => ({ orientation: x.orientation, part: x.part / total }))
+}
+
 /** « nord-ouest » et « sud-est » → « nord-ouest et sud-est ». */
 export function versantsLisibles(v: Toiture['versants']): string | null {
   if (!v || v.length === 0) return null

@@ -17,6 +17,9 @@ export interface Metre {
   ouvertures_m2: number | null
   azimut: number | null
   pente_source: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
+  debord_m: number | null
+  part_toiture: number | null
+  versant: string | null
   hauteur_source: 'bati' | 'saisie' | null
   source: 'bati' | 'dessin'
   created_at: string
@@ -73,6 +76,11 @@ export function useEnregistrerMetre(token: string | undefined) {
       azimut?: number | null
       pente_source?: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
       hauteur_source?: 'bati' | 'saisie' | null
+      /** Débord de toiture, en mètres. Saisi, pas mesuré : le LiDAR ne le voit pas. */
+      debord_m?: number | null
+      /** Part du toit retenue, dans ]0,1] — un seul versant plutôt que l'ensemble. */
+      part_toiture?: number | null
+      versant?: string | null
     }) => {
       const { data, error } = await supabase.rpc('enregistrer_metre_by_token', {
         p_token: token,
@@ -87,6 +95,9 @@ export function useEnregistrerMetre(token: string | undefined) {
         p_azimut: p.azimut ?? null,
         p_pente_source: p.pente_source ?? null,
         p_hauteur_source: p.hauteur_source ?? null,
+        p_debord_m: p.debord_m ?? 0,
+        p_part_toiture: p.part_toiture ?? 1,
+        p_versant: p.versant ?? null,
       })
       if (error) throw error
       const r = data as { ok: boolean; error?: string }

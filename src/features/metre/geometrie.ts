@@ -72,6 +72,35 @@ export function surfaceReelle(surfaceProjetee: number, pentePct: number): number
   return surfaceProjetee / Math.cos(Math.atan(pentePct / 100))
 }
 
+/**
+ * L'emprise du TOIT, qui déborde des murs.
+ *
+ * POURQUOI CE N'EST PAS UN DÉTAIL
+ *
+ * Le contour de la BD TOPO est celui du bâtiment au sol. Vérifié contre le
+ * cadastre sur trois maisons : les deux coïncident à 1 % près. Le toit, lui,
+ * dépasse des murs à l'égout — trente à cinquante centimètres en construction
+ * courante. Sur une maison de 80 m², quarante centimètres ajoutent quinze
+ * mètres carrés, soit près de vingt pour cent. Dans le sens qui fait commander
+ * TROP PEU de tuiles.
+ *
+ * ET POURQUOI ON NE LE MESURE PAS
+ *
+ * Le LiDAR de l'IGN a une maille de cinquante centimètres, et son bord de toit
+ * est flou sur un à deux pixels. Chercher un débord de quarante centimètres
+ * là-dedans revient à mesurer sous la résolution : l'essai donne 1,00 à 1,50 m,
+ * ce qui est le flou, pas le débord. On refuse donc de l'annoncer comme mesuré.
+ * L'artisan le pose, il connaît ses toits, et l'écran montre le mètre carré que
+ * ça représente.
+ *
+ * La formule est celle du dilaté d'un polygone : l'aire gagne le périmètre fois
+ * la distance, plus un disque aux angles.
+ */
+export function empriseAvecDebord(emprise: number, perimetre: number, debordM: number): number {
+  if (!Number.isFinite(debordM) || debordM <= 0) return emprise
+  return emprise + perimetre * debordM + Math.PI * debordM * debordM
+}
+
 /** Une pente s'annonce en pourcentage sur un chantier, en degrés sur un plan. */
 export const pctEnDegres = (pct: number) => (Math.atan(pct / 100) * 180) / Math.PI
 export const degresEnPct = (deg: number) => Math.tan(rad(deg)) * 100
