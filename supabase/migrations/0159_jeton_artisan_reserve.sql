@@ -1,0 +1,93 @@
+-- Le jeton d'un artisan n'est lisible que par le fondateur.
+--
+-- Le jeton `artisans.token` est la clé MAÎTRE de l'espace d'un artisan : tous
+-- ses chantiers, les noms, téléphones et adresses de tous ses clients, ses
+-- devis, ses montants — sans mot de passe.
+--
+-- Or la politique `artisans_lecture` est `using (true)` pour tout membre
+-- connecté, colonne comprise. L'audit sécurité l'a prouvé avec le compte d'un
+-- commercial qui ne voit AUCUN projet par la RLS : il lisait les 103 jetons,
+-- et par `get_espace_artisan` obtenait 162 fiches chantier avec le téléphone
+-- du client. Et `artisans_ecriture` lui permettait de RÉÉCRIRE un jeton —
+-- donc d'en fixer un qu'il connaît.
+--
+-- Une politique RLS ne masque pas une colonne : ce sont les privilèges de
+-- colonne qui le font. Le jeton sort de la lecture et de l'écriture
+-- ordinaires ; le fondateur l'obtient, et le renouvelle, par deux fonctions
+-- qui vérifient son rôle.
+--
+-- `anon` n'avait aucune raison de détenir des droits sur cette table (seule la
+-- RLS le bloquait) : il n'en a plus. L'inscription passe par `inscrire_artisan`.
+
+revoke all on public.artisans from anon;
+revoke select, update on public.artisans from authenticated;
+
+grant select (
+  id, nom, prenom, societe, telephone, email, metiers, zone_intervention,
+  rayon_km, adresse, ville, code_postal, latitude, longitude, specificites,
+  created_at, updated_at, sous_metiers, forme_juridique, capital_social,
+  siren, ville_immatriculation, representant, qualite_representant,
+  taux_commission, contrat_externe, ecarte_at, ecarte_motif,
+  departements_couverts, source, nb_salaries, annees_experience,
+  assurance_rc_pro, assurance_decennale, zones_couvertes, note_elocution,
+  note_communication_agence, partenaire_at, assurance_decennale_url,
+  assurance_decennale_assureur, assurance_decennale_police,
+  assurance_decennale_echeance, assurance_rc_pro_url,
+  assurance_rc_pro_assureur, assurance_rc_pro_police,
+  assurance_rc_pro_echeance, assurances_validees_at, assurances_validees_par,
+  logo_url, tva_intracom, code_ape, iban, bic, mediateur_nom, mediateur_url,
+  cgv, conditions_paiement, garantie_zone, acompte_defaut, tva_mode_defaut
+) on public.artisans to authenticated;
+
+grant update (
+  nom, prenom, societe, telephone, email, metiers, zone_intervention,
+  rayon_km, adresse, ville, code_postal, latitude, longitude, specificites,
+  updated_at, sous_metiers, forme_juridique, capital_social, siren,
+  ville_immatriculation, representant, qualite_representant, taux_commission,
+  contrat_externe, ecarte_at, ecarte_motif, departements_couverts, source,
+  nb_salaries, annees_experience, assurance_rc_pro, assurance_decennale,
+  zones_couvertes, note_elocution, note_communication_agence, partenaire_at,
+  assurance_decennale_url, assurance_decennale_assureur,
+  assurance_decennale_police, assurance_decennale_echeance,
+  assurance_rc_pro_url, assurance_rc_pro_assureur, assurance_rc_pro_police,
+  assurance_rc_pro_echeance, assurances_validees_at, assurances_validees_par,
+  logo_url, tva_intracom, code_ape, iban, bic, mediateur_nom, mediateur_url,
+  cgv, conditions_paiement, garantie_zone, acompte_defaut, tva_mode_defaut
+) on public.artisans to authenticated;
+
+create or replace function public.jeton_espace_artisan(p_artisan_id uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+begin
+  if not public.est_fondateur() then return null; end if;
+  return (select token from public.artisans where id = p_artisan_id);
+end
+$function$;
+
+create or replace function public.regenerer_jeton_artisan(p_artisan_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare v text;
+begin
+  if not public.est_fondateur() then
+    raise exception 'reserve_fondateur' using errcode = '42501';
+  end if;
+  update public.artisans
+     set token = replace(gen_random_uuid()::text, '-', '')
+   where id = p_artisan_id
+  returning token into v;
+  return v;
+end
+$function$;
+
+revoke execute on function public.jeton_espace_artisan(uuid) from public, anon;
+revoke execute on function public.regenerer_jeton_artisan(uuid) from public, anon;
+grant execute on function public.jeton_espace_artisan(uuid) to authenticated;
+grant execute on function public.regenerer_jeton_artisan(uuid) to authenticated;

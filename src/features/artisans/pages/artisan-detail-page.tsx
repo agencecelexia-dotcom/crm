@@ -39,6 +39,7 @@ import {
   useDefinirPartenaire,
   useDeleteArtisan,
   useEcarterArtisan,
+  useJetonArtisan,
 } from '../hooks/use-artisans'
 import { ScoringArtisanCard } from '../components/scoring-artisan-card'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
@@ -52,6 +53,8 @@ export function ArtisanDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { estFondateur } = useAuth()
+  // Le jeton n'est plus lu avec la fiche : la base ne le donne qu'au fondateur.
+  const { data: jeton } = useJetonArtisan(id, estFondateur)
   const { data: artisan, isLoading } = useArtisan(id)
   const { data: projets } = useProjetsByArtisan(id)
   const remove = useDeleteArtisan()
@@ -217,12 +220,12 @@ export function ArtisanDetailPage() {
       {/* Pont vers son CRM — juste après le contrat : brancher un partenaire
           sur nos données relève de la même décision que le signer.
           Fondateurs seuls, la carte contient un secret de signature. */}
-      {estFondateur && artisan.token && (
+      {estFondateur && jeton && (
         <div className="mb-4">
           <PontCrmCard
             artisanId={artisan.id}
             societe={artisan.societe ?? `${artisan.nom} ${artisan.prenom ?? ''}`.trim()}
-            tokenArtisan={artisan.token}
+            tokenArtisan={jeton}
           />
         </div>
       )}

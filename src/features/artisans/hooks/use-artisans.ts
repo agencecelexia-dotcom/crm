@@ -6,6 +6,18 @@ import type { Artisan, ArtisanInput, ScoringArtisan } from '@/types/database'
 
 const TABLE = 'artisans'
 
+/**
+ * Les colonnes lisibles d'un artisan — toutes, SAUF LE JETON.
+ *
+ * Le jeton est la clé maître de son espace : tous ses chantiers et les
+ * coordonnées de tous ses clients, sans mot de passe. Un commercial qui ne voit
+ * aucun projet lisait pourtant les 103 jetons par un simple `select('*')`, et
+ * pouvait les réécrire. La base ne l'accorde plus qu'au fondateur, par
+ * `jeton_espace_artisan` (migration 0159) ; demander `*` échouerait donc.
+ */
+const COLONNES =
+  'id, nom, prenom, societe, telephone, email, metiers, zone_intervention, rayon_km, adresse, ville, code_postal, latitude, longitude, specificites, created_at, updated_at, sous_metiers, forme_juridique, capital_social, siren, ville_immatriculation, representant, qualite_representant, taux_commission, contrat_externe, ecarte_at, ecarte_motif, departements_couverts, source, nb_salaries, annees_experience, assurance_rc_pro, assurance_decennale, zones_couvertes, note_elocution, note_communication_agence, partenaire_at, assurance_decennale_url, assurance_decennale_assureur, assurance_decennale_police, assurance_decennale_echeance, assurance_rc_pro_url, assurance_rc_pro_assureur, assurance_rc_pro_police, assurance_rc_pro_echeance, assurances_validees_at, assurances_validees_par, logo_url, tva_intracom, code_ape, iban, bic, mediateur_nom, mediateur_url, cgv, conditions_paiement, garantie_zone, acompte_defaut, tva_mode_defaut'
+
 // ------------------------------------------------------------
 //  Hooks react-query pour les artisans (liste / détail / CRUD).
 //  Le géocodage de l'adresse est fait automatiquement à l'enregistrement.
@@ -18,7 +30,7 @@ export function useArtisans() {
     queryFn: async (): Promise<Artisan[]> => {
       const { data, error } = await supabase
         .from(TABLE)
-        .select('*')
+        .select(COLONNES)
         .is('ecarte_at', null)
         .order('nom', { ascending: true })
       if (error) throw error
@@ -35,7 +47,7 @@ export function useArtisan(id: string | undefined) {
     queryFn: async (): Promise<Artisan> => {
       const { data, error } = await supabase
         .from(TABLE)
-        .select('*')
+        .select(COLONNES)
         .eq('id', id!)
         .single()
       if (error) throw error
@@ -78,7 +90,7 @@ export function useCreateArtisan() {
       const { data, error } = await supabase
         .from(TABLE)
         .insert(payload)
-        .select('*')
+        .select(COLONNES)
         .single()
       if (error) throw error
       return data
@@ -103,7 +115,7 @@ export function useUpdateArtisan() {
         .from(TABLE)
         .update(payload)
         .eq('id', id)
-        .select('*')
+        .select(COLONNES)
         .single()
       if (error) throw error
       return data
@@ -115,20 +127,32 @@ export function useUpdateArtisan() {
   })
 }
 
-/** Régénère le token (lien public) d'un artisan → révoque l'ancien lien. */
+/**
+ * Le lien de l'espace d'un artisan — pour le fondateur seulement.
+ *
+ * La base renvoie NULL à tout autre rôle : un commercial ne voit pas le lien,
+ * et l'écran n'affiche alors pas la carte qui le contient.
+ */
+export function useJetonArtisan(id: string | undefined, actif: boolean) {
+  return useQuery({
+    queryKey: ['artisans', id, 'jeton'],
+    enabled: !!id && actif,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase.rpc('jeton_espace_artisan', { p_artisan_id: id })
+      if (error) throw error
+      return (data as string | null) ?? null
+    },
+  })
+}
+
+/** Régénère le jeton (lien public) d'un artisan → révoque l'ancien lien. Fondateur seulement. */
 export function useRegenererTokenArtisan() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string): Promise<string> => {
-      const nouveau = crypto.randomUUID().replace(/-/g, '')
-      const { data, error } = await supabase
-        .from(TABLE)
-        .update({ token: nouveau })
-        .eq('id', id)
-        .select('token')
-        .single()
+      const { data, error } = await supabase.rpc('regenerer_jeton_artisan', { p_artisan_id: id })
       if (error) throw error
-      return data.token as string
+      return data as string
     },
     onSuccess: (_t, id) => {
       qc.invalidateQueries({ queryKey: ['artisans'] })
@@ -144,7 +168,7 @@ export function useArtisansEcartes() {
     queryFn: async (): Promise<Artisan[]> => {
       const { data, error } = await supabase
         .from(TABLE)
-        .select('*')
+        .select(COLONNES)
         .not('ecarte_at', 'is', null)
         .order('ecarte_at', { ascending: false })
       if (error) throw error

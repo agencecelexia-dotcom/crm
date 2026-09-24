@@ -72,7 +72,6 @@ export interface Artisan {
   representant: string | null
   qualite_representant: string | null
   taux_commission: number // taux par défaut de l'artisan (ex: 0.10)
-  token: string // lien public "espace artisan" (/artisan/:token)
   contrat_externe: boolean // contrat signé hors application (pas de signature dans l'espace)
   ecarte_at: string | null // "pas fiable" : écarté (hors liste active) mais conservé
   ecarte_motif: string | null // raison de la mise à l'écart
