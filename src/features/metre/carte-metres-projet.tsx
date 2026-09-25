@@ -6,6 +6,11 @@ import { supabase } from '@/lib/supabase/client'
 import { formatM, formatM2 } from './geometrie'
 import type { Metre } from './use-metres'
 
+type MetreAgence = Metre & {
+  artisan_id: string
+  artisan: { nom: string | null; prenom: string | null; societe: string | null } | null
+}
+
 /**
  * D'où vient la pente — la question que l'agence doit pouvoir se poser.
  *
@@ -34,21 +39,24 @@ const PROVENANCE: Record<string, string> = {
 export function CarteMetresProjet({ projetId }: { projetId: string }) {
   const { data: metres } = useQuery({
     queryKey: ['metres-projet', projetId],
-    queryFn: async (): Promise<Metre[]> => {
+    queryFn: async (): Promise<MetreAgence[]> => {
       const { data, error } = await supabase
         .from('metres')
         .select(
-          'id, nom, type, geometrie, surface_m2, perimetre_m, longueur_m, hauteur_m, pente_pct, pente_source, surface_reelle_m2, source, debord_m, part_toiture, versant, created_at',
+          'id, nom, type, geometrie, surface_m2, perimetre_m, longueur_m, hauteur_m, pente_pct, pente_source, surface_reelle_m2, source, debord_m, part_toiture, versant, ouvertures_m2, created_at, artisan_id, artisan:artisans(nom, prenom, societe)',
         )
         .eq('projet_id', projetId)
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data as Metre[]) ?? []
+      return (data as unknown as MetreAgence[]) ?? []
     },
   })
 
   // Pas de carte vide : tant que l'artisan n'a rien mesuré, il n'y a rien à dire.
   if (!metres?.length) return null
+
+  // Un chantier peut avoir plusieurs artisans : on dit alors qui a mesuré quoi.
+  const plusieurs = new Set(metres.map((m) => m.artisan_id)).size > 1
 
   return (
     <Card className="p-4">
@@ -62,6 +70,12 @@ export function CarteMetresProjet({ projetId }: { projetId: string }) {
           <li key={m.id} className="flex items-baseline justify-between gap-3 text-sm">
             <span className="min-w-0 flex-1 truncate">
               {m.nom}
+              {plusieurs && m.artisan && (
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {m.artisan.societe || [m.artisan.prenom, m.artisan.nom].filter(Boolean).join(' ')}
+                </span>
+              )}
               {m.pente_pct ? (
                 <span className="text-muted-foreground">
                   {' '}
@@ -81,14 +95,22 @@ export function CarteMetresProjet({ projetId }: { projetId: string }) {
                   · débord {Math.round(Number(m.debord_m) * 100)} cm
                 </span>
               ) : null}
+              {m.type === 'facade' && m.ouvertures_m2 ? (
+                <span className="text-muted-foreground">
+                  {' '}
+                  · ouvertures déduites {formatM2(Number(m.ouvertures_m2))}
+                </span>
+              ) : null}
               {m.hauteur_m ? (
                 <span className="text-muted-foreground"> · h. {formatM(Number(m.hauteur_m))}</span>
               ) : null}
             </span>
             <span className="montant shrink-0 font-medium">
-              {m.type === 'surface'
-                ? formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))
-                : formatM(Number(m.longueur_m ?? 0))}
+              {/* Une façade est une SURFACE : elle s'affichait en mètres, c'est-à-dire
+                  sa longueur, alors que la base garde bien ses m². */}
+              {m.type === 'longueur'
+                ? formatM(Number(m.longueur_m ?? 0))
+                : formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))}
             </span>
           </li>
         ))}

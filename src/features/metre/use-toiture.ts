@@ -158,19 +158,34 @@ export function penteRetenue(p: {
   saisie: number | null
   mesuree: Toiture | null | undefined
   deduite: number | null
-}): { pente: number; source: 'saisie' | 'lidar' | 'photogrammetrie' | 'altitudes' | null } {
-  if (p.saisie != null) return { pente: p.saisie, source: 'saisie' }
+}): {
+  /** La pente retenue, ou null quand personne ne la connaît : il faut la demander. */
+  pente: number | null
+  source: 'saisie' | 'lidar' | 'photogrammetrie' | null
+  /**
+   * La pente DÉDUITE de deux altitudes de la BD TOPO, proposée sans être
+   * retenue. Elle vaut ±27 à ±61 points : la présenter comme la pente du toit
+   * reviendrait à afficher un chiffre qu'on ne sait pas défendre. L'artisan
+   * peut la reprendre d'un geste — elle devient alors SA saisie.
+   */
+  suggestion: number | null
+} {
+  const suggestion = p.deduite
+  if (p.saisie != null) return { pente: p.saisie, source: 'saisie', suggestion }
 
   const m = p.mesuree
   if (m?.couvert && m.fiable && m.pente != null) {
     return {
       pente: Math.round(m.pente),
       source: m.source?.includes('LiDAR') ? 'lidar' : 'photogrammetrie',
+      suggestion,
     }
   }
 
-  if (p.deduite != null) return { pente: p.deduite, source: 'altitudes' }
-  return { pente: 0, source: null }
+  // Ni mesure fiable, ni choix de l'artisan : la pente est INCONNUE. Elle
+  // valait 0 jusqu'ici, et l'écran allumait « plate » et calculait un toit plat
+  // que personne n'avait choisi.
+  return { pente: null, source: null, suggestion }
 }
 
 /**

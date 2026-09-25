@@ -60,6 +60,25 @@ export function FeuilleMetre({
   titre?: string | null
   onClose: () => void
 }) {
+  // LE BOUTON RETOUR DU TÉLÉPHONE FERME LA FEUILLE. Sans entrée d'historique,
+  // il changeait d'écran — voire quittait l'espace — en laissant la feuille
+  // ouverte par-dessus. On en pose une à l'ouverture ; « retour » la consomme
+  // et ferme. Fermer par la croix la retire, pour ne pas laisser d'entrée morte.
+  const fermer = useRef(onClose)
+  useEffect(() => {
+    fermer.current = onClose
+  })
+  useEffect(() => {
+    window.history.pushState({ feuilleMetre: true }, '')
+    const surRetour = () => fermer.current()
+    window.addEventListener('popstate', surRetour)
+    return () => window.removeEventListener('popstate', surRetour)
+  }, [])
+  function fermerFeuille() {
+    if (window.history.state?.feuilleMetre) window.history.back()
+    else onClose()
+  }
+
   const { data: ctx } = useContexteMetre(token, affectationToken)
   const enregistrer = useEnregistrerMetre(token)
   const supprimer = useSupprimerMetre(token)
@@ -93,7 +112,9 @@ export function FeuilleMetre({
   // trente-quatre chantiers, deux seulement tombaient à moins de quatre-vingts
   // mètres. On confronte donc la position à l'adresse avant toute mesure.
   const { data: situation } = useQuery({
-    queryKey: ['situer', ctx?.projet_id, ctx?.client_adresse, ctx?.client_ville],
+    // La position fait partie de la clé : après « Le chantier est ici », le
+    // bandeau d'alerte restait affiché toute la session, faute de recalcul.
+    queryKey: ['situer', ctx?.projet_id, ctx?.client_adresse, ctx?.client_ville, ctx?.latitude, ctx?.longitude],
     enabled: !!ctx?.ok,
     staleTime: 1000 * 60 * 30,
     queryFn: ({ signal }) =>
@@ -122,7 +143,10 @@ export function FeuilleMetre({
   // position est présélectionné : l'artisan ouvre l'écran et lit ses mesures
   // sans toucher à rien. C'est tout l'objet de l'outil.
   const premierCadrage = useRef(true)
-  const fiable = situation?.fiable === true
+  // Une adresse cherchée à la main et résolue AU NUMÉRO vaut une adresse
+  // fiable : la maison se présélectionnait jusqu'ici seulement à l'ouverture.
+  const [adresseManuellePrecise, setAdresseManuellePrecise] = useState(false)
+  const fiable = situation?.fiable === true || adresseManuellePrecise
   useEffect(() => {
     if (lon == null || lat == null) return
     const p: Point = [lon, lat]
@@ -198,16 +222,20 @@ export function FeuilleMetre({
           toast.success('Métré enregistré', {
             description: retenue != null ? formatM2(Number(retenue)) : undefined,
           })
-          recommencer()
+          // On RESTE sur la maison : l'artisan enchaîne souvent toit puis
+          // façades. Tout réinitialiser l'obligeait à la re-toucher et à
+          // refaire ses réglages.
         },
         onError: (e) =>
-          toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
+          toast.error('Mesure non enregistrée', {
+            description: e instanceof Error ? e.message : undefined,
+          }),
       },
     )
   }
 
   return (
-    <Sheet open onOpenChange={(o) => !o && onClose()}>
+    <Sheet open onOpenChange={(o) => !o && fermerFeuille()}>
       <SheetContent side="bottom" className="flex h-[95dvh] max-h-[95dvh] flex-col gap-0 p-0">
         <SheetHeader className="shrink-0 border-b border-border p-3">
           <SheetTitle className="truncate text-base">{titre || 'Métré'}</SheetTitle>
@@ -295,6 +323,7 @@ export function FeuilleMetre({
                       // ABF de l'ancien bâtiment restaient à l'écran.
                       recommencer()
                       premierCadrage.current = true
+                      setAdresseManuellePrecise(a.precise)
                       setRecadrage([a.lon, a.lat])
                       setChercheOuverte(false)
                       setRecherche('')
@@ -324,7 +353,10 @@ export function FeuilleMetre({
         </div>
 
         {/* Le panneau de mesure */}
-        <div className="shrink-0 space-y-3 border-t border-border p-3">
+        {/* Le panneau DÉFILE, et laisse au moins un tiers de l'écran à la carte :
+            sans défilement, sur un téléphone, le bas du panneau — et le bouton
+            d'enregistrement — sortait de l'écran sans qu'on puisse l'atteindre. */}
+        <div className="max-h-[62dvh] shrink-0 space-y-3 overflow-y-auto overscroll-contain border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {/* Ce qu'on sait — ou pas — de l'endroit où l'on est. */}
           {situation?.message && (
             <div
@@ -423,7 +455,7 @@ export function FeuilleMetre({
                           recommencer()
                         },
                         onError: (e) =>
-                          toast.error('Échec', {
+                          toast.error('Mesure non enregistrée', {
                             description: e instanceof Error ? e.message : undefined,
                           }),
                       },
@@ -509,32 +541,47 @@ export function FeuilleMetre({
             </>
           )}
 
-          {/* Les métrés déjà pris sur ce chantier */}
-          {!!ctx?.metres?.length && !choisi && !dessin && (
-            <div className="space-y-1 border-t border-border pt-2">
-              {ctx.metres.map((m) => (
-                <div key={m.id} className="flex items-center gap-2 text-xs">
-                  <span className="min-w-0 flex-1 truncate">
-                    {m.nom}
-                    <span className="text-muted-foreground">
-                      {' · '}
-                      {m.type === 'longueur'
-                        ? formatM(Number(m.longueur_m ?? 0))
-                        : formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))}
+          {/* Les métrés déjà pris sur ce chantier — TOUJOURS visibles : ils
+              étaient masqués dès qu'une maison était sélectionnée, c'est-à-dire
+              à chaque ouverture. */}
+          {!!ctx?.metres?.length && (
+            <details className="rounded-xl border border-border px-3 py-2">
+              <summary className="cursor-pointer select-none py-1 text-sm font-medium">
+                Déjà enregistré ({ctx.metres.length})
+              </summary>
+              <ul className="mt-1 divide-y divide-border">
+                {ctx.metres.map((m) => (
+                  <li key={m.id} className="flex min-h-11 items-center gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">
+                      {m.nom}
+                      <span className="text-muted-foreground">
+                        {' · '}
+                        {m.type === 'longueur'
+                          ? formatM(Number(m.longueur_m ?? 0))
+                          : formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))}
+                      </span>
                     </span>
-                  </span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7 shrink-0 text-muted-foreground"
-                    aria-label={`Supprimer ${m.nom}`}
-                    onClick={() => supprimer.mutate(m.id)}
-                  >
-                    <X className="size-3.5" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-11 shrink-0 text-muted-foreground"
+                      aria-label={`Supprimer ${m.nom}`}
+                      disabled={supprimer.isPending}
+                      onClick={() => {
+                        // Une suppression sans confirmation, à côté d'un doigt de chantier…
+                        if (!window.confirm(`Supprimer « ${m.nom} » ?`)) return
+                        supprimer.mutate(m.id, {
+                          onSuccess: () => toast.success('Mesure supprimée'),
+                          onError: () => toast.error('Suppression impossible'),
+                        })
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           <p className="text-center text-[11px] leading-snug text-muted-foreground">

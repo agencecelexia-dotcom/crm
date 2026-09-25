@@ -99,7 +99,7 @@ export function PanneauBatiment({
     batiment.contour,
   )
   const penteDeduite = batiment.toiture ? Math.round(batiment.toiture.pente) : null
-  const { pente, source: origine } = penteRetenue({
+  const { pente, source: origine, suggestion } = penteRetenue({
     saisie: penteSaisie,
     mesuree: toitureIgn,
     deduite: penteDeduite,
@@ -153,8 +153,10 @@ export function PanneauBatiment({
   // montre, chiffré à part, et l'artisan le corrige d'un doigt.
   const [debordCm, setDebordCm] = useState(DEBORD_DEFAUT)
   const empriseToit = empriseAvecDebord(batiment.emprise, batiment.perimetre, debordCm / 100)
-  const toiture = surfaceReelle(empriseToit, pente)
-  const gainDebord = toiture - surfaceReelle(batiment.emprise, pente)
+  // Sans pente connue, il n'y a PAS de surface de toiture à afficher : la
+  // surface au sol n'en est pas une, et un toit plat n'est pas un toit inconnu.
+  const toiture = pente != null ? surfaceReelle(empriseToit, pente) : null
+  const gainDebord = pente != null ? surfaceReelle(empriseToit, pente) - surfaceReelle(batiment.emprise, pente) : null
 
   // UN COUVREUR NE REFAIT PAS TOUJOURS TOUT LE TOIT. Le relevé sépare les
   // versants par leur exposition ; l'artisan en choisit un et lit sa surface,
@@ -164,7 +166,7 @@ export function PanneauBatiment({
   const partRetenue = versantChoisi
     ? (versants.find((v) => v.orientation === versantChoisi)?.part ?? 1)
     : 1
-  const surfaceRetenue = toiture * partRetenue
+  const surfaceRetenue = toiture != null ? toiture * partRetenue : null
 
   function choisirMur(m: Facade | null) {
     setMur(m)
@@ -213,8 +215,14 @@ export function PanneauBatiment({
           <div className="grid grid-cols-2 gap-2">
             <Chiffre titre="Emprise au sol" valeur={formatM2(batiment.emprise)} />
             <Chiffre
-              titre={versantChoisi ? `Versant ${versantChoisi} à ${pente} %` : `Toiture à ${pente} %`}
-              valeur={formatM2(surfaceRetenue)}
+              titre={
+                pente == null
+                  ? 'Toiture'
+                  : versantChoisi
+                    ? `Versant ${versantChoisi} à ${pente} %`
+                    : `Toiture à ${pente} %`
+              }
+              valeur={surfaceRetenue != null ? formatM2(surfaceRetenue) : 'Choisissez la pente'}
               fort
             />
             {batiment.encombrement && (
@@ -228,9 +236,7 @@ export function PanneauBatiment({
                 titre="Gouttière · faîtage (mesurés)"
                 valeur={`${formatHauteur(toitureIgn.hauteur_gouttiere)} · ${formatHauteur(toitureIgn.hauteur_faitage ?? 0)}`}
               />
-            ) : batiment.hauteur != null && (
-              <Chiffre titre="Hauteur (IGN, non mesurée)" valeur={formatM(batiment.hauteur)} />
-            )}
+            ) : null}
             <Chiffre titre="Périmètre" valeur={formatM(batiment.perimetre)} />
           </div>
 
@@ -269,20 +275,14 @@ export function PanneauBatiment({
                   'vérifiez que c’est bien la maison, et non un abri.'}{' '}
               Saisissez la pente.
             </p>
-          ) : !batiment.toiture ? (
-            // Sans altitudes, l'écran affichait « Toiture à 0 % » et la surface
-            // au sol, en silence. Il faut le dire.
-            <p className="text-xs text-[#B45309]">
-              L’IGN ne donne pas les altitudes de ce toit&nbsp;: la pente est inconnue.
-              Choisissez-la ci-dessous, sans quoi la surface affichée est celle du sol.
-            </p>
           ) : (
+            // Ni mesure fiable, ni choix de l'artisan. La pente DÉDUITE de deux
+            // altitudes de la BD TOPO (±27 à ±61 points) n'est qu'une piste : on
+            // la propose, on ne la retient pas à sa place.
             <p className="text-xs text-[#B45309]">
-              Pente seulement <strong>déduite</strong> de deux altitudes&nbsp;:{' '}
-              <strong className="text-foreground">{penteDeduite} %</strong>
-              {batiment.toiture.incertitude > 0 && ` ± ${Math.round(batiment.toiture.incertitude)}`}
-              . Le calcul suppose un toit à deux pans et n’a pas la précision d’un relevé&nbsp;:
-              vérifiez-la.
+              La pente de ce toit n’a pas pu être mesurée&nbsp;: choisissez-la ci-dessous.
+              {suggestion != null &&
+                ` L’IGN suggère environ ${suggestion} %, sans garantie — à vérifier avec le client.`}
             </p>
           )}
 
@@ -290,13 +290,24 @@ export function PanneauBatiment({
             <span className="text-xs text-muted-foreground">Pente&nbsp;:</span>
             {/* Revenir à la valeur de l'IGN : une fois une pastille touchée,
                 elle était perdue. */}
-            {penteSaisie != null && (penteMesuree ?? penteDeduite) != null && (
+            {penteSaisie != null && toitureIgn?.fiable && toitureIgn.pente != null && (
               <button
                 type="button"
                 onClick={() => setPenteSaisie(null)}
                 className="rounded-full border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
               >
-                IGN&nbsp;: {penteMesuree ?? penteDeduite} %
+                Mesurée&nbsp;: {Math.round(toitureIgn.pente)} %
+              </button>
+            )}
+            {/* La suggestion de la BD TOPO, à reprendre d'un geste : elle devient
+                alors le choix de l'artisan, et c'est écrit comme tel. */}
+            {pente == null && suggestion != null && (
+              <button
+                type="button"
+                onClick={() => setPenteSaisie(suggestion)}
+                className="rounded-full border border-dashed border-[#B45309]/60 bg-card px-2.5 py-1.5 text-xs text-[#B45309] transition-colors hover:bg-accent"
+              >
+                ≈ {suggestion} % (IGN)
               </button>
             )}
             {PENTES.map((p) => (
@@ -338,14 +349,31 @@ export function PanneauBatiment({
             {debordCm > 0 ? (
               <>
                 Le contour est celui des murs&nbsp;; le toit dépasse de {debordCm} cm à l’égout,
-                soit <strong className="text-foreground">{formatM2(gainDebord)}</strong> en plus.
+                {gainDebord != null ? (
+                  <>
+                    soit <strong className="text-foreground">{formatM2(gainDebord)}</strong> en plus.
+                  </>
+                ) : (
+                  'à ajouter à la surface une fois la pente choisie.'
+                )}
                 Ce débord n’est pas mesurable sur les données de l’IGN&nbsp;: à vous de le régler.
               </>
             ) : (
               <>
-                Sans débord, la surface est celle du toit à l’aplomb des murs — en général{' '}
-                {formatM2(surfaceReelle(empriseAvecDebord(batiment.emprise, batiment.perimetre, 0.4), pente) - toiture)}{' '}
-                de moins que le toit réel.
+                Sans débord, la surface est celle du toit à l’aplomb des murs
+                {pente != null && toiture != null ? (
+                  <>
+                    {' '}
+                    — en général{' '}
+                    {formatM2(
+                      surfaceReelle(empriseAvecDebord(batiment.emprise, batiment.perimetre, 0.4), pente) -
+                        toiture,
+                    )}{' '}
+                    de moins que le toit réel.
+                  </>
+                ) : (
+                  ', plus petite que le toit réel.'
+                )}
               </>
             )}
           </p>
@@ -369,7 +397,7 @@ export function PanneauBatiment({
                       : 'border-border bg-card hover:bg-accent',
                   )}
                 >
-                  {v.orientation} · {formatM2(toiture * v.part)}
+                  {v.orientation} · {formatM2((toiture ?? 0) * v.part)}
                 </button>
               ))}
               {versantChoisi && (
@@ -392,16 +420,21 @@ export function PanneauBatiment({
 
           <Garder
             enCours={enCours}
+            desactive={pente == null}
             defaut={versantChoisi ? `Toiture versant ${versantChoisi}` : batiment.nature || 'Toiture'}
             onGarder={(nom) =>
               onEnregistrer({
                 nom,
                 type: 'surface',
                 geometrie: batiment.contour,
-                hauteur_m: batiment.hauteur,
-                pente_pct: pente > 0 ? pente : null,
+                // La hauteur MESURÉE à la gouttière, jamais celle de la BD TOPO
+                // (fausse de 3,6 à 4,8 m sur un tiers des maisons comparées).
+                hauteur_m: toitureIgn?.hauteur_gouttiere ?? null,
+                // 0 = toit plat, choisi. `null` n'arrive plus ici : le bouton est
+                // désactivé tant que la pente est inconnue.
+                pente_pct: pente,
                 pente_source: origine,
-                hauteur_source: 'bati',
+                hauteur_source: toitureIgn?.hauteur_gouttiere != null ? 'lidar' : null,
                 debord_m: debordCm / 100,
                 part_toiture: partRetenue,
                 versant: versantChoisi,

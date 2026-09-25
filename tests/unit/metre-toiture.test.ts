@@ -23,13 +23,15 @@ describe('penteRetenue — quel chiffre l’artisan recopie', () => {
     expect(penteRetenue({ saisie: 40, mesuree: mesure({}), deduite: 55 })).toEqual({
       pente: 40,
       source: 'saisie',
+      suggestion: 55,
     })
   })
 
-  it('la mesure passe avant la déduction', () => {
+  it('la mesure passe avant tout le reste', () => {
     expect(penteRetenue({ saisie: null, mesuree: mesure({}), deduite: 55 })).toEqual({
       pente: 61,
       source: 'lidar',
+      suggestion: 55,
     })
   })
 
@@ -38,19 +40,20 @@ describe('penteRetenue — quel chiffre l’artisan recopie', () => {
   // exactement le défaut que l'audit a reproché à la version précédente.
   it('une mesure NON FIABLE ne devient jamais la pente affichée', () => {
     const bruit = mesure({ fiable: false, pente: 65, incertitude: 65 })
-    expect(penteRetenue({ saisie: null, mesuree: bruit, deduite: 35 })).toEqual({
-      pente: 35,
-      source: 'altitudes',
-    })
-    expect(penteRetenue({ saisie: null, mesuree: bruit, deduite: null })).toEqual({
-      pente: 0,
-      source: null,
-    })
+    expect(penteRetenue({ saisie: null, mesuree: bruit, deduite: null }).pente).toBeNull()
   })
 
-  it('hors couverture, on retombe sur la déduction', () => {
+  // La pente déduite de deux altitudes vaut ±27 à ±61 points : elle est
+  // PROPOSÉE, jamais retenue d'office.
+  it('la pente déduite de la BD TOPO n’est qu’une suggestion', () => {
+    const bruit = mesure({ fiable: false, pente: 65, incertitude: 65 })
+    expect(penteRetenue({ saisie: null, mesuree: bruit, deduite: 35 })).toEqual({
+      pente: null,
+      source: null,
+      suggestion: 35,
+    })
     const absent = mesure({ couvert: false, fiable: false, pente: null })
-    expect(penteRetenue({ saisie: null, mesuree: absent, deduite: 35 }).source).toBe('altitudes')
+    expect(penteRetenue({ saisie: null, mesuree: absent, deduite: 35 }).pente).toBeNull()
   })
 
   it('la photogrammétrie est nommée pour ce qu’elle est', () => {
@@ -58,13 +61,16 @@ describe('penteRetenue — quel chiffre l’artisan recopie', () => {
     expect(penteRetenue({ saisie: null, mesuree: photo, deduite: null })).toEqual({
       pente: 53,
       source: 'photogrammetrie',
+      suggestion: null,
     })
   })
 
-  it('sans rien du tout, la pente vaut zéro et n’a pas de source', () => {
+  // L'écran allumait « plate » et calculait un toit plat que personne n'avait choisi.
+  it('sans rien du tout, la pente est INCONNUE — pas zéro', () => {
     expect(penteRetenue({ saisie: null, mesuree: null, deduite: null })).toEqual({
-      pente: 0,
+      pente: null,
       source: null,
+      suggestion: null,
     })
   })
 
@@ -73,6 +79,7 @@ describe('penteRetenue — quel chiffre l’artisan recopie', () => {
     expect(penteRetenue({ saisie: 0, mesuree: mesure({}), deduite: 55 })).toEqual({
       pente: 0,
       source: 'saisie',
+      suggestion: 55,
     })
   })
 })
