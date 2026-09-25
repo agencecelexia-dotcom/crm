@@ -43,6 +43,8 @@ export interface ContexteMetre {
   latitude: number | null
   longitude: number | null
   metier: string | null
+  /** Tous les métiers du chantier (0168) ; `metier` n'en garde qu'un. */
+  metiers: string[] | null
   metres: Metre[]
 }
 
@@ -80,6 +82,8 @@ const MESSAGES: Record<string, string> = {
   pente_requise: 'Choisissez la pente du toit avant d’enregistrer.',
   trace_demesure: 'Ce tracé est démesuré (plus de 2 km) : vérifiez-le.',
   batiment_invalide: 'Ce bâtiment ne peut pas être retenu : touchez-le à nouveau.',
+  quantite_invalide: 'Cette quantité ne peut pas être enregistrée : rechargez la page.',
+  valeur_invalide: 'Cette valeur n’est pas plausible.',
   acces_refuse: 'Votre lien n’est plus valable. Demandez-en un nouveau à Celexia.',
 }
 

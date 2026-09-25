@@ -40,6 +40,9 @@ import {
 } from './use-metres'
 import { situerChantier } from './position'
 import { BandeauMaison } from './bandeau-maison'
+import { vueDuChantier } from './vue-par-metier'
+import { PanneauCloture } from './panneau-cloture'
+import { parcelleSous, troncons } from './parcelle'
 import {
   maisonDeLAdresse,
   useMaisonChantier,
@@ -112,6 +115,7 @@ export function FeuilleMetre({
   // — le bâtiment dont le centre est le plus proche du point d'adresse —
   // prenait la maison d'en face dès que le point tombait sur la chaussée.
   const maisonServeur = useMaisonChantier(token, affectationToken, !!ctx?.ok)
+  const vue = vueDuChantier(ctx?.metiers?.length ? ctx.metiers : [ctx?.metier])
   const retenir = useRetenirMaison(token, affectationToken)
   // Une adresse cherchée à la main, et la maison trouvée à cette adresse.
   const [manuelle, setManuelle] = useState<{
@@ -185,6 +189,61 @@ export function FeuilleMetre({
     [batiments, cible],
   )
   const choisi = choix === 'aucun' ? null : (choix ?? preselection)
+  // Les autres bâtiments chargés : ils disent quels murs de la maison sont accolés.
+  const voisins = useMemo(
+    () => batiments.filter((b) => b.id !== choisi?.id).map((b) => b.contour),
+    [batiments, choisi?.id],
+  )
+
+  // LA CLÔTURE : pour les métiers du terrain, la parcelle de la maison et ses
+  // côtés à cocher. Les côtés cochés sont gardés par maison : changer de
+  // maison ne reporte pas les choix de l'autre.
+  const terrain = vue === 'terrain'
+  const { data: parcelle, isLoading: parcelleEnCours } = useQuery({
+    queryKey: ['parcelle', choisi?.id],
+    enabled: terrain && !!choisi?.centre,
+    staleTime: 1000 * 60 * 60,
+    retry: 1,
+    queryFn: ({ signal }) => parcelleSous(choisi!.centre!, signal),
+  })
+  const [cotesPar, setCotesPar] = useState<Record<string, number[]>>({})
+  const cotesChoisis = useMemo(() => new Set(choisi ? (cotesPar[choisi.id] ?? []) : []), [cotesPar, choisi])
+  function basculerCote(i: number) {
+    if (!choisi) return
+    setCotesPar((avant) => {
+      const liste = avant[choisi.id] ?? []
+      return { ...avant, [choisi.id]: liste.includes(i) ? liste.filter((x) => x !== i) : [...liste, i] }
+    })
+  }
+  function enregistrerCloture() {
+    if (!parcelle || !choisi) return
+    const morceaux = troncons(parcelle, cotesChoisis)
+    let restants = morceaux.length
+    for (const t of morceaux) {
+      enregistrer.mutate(
+        {
+          affectation_token: affectationToken,
+          nom: `Clôture ${t.cotes.map((c) => c.orientation).join(', ')}`,
+          type: 'longueur',
+          geometrie: t.ligne,
+          source: 'dessin',
+        },
+        {
+          onSuccess: () => {
+            restants--
+            if (restants === 0) {
+              toast.success('Clôture enregistrée', {
+                description: formatM(morceaux.reduce((s, x) => s + x.cotes.reduce((a, c) => a + c.longueur, 0), 0)),
+              })
+              confirmerParLaMesure(choisi)
+            }
+          },
+          onError: (e) =>
+            toast.error('Clôture non enregistrée', { description: e instanceof Error ? e.message : undefined }),
+        },
+      )
+    }
+  }
   // La maison proposée attend un « Oui » : le bandeau offre déjà d'en choisir une autre.
   const aConfirmer =
     !!choisi?.cleabs && choisi.cleabs === cible && choisi.cleabs !== retenue && maison?.confiance === 'a_confirmer'
@@ -293,6 +352,27 @@ export function FeuilleMetre({
     )
   }
 
+  // LA CLÉ N'EST PAS DÉCORATIVE. Sans elle, React réutilise le même panneau
+  // d'un bâtiment à l'autre et garde son état : la pente saisie pour la maison
+  // A restait affichée sur la maison B, ainsi que le débord, le mur choisi et
+  // le versant retenu. Des chiffres justes sur la mauvaise maison — exactement
+  // ce que l'audit avait trouvé ailleurs.
+  const panneauMaison = choisi ? (
+    <PanneauBatiment
+      key={choisi.id}
+      token={token}
+      batiment={choisi}
+      enCours={enregistrer.isPending}
+      onEnregistrer={garder}
+      onMurChoisi={setMurChoisi}
+      voisins={voisins}
+      vue={vue}
+      titre={titre}
+      adresse={maison?.adresse_retrouvee ?? ctx?.client_adresse ?? null}
+      affectationToken={affectationToken}
+    />
+  ) : null
+
   return (
     <Sheet open onOpenChange={(o) => !o && fermerFeuille()}>
       <SheetContent side="bottom" className="flex h-[95dvh] max-h-[95dvh] flex-col gap-0 p-0">
@@ -323,6 +403,9 @@ export function FeuilleMetre({
             onBouger={(p) => {
               centreCarte.current = p
             }}
+            parcelle={terrain ? (parcelle ?? null) : null}
+            cotesChoisis={cotesChoisis}
+            onBasculerCote={basculerCote}
           />
 
           {enRecherche && (
@@ -463,20 +546,29 @@ export function FeuilleMetre({
                   Ce n’est pas le bon bâtiment — en choisir un autre
                 </button>
               )}
-            {/* LA CLÉ N'EST PAS DÉCORATIVE. Sans elle, React réutilise le même
-                panneau d'un bâtiment à l'autre et garde son état : la pente
-                saisie pour la maison A restait affichée sur la maison B, ainsi
-                que le débord, le mur choisi et le versant retenu. Des chiffres
-                justes sur la mauvaise maison — exactement ce que l'audit avait
-                trouvé ailleurs. */}
-            <PanneauBatiment
-              key={choisi.id}
-              token={token}
-              batiment={choisi}
-              enCours={enregistrer.isPending}
-              onEnregistrer={garder}
-              onMurChoisi={setMurChoisi}
-            />
+            {/* Le poseur de clôture chiffre le TERRAIN : sa parcelle passe
+                devant, la maison se replie. */}
+            {terrain && (
+              <PanneauCloture
+                parcelle={parcelle}
+                enCours={parcelleEnCours}
+                adresse={maison && maison.confiance !== 'confirmee' ? maison.point : null}
+                choisis={cotesChoisis}
+                onBasculer={basculerCote}
+                onEnregistrer={enregistrerCloture}
+                enregistrement={enregistrer.isPending}
+              />
+            )}
+            {terrain ? (
+              <details className="rounded-xl border border-border px-3 py-2">
+                <summary className="min-h-11 cursor-pointer select-none content-center text-sm font-medium">
+                  La maison : toit, façades
+                </summary>
+                <div className="mt-2 space-y-3">{panneauMaison}</div>
+              </details>
+            ) : (
+              panneauMaison
+            )}
             </>
           ) : dessin ? (
             <>

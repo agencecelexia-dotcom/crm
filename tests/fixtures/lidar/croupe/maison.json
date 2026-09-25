@@ -1,0 +1,233 @@
+{
+ "nom": "croupe",
+ "description": "Toit à quatre pans à 31 %, orientations dispersées (Saint-Aygulf)",
+ "cleabs": "BATIMENT0000002270827986",
+ "contour": [
+  [
+   6.70870355,
+   43.39078488
+  ],
+  [
+   6.70864277,
+   43.39091485
+  ],
+  [
+   6.70855819,
+   43.39094387
+  ],
+  [
+   6.70850914,
+   43.3908726
+  ],
+  [
+   6.7085514,
+   43.39085764
+  ],
+  [
+   6.70855575,
+   43.39084848
+  ],
+  [
+   6.7085219,
+   43.39084064
+  ],
+  [
+   6.70855,
+   43.39077843
+  ],
+  [
+   6.70862139,
+   43.390794
+  ],
+  [
+   6.70863567,
+   43.39076649
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": false,
+  "motif": "toit_sans_pan_dominant",
+  "pente": 31,
+  "incertitude": 2,
+  "pixels": 626,
+  "versants": [
+   {
+    "orientation": "ouest",
+    "part": 0.1918032786885246
+   },
+   {
+    "orientation": "nord-est",
+    "part": 0.15245901639344261
+   },
+   {
+    "orientation": "est",
+    "part": 0.15245901639344261
+   },
+   {
+    "orientation": "sud-ouest",
+    "part": 0.1360655737704918
+   },
+   {
+    "orientation": "nord-ouest",
+    "part": 0.11311475409836065
+   }
+  ],
+  "source": "LiDAR HD de l’IGN, grille de 50 cm",
+  "murs": [
+   {
+    "i": 0,
+    "longueur": 15.26,
+    "surface": 48,
+    "hauteur_moyenne": 3.1,
+    "hauteur_min": 2.8,
+    "hauteur_max": 3.9,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 1,
+    "longueur": 7.58,
+    "surface": 36,
+    "hauteur_moyenne": 4.8,
+    "hauteur_min": 3.9,
+    "hauteur_max": 5.6,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 2,
+    "longueur": 8.86,
+    "surface": 46.1,
+    "hauteur_moyenne": 5.2,
+    "hauteur_min": 3.5,
+    "hauteur_max": 5.7,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 3,
+    "longueur": 3.81,
+    "surface": 14.3,
+    "hauteur_moyenne": 3.7,
+    "hauteur_min": 3.3,
+    "hauteur_max": 4.6,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 4,
+    "longueur": 1.08,
+    "surface": 3.3,
+    "hauteur_moyenne": 3.1,
+    "hauteur_min": 3,
+    "hauteur_max": 3.2,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 5,
+    "longueur": 2.88,
+    "surface": 8.9,
+    "hauteur_moyenne": 3.1,
+    "hauteur_min": 2.9,
+    "hauteur_max": 3.3,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 6,
+    "longueur": 7.28,
+    "surface": 22.6,
+    "hauteur_moyenne": 3.1,
+    "hauteur_min": 2.6,
+    "hauteur_max": 3.3,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 7,
+    "longueur": 6.04,
+    "surface": 17.5,
+    "hauteur_moyenne": 2.9,
+    "hauteur_min": 1.6,
+    "hauteur_max": 3.2,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 8,
+    "longueur": 3.27,
+    "surface": 9.3,
+    "hauteur_moyenne": 2.8,
+    "hauteur_min": 2.8,
+    "hauteur_max": 2.9,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 9,
+    "longueur": 5.87,
+    "surface": 17.8,
+    "hauteur_moyenne": 3,
+    "hauteur_min": 2.8,
+    "hauteur_max": 3.2,
+    "valide": 1,
+    "accole": false
+   }
+  ],
+  "hauteur_gouttiere": 3.1,
+  "hauteur_faitage": 5.6,
+  "facteur": 1.047,
+  "part_plate": 0.02,
+  "pans": [
+   {
+    "orientation": "ouest",
+    "part": 0.19,
+    "pente": 32,
+    "incertitude": 2
+   },
+   {
+    "orientation": "nord-est",
+    "part": 0.15,
+    "pente": 31,
+    "incertitude": 2
+   },
+   {
+    "orientation": "est",
+    "part": 0.15,
+    "pente": 32,
+    "incertitude": 1
+   },
+   {
+    "orientation": "sud-ouest",
+    "part": 0.14,
+    "pente": 30,
+    "incertitude": 4
+   },
+   {
+    "orientation": "nord-ouest",
+    "part": 0.11,
+    "pente": 31,
+    "incertitude": 3
+   },
+   {
+    "orientation": "sud",
+    "part": 0.1,
+    "pente": 31,
+    "incertitude": 2
+   },
+   {
+    "orientation": "nord",
+    "part": 0.09,
+    "pente": 32,
+    "incertitude": 2
+   }
+  ]
+ }
+}

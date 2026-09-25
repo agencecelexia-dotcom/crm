@@ -142,3 +142,36 @@ describe('recoupement : les deux sources restent visibles', () => {
     expect(l.confianceIa).toBe(0.4)
   })
 })
+
+describe('la question de dimension suit le métier', () => {
+  const ligne = (l: Parameters<typeof construireChecklist>[0]) => construireChecklist(l).find((x) => x.cle === 'surface')!
+
+  it('une clôture se demande en longueur, pas en surface', () => {
+    const r = ligne({ metiers: ['Clôture'] })
+    expect(r.label).toBe('Longueur de clôture')
+    expect(r.question).toMatch(/longueur de clôture/)
+    expect(r.etat).toBe('manquant')
+  })
+
+  it('la mesure dite par le client répond à la question, avec sa confiance', () => {
+    const r = ligne({
+      metiers: ['Clôture'],
+      mesures: [{ cle: 'cloture_longueur', valeur: 10, unite: 'ml', citation: 'ma clôture fait dix mètres', confiance: 0.9 }],
+    })
+    expect(r.valeur).toBe('10 m')
+    expect(r.etat).toBe('obtenu')
+  })
+
+  it('un chiffre mal entendu reste à confirmer', () => {
+    const r = ligne({
+      metiers: ['Toiture'],
+      mesures: [{ cle: 'toit_surface', valeur: 110, unite: 'm2', citation: 'cent dix mètres', confiance: 0.5 }],
+    })
+    expect(r.label).toBe('Surface du toit')
+    expect(r.etat).toBe('a_confirmer')
+  })
+
+  it('sans métier connu, la question reste générale', () => {
+    expect(ligne({}).label).toBe('Surface')
+  })
+})

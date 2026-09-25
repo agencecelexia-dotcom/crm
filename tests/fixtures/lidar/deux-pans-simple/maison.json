@@ -1,0 +1,123 @@
+{
+ "nom": "deux-pans-simple",
+ "description": "Maison à deux pans, 36 %, LiDAR (Sathonay-Camp)",
+ "cleabs": "BATIMENT0000002209748162",
+ "contour": [
+  [
+   4.8703553,
+   45.81760704
+  ],
+  [
+   4.87041973,
+   45.81764561
+  ],
+  [
+   4.87052124,
+   45.81756196
+  ],
+  [
+   4.8704581,
+   45.81752337
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": true,
+  "motif": null,
+  "pente": 36,
+  "incertitude": 2,
+  "pixels": 269,
+  "versants": [
+   {
+    "orientation": "nord-est",
+    "part": 0.36259541984732824
+   },
+   {
+    "orientation": "sud-ouest",
+    "part": 0.31679389312977096
+   },
+   {
+    "orientation": "nord-ouest",
+    "part": 0.10687022900763359
+   }
+  ],
+  "source": "LiDAR HD de l’IGN, grille de 50 cm",
+  "murs": [
+   {
+    "i": 0,
+    "longueur": 6.59,
+    "surface": 39.6,
+    "hauteur_moyenne": 6,
+    "hauteur_min": 5.9,
+    "hauteur_max": 6.4,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 1,
+    "longueur": 12.18,
+    "surface": 75.1,
+    "hauteur_moyenne": 6.2,
+    "hauteur_min": 6,
+    "hauteur_max": 6.5,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 2,
+    "longueur": 6.51,
+    "surface": 40.8,
+    "hauteur_moyenne": 6.3,
+    "hauteur_min": 6.1,
+    "hauteur_max": 6.5,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 3,
+    "longueur": 12.25,
+    "surface": 73.8,
+    "hauteur_moyenne": 6,
+    "hauteur_min": 5.6,
+    "hauteur_max": 6.4,
+    "valide": 1,
+    "accole": false
+   }
+  ],
+  "hauteur_gouttiere": 6.1,
+  "hauteur_faitage": 7.2,
+  "facteur": 1.062,
+  "part_plate": 0.02,
+  "pans": [
+   {
+    "orientation": "nord-est",
+    "part": 0.36,
+    "pente": 36,
+    "incertitude": 1
+   },
+   {
+    "orientation": "sud-ouest",
+    "part": 0.31,
+    "pente": 36,
+    "incertitude": 2
+   },
+   {
+    "orientation": "nord-ouest",
+    "part": 0.1,
+    "pente": 37,
+    "incertitude": 2
+   },
+   {
+    "orientation": "sud-est",
+    "part": 0.09,
+    "pente": 36,
+    "incertitude": 1
+   }
+  ]
+ }
+}

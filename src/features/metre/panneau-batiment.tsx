@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Check, Loader2, TriangleAlert } from 'lucide-react'
+import { Check, Copy, Loader2, TriangleAlert } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,14 +11,22 @@ import {
   empriseAvecDebord,
   formatM,
   formatM2,
+  longueurAccolee,
   surfaceReelle,
   type Facade,
+  type Point,
 } from './geometrie'
 import { useFicheMaison } from './use-fiche-maison'
+import type { VueMetier } from './vue-par-metier'
+import { partagerTexte, texteMetre } from './resume-metre'
+import { CroquisCote } from './croquis-cote'
+import { FicheMesures, type CarteMesure } from './fiche-mesures'
 import {
   mesureFacade,
   partsNormalisees,
+  penteMesureeDe,
   penteRetenue,
+  resumePans,
   useToiture,
   versantsLisibles,
 } from './use-toiture'
@@ -70,14 +79,29 @@ export function PanneauBatiment({
   enCours,
   onMurChoisi,
   token,
+  voisins,
+  vue = 'tout',
+  titre,
+  adresse,
+  affectationToken,
 }: {
   batiment: Batiment
+  /** Le chantier : son dossier de métrés porte ce qu'a dit le client. */
+  affectationToken: string
+  /** Pour l'en-tête du texte copié. */
+  titre?: string | null
+  adresse?: string | null
+  /** Ce que le métier du chantier regarde d'abord. */
+  vue?: VueMetier
+  /** Les contours des AUTRES bâtiments chargés autour : ils disent quels murs sont accolés. */
+  voisins: Point[][]
   onEnregistrer: (m: MesureAEnregistrer) => void
   enCours: boolean
   onMurChoisi: (f: Facade | null) => void
   token: string
 }) {
-  const [onglet, setOnglet] = useState<'toiture' | 'facades' | 'maison'>('toiture')
+  // Le métier ouvre sur SON onglet : le façadier n'a pas à chercher ses murs.
+  const [onglet, setOnglet] = useState<'toiture' | 'facades' | 'maison'>(vue === 'facades' ? 'facades' : 'toiture')
   const { data: fiche, isLoading: ficheEnCours } = useFicheMaison(
     token,
     batiment.cleabs,
@@ -144,6 +168,9 @@ export function PanneauBatiment({
   // somme des pans d'un bout à l'autre. Sans cela l'écran montrait 49 m² sur
   // un pignon quand la base en gardait 44,8.
   const longueurServeur = mur ? mur.pans.reduce((s, p) => s + distance(p.a, p.b), 0) : 0
+  // Un mur ACCOLÉ se lit dans le tracé des bâtiments voisins, pas dans le
+  // LiDAR : un débord de toit ou un arbre y passaient pour un voisin.
+  const longueurTouchee = mur ? mur.pans.reduce((s, p) => s + longueurAccolee(p, voisins), 0) : 0
   const hauteurEquivalente =
     surfaceBrute != null && longueurServeur > 0 ? surfaceBrute / longueurServeur : null
   // LE TOIT DÉBORDE DES MURS, et le contour ne le montre pas : vérifié contre
@@ -168,6 +195,91 @@ export function PanneauBatiment({
     : 1
   const surfaceRetenue = toiture != null ? toiture * partRetenue : null
 
+  // LES CARTES DU MÉTIER
+  //
+  // Les façades toutes ensemble : ce que chiffre un ravalement complet. Si un
+  // seul côté n'a pas de relevé, pas de total — il serait faux sans le dire.
+  const relevesFacades = batiment.facades.map((f) => mesureFacade(f, toitureIgn))
+  const totalFacades =
+    relevesFacades.length && relevesFacades.every(Boolean)
+      ? relevesFacades.reduce((s, m) => s + m!.surface, 0)
+      : null
+  const murAccole = batiment.facades.reduce(
+    (s, f) => s + f.pans.reduce((t, p) => t + longueurAccolee(p, voisins), 0),
+    0,
+  )
+  const carteToit: CarteMesure = {
+    cle: 'toit_surface',
+    libelle: versantChoisi ? `Toit, versant ${versantChoisi}` : 'Toit',
+    unite: 'm2',
+    valeur: surfaceRetenue,
+    detail: pente == null ? 'pente à choisir' : (resumePans(toitureIgn) ?? `pente ${pente} %`),
+    onToucher: () => setOnglet('toiture'),
+  }
+  const carteFacades: CarteMesure = {
+    cle: 'facades_total',
+    libelle: 'Façades, tous côtés',
+    unite: 'm2',
+    valeur: totalFacades,
+    detail:
+      totalFacades == null
+        ? 'hauteur non mesurée partout'
+        : `ouvertures non déduites${murAccole > 0.5 ? ` · ${formatM(murAccole)} de mur accolé` : ''}`,
+    onToucher: () => setOnglet('facades'),
+  }
+  const carteHauteur: CarteMesure = {
+    cle: 'hauteur_murs',
+    libelle: 'Hauteur à la gouttière',
+    unite: 'm',
+    valeur: toitureIgn?.hauteur_gouttiere ?? null,
+    onToucher: () => setOnglet('facades'),
+  }
+  const cartePente: CarteMesure = {
+    cle: 'toit_pente',
+    libelle: 'Pente',
+    unite: 'pct',
+    valeur: pente,
+    onToucher: () => setOnglet('toiture'),
+  }
+  const cartes: CarteMesure[] =
+    vue === 'toit'
+      ? [carteToit, cartePente]
+      : vue === 'facades'
+        ? [carteFacades, carteHauteur]
+        : vue === 'terrain'
+          ? []
+          : [carteToit, carteFacades]
+
+  async function copier() {
+    const texte = texteMetre({
+      titre: titre ?? null,
+      adresse: adresse ?? null,
+      toit:
+        surfaceRetenue != null && pente != null && origine
+          ? {
+              surface: surfaceRetenue,
+              pente,
+              pans: origine === 'saisie' ? null : resumePans(toitureIgn),
+              debordCm,
+              source: origine,
+              versant: versantChoisi,
+            }
+          : null,
+      facades: batiment.facades.flatMap((f) => {
+        const m = mesureFacade(f, toitureIgn)
+        return m ? [{ orientation: f.orientation, surface: m.surface, hauteur: m.hauteurMoyenne }] : []
+      }),
+      emprise: batiment.emprise,
+      perimetre: batiment.perimetre,
+      dimensions: batiment.encombrement
+        ? { longueur: batiment.encombrement.longueur, largeur: batiment.encombrement.largeur }
+        : null,
+    })
+    const fait = await partagerTexte('Métré', texte)
+    if (fait === 'copie') toast.success('Mesures copiées', { description: 'Collez-les dans votre devis ou un message.' })
+    else if (fait === 'echec') toast.error('Copie impossible sur cet appareil.')
+  }
+
   function choisirMur(m: Facade | null) {
     setMur(m)
     onMurChoisi(m)
@@ -190,6 +302,10 @@ export function PanneauBatiment({
           </p>
         </div>
       )}
+
+      {/* Les chiffres du métier, d'abord : le couvreur lit son toit, le
+          façadier ses murs, sans chercher l'onglet. */}
+      <FicheMesures token={token} affectationToken={affectationToken} cartes={cartes} />
 
       <div className="flex gap-1 rounded-lg bg-muted p-1">
         {(['toiture', 'facades', 'maison'] as const).map((o) => (
@@ -241,6 +357,21 @@ export function PanneauBatiment({
             <Chiffre titre="Périmètre" valeur={formatM(batiment.perimetre)} />
           </div>
 
+          {/* À COMMANDER : la surface mesurée ne tient pas compte des coupes. Tous
+              les rapports du marché donnent cette table ; la mesure reste le
+              chiffre principal, les chutes ne s'ajoutent qu'à la commande. */}
+          {surfaceRetenue != null && (
+            <p className="text-xs text-muted-foreground">
+              À commander, chutes comprises&nbsp;:{' '}
+              {[5, 10, 15].map((c, i) => (
+                <span key={c}>
+                  {i > 0 && ' · '}
+                  <span className="montant text-foreground">{formatM2(surfaceRetenue * (1 + c / 100))}</span> (+{c}&nbsp;%)
+                </span>
+              ))}
+            </p>
+          )}
+
           {/* D'OÙ VIENT LA PENTE — jamais un chiffre sans sa provenance. */}
           {toitureEnCours ? (
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -249,6 +380,19 @@ export function PanneauBatiment({
             </p>
           ) : penteSaisie != null ? (
             <p className="text-xs text-muted-foreground">Pente saisie par vos soins.</p>
+          ) : penteMesuree != null && resumePans(toitureIgn) ? (
+            // Pan par pan : la surface est la somme des pans, chacun à SA pente ;
+            // la pente affichée est celle qui, sur tout le toit, donne la même.
+            <p className="text-xs text-muted-foreground">
+              Toit <strong className="text-foreground">mesuré pan par pan</strong>&nbsp;:{' '}
+              {resumePans(toitureIgn)}
+              {!resumePans(toitureIgn)!.includes(`à ${penteMesuree} %`) &&
+                ` (pente d’ensemble ${penteMesuree} %)`}
+              .{' '}
+              {parLiDAR
+                ? 'Relevé LiDAR de l’IGN, grille de 50 cm.'
+                : 'Photogrammétrie de l’IGN, grille de 1 m — moins fine que le LiDAR, absent ici.'}
+            </p>
           ) : penteMesuree != null ? (
             <p className="text-xs text-muted-foreground">
               Pente <strong className="text-foreground">mesurée</strong> sur {toitureIgn?.pixels}{' '}
@@ -261,12 +405,12 @@ export function PanneauBatiment({
               {versantsLisibles(toitureIgn?.versants) &&
                 ` Deux versants, ${versantsLisibles(toitureIgn?.versants)}.`}
             </p>
-          ) : toitureIgn && toitureIgn.couvert && !toitureIgn.fiable ? (
-            // Un îlot urbain n'a pas de pan dominant : servir une médiane et son
-            // écart interquartile reviendrait à habiller du bruit en mesure.
+          ) : toitureIgn && toitureIgn.couvert && penteMesureeDe(toitureIgn) == null ? (
+            // Un toit trop découpé n'a pas de pans lisibles : servir une médiane
+            // et son écart reviendrait à habiller du bruit en mesure.
             <p className="text-xs text-[#B45309]">
-              Les altitudes de ce toit ne montrent pas deux versants nets&nbsp;: il est trop
-              découpé pour qu’une pente unique ait un sens. Saisissez-la.
+              Ce toit est trop découpé pour qu’on lise ses pans dans les altitudes de l’IGN.
+              Saisissez la pente.
             </p>
           ) : toitureIgn && !toitureIgn.couvert ? (
             <p className="text-xs text-[#B45309]">
@@ -291,13 +435,13 @@ export function PanneauBatiment({
             <span className="text-xs text-muted-foreground">Pente&nbsp;:</span>
             {/* Revenir à la valeur de l'IGN : une fois une pastille touchée,
                 elle était perdue. */}
-            {penteSaisie != null && toitureIgn?.fiable && toitureIgn.pente != null && (
+            {penteSaisie != null && penteMesureeDe(toitureIgn) != null && (
               <button
                 type="button"
                 onClick={() => setPenteSaisie(null)}
                 className="rounded-full border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
               >
-                Mesurée&nbsp;: {Math.round(toitureIgn.pente)} %
+                Mesurée&nbsp;: {penteMesureeDe(toitureIgn)} %
               </button>
             )}
             {/* La suggestion de la BD TOPO, à reprendre d'un geste : elle devient
@@ -414,8 +558,9 @@ export function PanneauBatiment({
           )}
           {versants.length > 1 && (
             <p className="text-xs text-muted-foreground">
-              Surfaces de versant approchées&nbsp;: elles supposent la même pente de chaque côté,
-              ce qui est le cas courant.
+              {toitureIgn?.pans
+                ? 'Surface de chaque versant, à sa propre pente.'
+                : 'Surfaces de versant approchées : elles supposent la même pente de chaque côté, ce qui est le cas courant.'}
             </p>
           )}
 
@@ -445,6 +590,13 @@ export function PanneauBatiment({
         </>
       ) : onglet === 'facades' ? (
         <>
+          {/* Le croquis coté : chaque mur avec sa longueur. Toucher un mur
+              choisit sa façade, comme les pastilles dessous. */}
+          <CroquisCote
+            contour={batiment.contour}
+            surligne={mur?.orientation ?? null}
+            onChoisir={(o) => choisirMur(mur?.orientation === o ? null : (batiment.facades.find((f) => f.orientation === o) ?? null))}
+          />
           {/* Un côté du bâtiment = une façade, nommée par son orientation. */}
           <div className="flex flex-wrap gap-1.5">
             {batiment.facades.map((m) => (
@@ -453,7 +605,7 @@ export function PanneauBatiment({
                 type="button"
                 onClick={() => choisirMur(mur?.orientation === m.orientation ? null : m)}
                 className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs transition-colors',
+                  'min-h-11 rounded-full border px-3 text-sm transition-colors',
                   mur?.orientation === m.orientation
                     ? 'border-primary bg-primary/10 font-medium text-primary'
                     : 'border-border bg-card hover:bg-accent',
@@ -519,13 +671,12 @@ export function PanneauBatiment({
                   Hauteur inconnue&nbsp;: saisissez-la pour obtenir la surface.
                 </p>
               )}
-              {origineHauteur === 'lidar' &&
-                mesureMur!.longueurAccolee > 0.5 * longueurServeur && (
-                  <p className="text-xs text-[#B45309]">
-                    Sur {formatM(mesureMur!.longueurAccolee)}, ce mur touche un autre volume —
-                    maison mitoyenne ou annexe accolée. Cette partie n’est peut-être pas à traiter.
-                  </p>
-                )}
+              {longueurTouchee > 0.5 * longueurServeur && (
+                <p className="text-xs text-[#B45309]">
+                  Sur {formatM(longueurTouchee)}, ce mur touche un autre bâtiment — maison
+                  mitoyenne ou annexe accolée. Cette partie n’est peut-être pas à traiter.
+                </p>
+              )}
 
               <div className="flex items-end gap-2">
                 <label className="flex-1 space-y-1">
@@ -603,6 +754,13 @@ export function PanneauBatiment({
       ) : (
         <FicheMaison fiche={fiche} enCours={ficheEnCours} />
       )}
+
+      {/* Tout ce qui est mesuré, en texte, avec sa provenance : à coller dans
+          le devis ou à envoyer à l'équipe. */}
+      <Button variant="outline" className="min-h-11 w-full" onClick={copier}>
+        <Copy className="size-4" />
+        Copier les mesures
+      </Button>
     </>
   )
 }
@@ -695,6 +853,11 @@ function FicheMaison({
   )
 }
 
+/**
+ * Enregistrer, en un appui. Le nom se déduit de ce qu'on mesure — « Toiture
+ * versant nord », « Façade sud » — : le taper au doigt, sur un chantier, ne
+ * servait qu'à retarder l'enregistrement.
+ */
 function Garder({
   defaut,
   onGarder,
@@ -706,20 +869,11 @@ function Garder({
   enCours: boolean
   desactive?: boolean
 }) {
-  const [nom, setNom] = useState('')
   return (
-    <div className="flex gap-2">
-      <Input
-        className="h-10 flex-1"
-        placeholder={defaut}
-        value={nom}
-        onChange={(e) => setNom(e.target.value)}
-      />
-      <Button onClick={() => onGarder(nom.trim() || defaut)} disabled={enCours || desactive}>
-        {enCours ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-        Garder
-      </Button>
-    </div>
+    <Button className="min-h-11 w-full" onClick={() => onGarder(defaut)} disabled={enCours || desactive}>
+      {enCours ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+      Enregistrer · {defaut}
+    </Button>
   )
 }
 

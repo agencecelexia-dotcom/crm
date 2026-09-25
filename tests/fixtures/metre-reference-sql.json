@@ -1,0 +1,59 @@
+{
+ "explication": "Ce que les fonctions SQL d'enregistrement (aire_polygone, longueur_ligne, longueur_pans) rendent pour les contours des jeux d'essai LiDAR. L'écran doit retrouver les mêmes chiffres : enregistré = affiché.",
+ "mesures": [
+  {
+   "maison": "abri-trop-petit",
+   "aire": 28.53,
+   "perimetre": 21.88,
+   "longueur_pans": 21.88
+  },
+  {
+   "maison": "accolee",
+   "aire": 142.86,
+   "perimetre": 48.47,
+   "longueur_pans": 48.47
+  },
+  {
+   "maison": "croupe",
+   "aire": 184.2,
+   "perimetre": 61.92,
+   "longueur_pans": 61.92
+  },
+  {
+   "maison": "deux-pans-raides",
+   "aire": 133.14,
+   "perimetre": 46.74,
+   "longueur_pans": 46.74
+  },
+  {
+   "maison": "deux-pans-simple",
+   "aire": 80.12,
+   "perimetre": 37.56,
+   "longueur_pans": 37.56
+  },
+  {
+   "maison": "dissymetrique",
+   "aire": 113.01,
+   "perimetre": 53.19,
+   "longueur_pans": 52.39
+  },
+  {
+   "maison": "mono-pente",
+   "aire": 82.35,
+   "perimetre": 43.19,
+   "longueur_pans": 43.19
+  },
+  {
+   "maison": "photogrammetrie",
+   "aire": 207.4,
+   "perimetre": 74.76,
+   "longueur_pans": 74.76
+  },
+  {
+   "maison": "sans-pan-dominant",
+   "aire": 57.45,
+   "perimetre": 36.09,
+   "longueur_pans": 36.08
+  }
+ ]
+}

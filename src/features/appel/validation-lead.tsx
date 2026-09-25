@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, HardHat, MapPin, Megaphone, RotateCcw, UserPlus } from 'lucide-react'
+import { AlertTriangle, Check, HardHat, MapPin, Megaphone, RotateCcw, UserPlus, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { PageHeader } from '@/components/page-header'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
-import { verifierMecaniquement, type LeadExtrait } from './checklist'
+import { verifierMecaniquement, type LeadExtrait, type MesureDite } from './checklist'
+import { QUANTITES } from '@/features/metre/catalogue-metrage'
+import { valeurLisible } from '@/features/metre/affichage-metrage'
 import { chercherDoublon, verifierAdresse, type AdresseVerifiee, type Doublon } from './verifications'
 
 /**
@@ -47,6 +49,11 @@ export function ValidationLead({
   const [doublons, setDoublons] = useState<Doublon[]>([])
   const [gps, setGps] = useState<{ lat: number; lon: number } | null>(null)
   const [enregistre, setEnregistre] = useState(false)
+  // Les mesures dites, celles qu'on garde : l'écoute peut mal entendre un
+  // chiffre, le commercial retire ce qui n'a pas été dit.
+  const [mesures, setMesures] = useState<MesureDite[]>(() =>
+    (lead?.mesures ?? []).filter((m) => QUANTITES[m.cle]?.unite === m.unite && Number.isFinite(m.valeur) && m.valeur >= 0),
+  )
   const [erreur, setErreur] = useState<string | null>(null)
 
   // Vérification d'adresse auprès de la Base Adresse Nationale.
@@ -117,6 +124,24 @@ export function ValidationLead({
         .single()
 
       if (error) throw error
+      // Ce que le client a dit des dimensions entre au dossier de métrés, avec
+      // sa phrase : la mesure viendra le confirmer — ou le contredire.
+      if (statut === 'nouveau' && mesures.length) {
+        const { error: e2 } = await supabase.from('metrage_chantier').insert(
+          mesures.map((m) => ({
+            projet_id: data.id,
+            cle: m.cle,
+            unite: m.unite,
+            valeur_declaree: m.valeur,
+            declaree_par: 'client',
+            declaree_source: 'appel',
+            citation: m.citation.slice(0, 500),
+            declaree_le: new Date().toISOString(),
+          })),
+        )
+        // Le lead est créé : une mesure non notée ne doit pas le faire recréer.
+        if (e2) console.error('mesures dites non notées', e2)
+      }
       // Aucune affectation : l'attribution reste une décision humaine.
       onCree(data.id)
     } catch (e) {
@@ -260,6 +285,36 @@ export function ValidationLead({
               <Check className="size-3" /> Coordonnées GPS renseignées
             </p>
           )}
+        </div>
+      )}
+
+      {nature === 'client' && mesures.length > 0 && (
+        <div className="space-y-1.5">
+          <Label>Mesures dites par le client</Label>
+          <p className="text-xs text-muted-foreground">
+            Elles iront au dossier de métrés, à vérifier par la mesure. Retirez celles qui n’ont pas été dites.
+          </p>
+          <ul className="space-y-1.5">
+            {mesures.map((m, i) => (
+              <li key={`${m.cle}-${i}`} className="flex items-start gap-2 rounded-xl border border-border p-2 text-sm">
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium">{QUANTITES[m.cle]?.libelle ?? m.cle}</span> :{' '}
+                  <span className="montant">{valeurLisible(m.valeur, m.unite)}</span>
+                  {(m.confiance ?? 1) < 0.75 && <span className="text-[#B45309]"> · à confirmer</span>}
+                  <span className="block text-xs text-muted-foreground">« {m.citation} »</span>
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-11 shrink-0 text-muted-foreground"
+                  aria-label={`Retirer ${QUANTITES[m.cle]?.libelle ?? m.cle}`}
+                  onClick={() => setMesures((l) => l.filter((_, j) => j !== i))}
+                >
+                  <X className="size-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

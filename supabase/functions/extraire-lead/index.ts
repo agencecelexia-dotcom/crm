@@ -8,6 +8,8 @@
 // C'est toute la raison d'être de cette fonction — le navigateur ne parle
 // jamais directement à l'API Anthropic.
 
+import { CLES_METRAGE } from '../_metrage.ts'
+
 const MODELE_EXTRACTION = 'claude-sonnet-4-5'
 const MODELE_RAPPORT = 'claude-opus-4-5'
 
@@ -63,6 +65,26 @@ const OUTIL_EXTRACTION = {
       },
       probleme: { type: 'string', description: 'La demande du client, en une phrase factuelle.' },
       surface: { type: 'string', description: 'Surface ou dimensions, avec unité. Vide si non dit.' },
+      mesures: {
+        type: 'array',
+        description:
+          "Les quantités que le CLIENT a données lui-même, chiffre à l'appui : longueur de clôture, "
+          + "surface du toit ou des façades, hauteur, nombre de fenêtres de toit… Une entrée par "
+          + "quantité, avec la phrase du client MOT POUR MOT. N'en déduis AUCUNE : « une grande "
+          + "maison » n'est pas une surface, « deux étages » n'est pas une hauteur. Vide si le "
+          + "client n'a donné aucun chiffre.",
+        items: {
+          type: 'object',
+          properties: {
+            cle: { type: 'string', enum: Object.keys(CLES_METRAGE) },
+            valeur: { type: 'number', description: "Le nombre dit, converti dans l'unité de la clé." },
+            unite: { type: 'string', enum: ['m2', 'ml', 'm', 'pct', 'u', 'oui_non'] },
+            citation: { type: 'string', description: 'La phrase du client, telle quelle.' },
+            confiance: { type: 'number', description: 'De 0 à 1 : un chiffre entendu au haut-parleur se trompe souvent.' },
+          },
+          required: ['cle', 'valeur', 'unite', 'citation'],
+        },
+      },
       sinistre: {
         type: 'string',
         enum: ['aucun', 'degat_des_eaux', 'grele', 'tempete', 'incendie', 'autre', 'inconnu'],
@@ -142,7 +164,9 @@ RAISONNE COMME UN HUMAIN QUI ÉCOUTE :
 
 7. GÉOGRAPHIE FRANÇAISE. Un code postal et une ville doivent être cohérents. « syndrome de Cernon » à côté du 12490 est « Saint-Rome-de-Cernon ». Utilise ta connaissance des communes pour rétablir les noms écorchés, mais baisse la confiance si tu extrapoles.
 
-8. TU AS DÉJÀ EXTRAIT CET APPEL. Si un état antérieur t'est fourni, ne le jette pas : la nouvelle transcription est plus longue, pas différente. Conserve un champ déjà obtenu SAUF si le client s'est corrigé depuis. Un champ qui disparaît de ta réponse est une régression pour le commercial.
+8. LES MESURES SONT CELLES DU CLIENT. Tu ne notes une mesure que si le client DONNE un chiffre (« ma clôture fait dix mètres », « le toit fait à peu près cent mètres carrés »), avec sa phrase exacte. Tu ne déduis jamais : pas de surface tirée d'un nombre de pièces, pas de hauteur tirée d'un nombre d'étages. Un « à peu près » reste une mesure, avec une confiance moyenne.
+
+9. TU AS DÉJÀ EXTRAIT CET APPEL. Si un état antérieur t'est fourni, ne le jette pas : la nouvelle transcription est plus longue, pas différente. Conserve un champ déjà obtenu SAUF si le client s'est corrigé depuis. Un champ qui disparaît de ta réponse est une régression pour le commercial.
 
 DEUX PERSONNES PARLENT, NE LES CONFONDS JAMAIS.
 
