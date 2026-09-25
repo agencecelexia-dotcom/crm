@@ -26,3 +26,33 @@ export const CLES_METRAGE: Record<string, 'm2' | 'ml' | 'm' | 'pct' | 'u' | 'oui
   piscine_largeur: 'm',
   plages_surface: 'm2',
 }
+
+const TOIT = ['toit_surface', 'toit_pente', 'toit_pans', 'egouts', 'faitage', 'rives', 'fenetres_toit', 'cheminees']
+const FACADES = ['facades_total', 'hauteur_murs', 'ouvertures']
+
+/**
+ * Les quantités de chaque métier, dans l'ordre où on les demande. La
+ * pré-mesure n'écrit que celles-là : les façades d'un immeuble entier ne
+ * disent rien à qui pose un parquet au troisième étage.
+ */
+export const METRAGE_PAR_METIER: Record<string, string[]> = {
+  Couverture: TOIT,
+  Toiture: TOIT,
+  'Solaire / Photovoltaïque': ['toit_surface', 'toit_pente', 'toit_pans'],
+  'Façade / Ravalement': FACADES,
+  Isolation: [...FACADES, 'toit_surface'],
+  Peinture: FACADES,
+  Maçonnerie: FACADES,
+  Clôture: ['cloture_longueur', 'cloture_hauteur', 'portail', 'portail_largeur', 'parcelle_surface'],
+  Portail: ['portail_largeur', 'cloture_longueur'],
+  Terrasse: ['terrasse_surface'],
+  Paysagisme: ['jardin_surface', 'parcelle_surface', 'cloture_longueur'],
+  Piscine: ['piscine_longueur', 'piscine_largeur', 'plages_surface', 'parcelle_surface'],
+}
+
+/** Les quantités utiles à un chantier, pour ses métiers. */
+export function clesDuChantier(metiers: (string | null | undefined)[]): Set<string> {
+  const cles = new Set<string>()
+  for (const m of metiers) for (const c of METRAGE_PAR_METIER[m ?? ''] ?? []) cles.add(c)
+  return cles
+}

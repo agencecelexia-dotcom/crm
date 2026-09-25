@@ -24,7 +24,8 @@
 import { identifierMaison, maisonConfirmee, type Dossier } from '../_batiment.ts'
 import { mesurerToit, type MurMesure, type Pan, type ResultatToit } from '../_calcul-toit.ts'
 import { centre, type Point } from '../_geometrie.ts'
-import { quantitesDeLaMaison } from '../_mesures-chantier.ts'
+import { quantitesDeLaMaison, type QuantiteMesuree } from '../_mesures-chantier.ts'
+import { clesDuChantier } from '../_metrage.ts'
 import { parcelleSous } from '../_parcelle.ts'
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
@@ -55,6 +56,8 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 
 interface ProjetAMesurer {
   id: string
+  metier: string | null
+  metiers: string[] | null
   client_adresse: string | null
   client_code_postal: string | null
   client_ville: string | null
@@ -117,8 +120,18 @@ async function toitDe(cleabs: string, contour: Point[]): Promise<ResultatToit> {
   return r
 }
 
+/** Ce que l'outil sait mesurer sans personne : au toit et aux murs (LiDAR), au terrain (cadastre). */
+const PAR_LE_LIDAR = ['toit_surface', 'toit_pente', 'toit_pans', 'facades_total', 'hauteur_murs']
+
 /** Un chantier : sa maison, ses mesures, et le dossier de métrés rempli. */
 async function premesurer(p: ProjetAMesurer): Promise<string> {
+  // Seulement les quantités du MÉTIER : les façades d'un immeuble entier ne
+  // disent rien à qui pose un parquet au troisième étage.
+  const cles = clesDuChantier([...(p.metiers ?? []), p.metier])
+  const auLidar = PAR_LE_LIDAR.some((c) => cles.has(c))
+  const auCadastre = cles.has('parcelle_surface')
+  if (!auLidar && !auCadastre) return 'métier sans métré'
+
   const dossier: Dossier = {
     adresse: p.client_adresse,
     codePostal: p.client_code_postal,
@@ -150,13 +163,16 @@ async function premesurer(p: ProjetAMesurer): Promise<string> {
   }
   if (!maison) return 'maison introuvable'
 
-  // 2. Le toit et les murs.
-  await pause(ESPACEMENT_MS)
-  const toit = await toitDe(maison.cleabs, maison.contour)
-  const quantites = quantitesDeLaMaison(maison.contour, toit)
+  // 2. Le toit et les murs — si le métier en a besoin.
+  const quantites: QuantiteMesuree[] = []
+  if (auLidar) {
+    await pause(ESPACEMENT_MS)
+    const toit = await toitDe(maison.cleabs, maison.contour)
+    quantites.push(...quantitesDeLaMaison(maison.contour, toit).filter((q) => cles.has(q.cle)))
+  }
 
   // 3. Le terrain : la parcelle sous la maison.
-  const c = centre(maison.contour)
+  const c = auCadastre ? centre(maison.contour) : null
   if (c) {
     const parcelle = await parcelleSous(c).catch(() => null)
     if (parcelle) {

@@ -10,6 +10,8 @@
  * quantité : c'est la même règle qu'applique la base (`verifier_metrage`).
  */
 
+import { METRAGE_PAR_METIER } from '../../../supabase/functions/_metrage.ts'
+
 export type Unite = 'm2' | 'ml' | 'm' | 'pct' | 'u' | 'oui_non'
 
 /** D'où l'outil tire la mesure, quand il sait la prendre. */
@@ -63,24 +65,12 @@ export const QUANTITES: Record<string, Quantite> = Object.fromEntries(
   ].map((x) => [x.cle, x]),
 )
 
-const TOIT = ['toit_surface', 'toit_pente', 'toit_pans', 'egouts', 'faitage', 'rives', 'fenetres_toit', 'cheminees']
-const FACADES = ['facades_total', 'hauteur_murs', 'ouvertures']
-
-/** Les quantités de chaque métier, dans l'ordre où on les demande. */
-export const PAR_METIER: Record<string, string[]> = {
-  Couverture: TOIT,
-  Toiture: TOIT,
-  'Solaire / Photovoltaïque': ['toit_surface', 'toit_pente', 'toit_pans'],
-  'Façade / Ravalement': FACADES,
-  Isolation: [...FACADES, 'toit_surface'],
-  Peinture: FACADES,
-  Maçonnerie: FACADES,
-  Clôture: ['cloture_longueur', 'cloture_hauteur', 'portail', 'portail_largeur', 'parcelle_surface'],
-  Portail: ['portail_largeur', 'cloture_longueur'],
-  Terrasse: ['terrasse_surface'],
-  Paysagisme: ['jardin_surface', 'parcelle_surface', 'cloture_longueur'],
-  Piscine: ['piscine_longueur', 'piscine_largeur', 'plages_surface', 'parcelle_surface'],
-}
+/**
+ * Les quantités de chaque métier, dans l'ordre où on les demande. La liste vit
+ * dans `supabase/functions/_metrage.ts` : la pré-mesure (côté serveur) n'écrit
+ * que ces quantités-là, et l'écran les montre.
+ */
+export const PAR_METIER: Record<string, string[]> = METRAGE_PAR_METIER
 
 /** Les quantités d'un chantier, pour ses métiers ; celles d'un métier inconnu : aucune. */
 export function quantitesDuChantier(metiers: (string | null | undefined)[]): Quantite[] {
