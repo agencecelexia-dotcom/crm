@@ -221,6 +221,7 @@ export function PanneauBatiment({
   )
   const carteToit: CarteMesure = {
     cle: 'toit_surface',
+    enCours: toitureEnCours,
     libelle: versantChoisi ? `Toit, versant ${versantChoisi}` : 'Toit',
     unite: 'm2',
     valeur: surfaceRetenue,
@@ -229,6 +230,7 @@ export function PanneauBatiment({
   }
   const carteFacades: CarteMesure = {
     cle: 'facades_total',
+    enCours: toitureEnCours,
     libelle: 'Façades, tous côtés',
     unite: 'm2',
     valeur: totalFacades,
@@ -240,6 +242,7 @@ export function PanneauBatiment({
   }
   const carteHauteur: CarteMesure = {
     cle: 'hauteur_murs',
+    enCours: toitureEnCours,
     libelle: 'Hauteur à la gouttière',
     unite: 'm',
     valeur: toitureIgn?.hauteur_gouttiere ?? null,
@@ -247,6 +250,7 @@ export function PanneauBatiment({
   }
   const cartePente: CarteMesure = {
     cle: 'toit_pente',
+    enCours: toitureEnCours,
     libelle: 'Pente',
     unite: 'pct',
     valeur: pente,

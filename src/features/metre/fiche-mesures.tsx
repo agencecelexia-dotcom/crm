@@ -20,6 +20,8 @@ export interface CarteMesure {
   detail?: string | null
   /** Toucher la carte : ouvrir l'onglet qui la détaille. */
   onToucher?: () => void
+  /** La mesure arrive : ni « à saisir », ni un chiffre provisoire. */
+  enCours?: boolean
 }
 
 /**
@@ -69,8 +71,9 @@ function Carte({
   // Ce que l'artisan lit : la valeur retenue par un humain l'emporte sur le calcul.
   const humaine = ligne?.statut === 'confirme' ? ligne.valeur_retenue : null
   const valeur = humaine ?? carte.valeur
-  const badge =
-    ligne?.statut === 'confirme'
+  const badge = carte.enCours && humaine == null
+    ? { texte: 'mesure en cours…', classe: 'bg-muted text-muted-foreground' }
+    : ligne?.statut === 'confirme'
       ? { texte: ligne.retenue_par === 'artisan' ? '✓ mesuré sur place' : '✓ confirmé', classe: BADGE_METRAGE.confirme.classe }
       : ligne && ligne.statut !== 'mesure'
         ? BADGE_METRAGE[ligne.statut]
@@ -101,7 +104,9 @@ function Carte({
           <span className="text-xs text-muted-foreground">{carte.libelle}</span>
           <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium', badge.classe)}>{badge.texte}</span>
         </span>
-        <span className="montant block text-xl font-semibold text-primary">{valeurLisible(valeur, carte.unite)}</span>
+        <span className="montant block text-xl font-semibold text-primary">
+          {carte.enCours && humaine == null ? '…' : valeurLisible(valeur, carte.unite)}
+        </span>
         {humaine != null && carte.valeur != null && Math.abs(humaine - carte.valeur) > 0.05 && (
           <span className="block text-[11px] text-muted-foreground">calculé : {valeurLisible(carte.valeur, carte.unite)}</span>
         )}
