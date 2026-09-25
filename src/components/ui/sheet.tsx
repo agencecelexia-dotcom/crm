@@ -75,9 +75,11 @@ function SheetContent({
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
-            <XIcon className="size-4" />
-            <span className="sr-only">Close</span>
+          // 44 px : la croix faisait 16 px, et sur un téléphone, avec des doigts
+          // de chantier, on la manquait une fois sur deux.
+          <SheetPrimitive.Close className="ring-offset-background focus:ring-ring absolute top-1.5 right-1.5 grid size-11 place-items-center rounded-full opacity-70 transition-opacity hover:bg-secondary hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
+            <XIcon className="size-5" />
+            <span className="sr-only">Fermer</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Content>

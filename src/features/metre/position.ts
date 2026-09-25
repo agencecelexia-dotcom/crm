@@ -121,7 +121,10 @@ export async function situerChantier(
   }
 
   // La rue ou la commune seulement : on ne peut désigner aucune maison.
-  const rue = /\d/.test(requete)
+  // Le test porte sur l'ADRESSE seule : la requête contient aussi le code
+  // postal, et ses chiffres faisaient croire qu'une rue était connue — « Seule
+  // la rue est reconnue » s'affichait pour un dossier sans aucune adresse.
+  const rue = !!p.adresse && /\d/.test(p.adresse)
   return {
     point: trouvePoint,
     fiabilite: rue ? 'rue' : 'commune',

@@ -43,6 +43,22 @@ function Recadrer({ centre, zoom }: { centre: Point | null; zoom?: number }) {
   return null
 }
 
+/**
+ * La carte rétrécit quand le panneau du dessous grandit — un bandeau, un
+ * onglet, des chiffres qui arrivent. Leaflet ne suit que la fenêtre : sans
+ * l'avertir, il gardait son ancienne taille, et la maison qu'on venait de
+ * centrer glissait sous le panneau, hors de la vue.
+ */
+function SuivreTaille() {
+  const map = useMap()
+  useEffect(() => {
+    const obs = new ResizeObserver(() => map.invalidateSize({ pan: true, debounceMoveend: true }))
+    obs.observe(map.getContainer())
+    return () => obs.disconnect()
+  }, [map])
+  return null
+}
+
 /** Remonte le centre de la carte : c'est lui qui corrige la position du chantier. */
 function SuivreCentre({ onBouger }: { onBouger?: (p: Point) => void }) {
   useMapEvents({
@@ -77,6 +93,9 @@ export function CarteMetre({
   onPoserSommet,
   onBouger,
   cadastre,
+  parcelle,
+  cotesChoisis,
+  onBasculerCote,
 }: {
   centre: Point | null
   zoom?: number
@@ -90,6 +109,10 @@ export function CarteMetre({
   onPoserSommet: (p: Point) => void
   onBouger?: (p: Point) => void
   cadastre: boolean
+  /** La parcelle de la maison et ses côtés, pour chiffrer une clôture. */
+  parcelle?: { contour: Point[]; cotes: { index: number; a: Point; b: Point }[] } | null
+  cotesChoisis?: Set<number>
+  onBasculerCote?: (index: number) => void
 }) {
   const dessine = mode !== 'apercu'
 
@@ -139,6 +162,7 @@ export function CarteMetre({
       )}
 
       <Recadrer centre={centre} zoom={centre ? zoom : undefined} />
+      <SuivreTaille />
       <SuivreCentre onBouger={onBouger} />
       <PoserSommet actif={dessine} onPoser={onPoserSommet} />
 
@@ -161,6 +185,29 @@ export function CarteMetre({
             />
           )
         })}
+
+      {/* La parcelle : son tour en pointillé, et chaque côté à toucher pour
+          l'ajouter à la clôture ou l'en retirer. */}
+      {parcelle && !dessine && (
+        <>
+          <Polygon
+            positions={parcelle.contour.map(versLeaflet)}
+            interactive={false}
+            pathOptions={{ color: '#FACC15', weight: 2, dashArray: '6 6', fill: false }}
+          />
+          {parcelle.cotes.map((c) => {
+            const choisi = cotesChoisis?.has(c.index) ?? false
+            return (
+              <Polyline
+                key={c.index}
+                positions={[versLeaflet(c.a), versLeaflet(c.b)]}
+                eventHandlers={{ click: () => onBasculerCote?.(c.index) }}
+                pathOptions={{ color: choisi ? '#EA580C' : '#FACC15', weight: choisi ? 7 : 5, opacity: choisi ? 1 : 0.55 }}
+              />
+            )
+          })}
+        </>
+      )}
 
       {/* La façade en cours de chiffrage. Elle peut compter plusieurs pans —
           une maison en L a deux murs au sud — et tous s'allument. */}

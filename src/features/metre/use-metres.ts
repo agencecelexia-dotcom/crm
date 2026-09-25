@@ -20,7 +20,7 @@ export interface Metre {
   debord_m: number | null
   part_toiture: number | null
   versant: string | null
-  hauteur_source: 'bati' | 'saisie' | null
+  hauteur_source: 'bati' | 'saisie' | 'lidar' | null
   source: 'bati' | 'dessin'
   created_at: string
 }
@@ -43,6 +43,8 @@ export interface ContexteMetre {
   latitude: number | null
   longitude: number | null
   metier: string | null
+  /** Tous les métiers du chantier (0168) ; `metier` n'en garde qu'un. */
+  metiers: string[] | null
   metres: Metre[]
 }
 
@@ -59,6 +61,34 @@ export function useContexteMetre(token: string | undefined, affectationToken?: s
       return (data as ContexteMetre) ?? null
     },
   })
+}
+
+/**
+ * Ce que l'artisan lit quand le serveur refuse une mesure.
+ *
+ * Les toasts affichaient le code brut (« hauteur_requise »). Chaque code a sa
+ * phrase, qui dit quoi faire.
+ */
+const MESSAGES: Record<string, string> = {
+  token_invalide: 'Votre lien n’est plus valable. Demandez-en un nouveau à Celexia.',
+  artisan_ecarte: 'Votre lien n’est plus valable. Contactez Celexia.',
+  chantier_retire: 'Ce chantier ne vous est plus attribué.',
+  chantier_introuvable: 'Ce chantier est introuvable. Rechargez la page.',
+  geometrie_insuffisante: 'Le tracé est incomplet : ajoutez des points.',
+  type_invalide: 'Cette mesure n’a pas pu être enregistrée. Réessayez.',
+  hauteur_requise: 'Indiquez la hauteur du mur pour enregistrer la façade.',
+  hauteur_invalide: 'Cette hauteur n’est pas plausible (entre 0 et 60 m).',
+  ouvertures_superieures_au_mur: 'Les ouvertures dépassent la surface du mur : vérifiez leur nombre.',
+  pente_requise: 'Choisissez la pente du toit avant d’enregistrer.',
+  trace_demesure: 'Ce tracé est démesuré (plus de 2 km) : vérifiez-le.',
+  batiment_invalide: 'Ce bâtiment ne peut pas être retenu : touchez-le à nouveau.',
+  quantite_invalide: 'Cette quantité ne peut pas être enregistrée : rechargez la page.',
+  valeur_invalide: 'Cette valeur n’est pas plausible.',
+  acces_refuse: 'Votre lien n’est plus valable. Demandez-en un nouveau à Celexia.',
+}
+
+export function messageMetre(code?: string | null): string {
+  return (code && MESSAGES[code]) || 'La mesure n’a pas pu être enregistrée. Réessayez.'
 }
 
 export function useEnregistrerMetre(token: string | undefined) {
@@ -101,7 +131,7 @@ export function useEnregistrerMetre(token: string | undefined) {
       })
       if (error) throw error
       const r = data as { ok: boolean; error?: string }
-      if (!r.ok) throw new Error(r.error)
+      if (!r.ok) throw new Error(messageMetre(r.error))
       return r as {
         ok: true
         id: string
@@ -147,7 +177,7 @@ export function useCorrigerPosition(token: string | undefined) {
       })
       if (error) throw error
       const r = data as { ok: boolean; error?: string }
-      if (!r.ok) throw new Error(r.error)
+      if (!r.ok) throw new Error(messageMetre(r.error))
       return r
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['metre-contexte'] }),
@@ -156,6 +186,8 @@ export function useCorrigerPosition(token: string | undefined) {
 
 /** Recherche d'adresse (Base Adresse Nationale) — gratuite, sans clé. */
 export interface Adresse {
+  /** Identifiant BAN : il relie l'adresse à son bâtiment dans le RNB. */
+  id: string
   label: string
   lat: number
   lon: number
@@ -170,10 +202,14 @@ export async function chercherAdresse(q: string, signal?: AbortSignal): Promise<
   const rep = await fetch(url, { signal })
   if (!rep.ok) return []
   const j = (await rep.json()) as {
-    features?: { properties?: { label?: string; type?: string }; geometry?: { coordinates?: number[] } }[]
+    features?: {
+      properties?: { id?: string; label?: string; type?: string }
+      geometry?: { coordinates?: number[] }
+    }[]
   }
   return (j.features ?? [])
     .map((f) => ({
+      id: f.properties?.id ?? '',
       label: f.properties?.label ?? '',
       lon: f.geometry?.coordinates?.[0] ?? 0,
       lat: f.geometry?.coordinates?.[1] ?? 0,

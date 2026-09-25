@@ -39,6 +39,7 @@ import { useProjet, usePatchProjet, useDeleteProjet, useRepreneurs } from '../ho
 import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { CarteMetresProjet } from '@/features/metre/carte-metres-projet'
+import { DossierMetrage } from '@/features/metre/dossier-metrage'
 import { ProjetPhotos } from '../components/projet-photos'
 import { SuiviCard } from '../components/suivi-card'
 import { NotesInternesCard } from '../components/notes-internes-card'
@@ -290,6 +291,10 @@ export function ProjetDetailPage() {
 
       {/* Photos du chantier (vues par l'artisan après signature) */}
       <ProjetPhotos projet={projet} />
+
+        {/* Le dossier de métrés : ce que dit le client, ce que mesure l'outil,
+            ce que l'artisan lira. Il précède le devis, comme au chantier. */}
+        <DossierMetrage projetId={projet.id} metiers={projet.metiers?.length ? projet.metiers : [projet.metier]} />
 
         {/* Les métrés relevés par l'artisan : ils précèdent le devis, comme
             dans la réalité du chantier. */}

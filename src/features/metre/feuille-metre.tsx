@@ -22,11 +22,10 @@ import { PanneauBatiment, type MesureAEnregistrer } from './panneau-batiment'
 import { CarteMetre, type FondCarte, type ModeCarte } from './carte-metre'
 import {
   aire,
-  distance,
+  centre as centreContour,
   formatM,
   formatM2,
   longueur,
-  plusProche,
   type Facade,
   type Point,
 } from './geometrie'
@@ -40,6 +39,16 @@ import {
   type Adresse,
 } from './use-metres'
 import { situerChantier } from './position'
+import { BandeauMaison } from './bandeau-maison'
+import { vueDuChantier } from './vue-par-metier'
+import { PanneauCloture } from './panneau-cloture'
+import { parcelleSous, troncons } from './parcelle'
+import {
+  maisonDeLAdresse,
+  useMaisonChantier,
+  useRetenirMaison,
+  type MaisonChantier,
+} from './use-batiment-chantier'
 
 /**
  * Prendre un métré sans se déplacer.
@@ -60,6 +69,25 @@ export function FeuilleMetre({
   titre?: string | null
   onClose: () => void
 }) {
+  // LE BOUTON RETOUR DU TÉLÉPHONE FERME LA FEUILLE. Sans entrée d'historique,
+  // il changeait d'écran — voire quittait l'espace — en laissant la feuille
+  // ouverte par-dessus. On en pose une à l'ouverture ; « retour » la consomme
+  // et ferme. Fermer par la croix la retire, pour ne pas laisser d'entrée morte.
+  const fermer = useRef(onClose)
+  useEffect(() => {
+    fermer.current = onClose
+  })
+  useEffect(() => {
+    window.history.pushState({ feuilleMetre: true }, '')
+    const surRetour = () => fermer.current()
+    window.addEventListener('popstate', surRetour)
+    return () => window.removeEventListener('popstate', surRetour)
+  }, [])
+  function fermerFeuille() {
+    if (window.history.state?.feuilleMetre) window.history.back()
+    else onClose()
+  }
+
   const { data: ctx } = useContexteMetre(token, affectationToken)
   const enregistrer = useEnregistrerMetre(token)
   const supprimer = useSupprimerMetre(token)
@@ -70,31 +98,43 @@ export function FeuilleMetre({
   const [mode, setMode] = useState<ModeCarte>('apercu')
   const [trace, setTrace] = useState<Point[]>([])
   const [batiments, setBatiments] = useState<Batiment[]>([])
-  const [choisi, setChoisi] = useState<Batiment | null>(null)
+  // Le choix de l'artisan : un bâtiment touché, ou « aucun » quand il a écarté
+  // la maison proposée. Tant qu'il n'a rien choisi, c'est la maison du
+  // chantier qui est sélectionnée.
+  const [choix, setChoix] = useState<Batiment | 'aucun' | null>(null)
   // La façade en cours de chiffrage, surlignée sur la carte.
   const [murChoisi, setMurChoisi] = useState<Facade | null>(null)
   const [nom, setNom] = useState('')
   const [recherche, setRecherche] = useState('')
   const [resultats, setResultats] = useState<Adresse[]>([])
   const [chercheOuverte, setChercheOuverte] = useState(false)
-  // Zoom d'ouverture. 19 quand on sait quelle maison c'est ; 18 sinon, pour
-  // montrer le voisinage : à 19 l'écran ne couvre que 82 m, et un bâtiment
-  // géocodé à 40 m de la rue tombe au bord.
-  const [zoom, setZoom] = useState(19)
-  // Le recadrage choisi par l'artisan l'emporte ; à défaut, la position du
-  // chantier. Le centre est DÉRIVÉ plutôt que recopié dans un état : le
-  // synchroniser par un effet provoquait un rendu en cascade dès que la
-  // position arrivait.
-  const [recadrage, setRecadrage] = useState<Point | null>(null)
   const centreCarte = useRef<Point | null>(null)
 
-  // Où est vraiment ce chantier ? La position enregistrée vient d'un géocodage
-  // fait à la création, qui retombe sur la ville faute d'adresse — sur
-  // trente-quatre chantiers, deux seulement tombaient à moins de quatre-vingts
-  // mètres. On confronte donc la position à l'adresse avant toute mesure.
+  // QUELLE EST LA MAISON ? Le serveur la désigne : le Référentiel national des
+  // bâtiments relie officiellement l'adresse à son bâtiment. L'ancienne règle
+  // — le bâtiment dont le centre est le plus proche du point d'adresse —
+  // prenait la maison d'en face dès que le point tombait sur la chaussée.
+  const maisonServeur = useMaisonChantier(token, affectationToken, !!ctx?.ok)
+  const vue = vueDuChantier(ctx?.metiers?.length ? ctx.metiers : [ctx?.metier])
+  const retenir = useRetenirMaison(token, affectationToken)
+  // Une adresse cherchée à la main, et la maison trouvée à cette adresse.
+  const [manuelle, setManuelle] = useState<{
+    point: Point
+    maison: MaisonChantier | null
+    enCours: boolean
+  } | null>(null)
+  // La maison confirmée pendant cette visite, par « Oui » ou par une mesure.
+  const [retenue, setRetenue] = useState<string | null>(null)
+
+  const maison = manuelle ? manuelle.maison : (maisonServeur.data ?? null)
+  // Serveur injoignable : on lit l'adresse dans le navigateur, pour cadrer la
+  // carte — mais sans rien présélectionner.
+  const secours = !manuelle && maisonServeur.isError
   const { data: situation } = useQuery({
-    queryKey: ['situer', ctx?.projet_id, ctx?.client_adresse, ctx?.client_ville],
-    enabled: !!ctx?.ok,
+    // La position fait partie de la clé : après « Le chantier est ici », le
+    // bandeau d'alerte restait affiché toute la session, faute de recalcul.
+    queryKey: ['situer', ctx?.projet_id, ctx?.client_adresse, ctx?.client_ville, ctx?.latitude, ctx?.longitude],
+    enabled: !!ctx?.ok && secours,
     staleTime: 1000 * 60 * 30,
     queryFn: ({ signal }) =>
       situerChantier(
@@ -109,48 +149,148 @@ export function FeuilleMetre({
       ),
   })
 
+  // La carte se centre sur LA MAISON — pas sur le point d'adresse, qui tombe
+  // souvent dans la rue, à vingt ou trente mètres.
+  const surMaison = maison?.principal ? centreContour(maison.principal.contour) : null
+  const cadre: Point | null =
+    surMaison ?? maison?.point ?? manuelle?.point ?? (secours ? (situation?.point ?? null) : null)
   // Les coordonnées vivent en SCALAIRES, pas en tableau : un tableau est
   // recréé à chaque rendu, et l'effet qui charge le bâti se relançait alors
   // sans fin — des centaines d'appels à l'IGN pour une seule ouverture.
-  const lon = recadrage?.[0] ?? situation?.point?.[0] ?? null
-  const lat = recadrage?.[1] ?? situation?.point?.[1] ?? null
+  const lon = cadre?.[0] ?? null
+  const lat = cadre?.[1] ?? null
   const centre: Point | null = lon != null && lat != null ? [lon, lat] : null
+  const cible = maison?.principal?.cleabs ?? null
+  // 19 quand on sait quelle maison c'est ; 18 sinon, pour montrer le
+  // voisinage : à 19 l'écran ne couvre que 82 m.
+  const zoom = cible ? 19 : 18
+  const enRecherche = manuelle ? manuelle.enCours : maisonServeur.isLoading
 
-  // Le bâti se recharge autour du centre à chaque déplacement.
-  //
-  // À la PREMIÈRE arrivée sur un chantier, le bâtiment le plus proche de sa
-  // position est présélectionné : l'artisan ouvre l'écran et lit ses mesures
-  // sans toucher à rien. C'est tout l'objet de l'outil.
-  const premierCadrage = useRef(true)
-  const fiable = situation?.fiable === true
   useEffect(() => {
     if (lon == null || lat == null) return
-    const p: Point = [lon, lat]
     const ctrl = new AbortController()
-    batimentsAutour(lat, lon, 150, ctrl.signal)
-      .then((bats) => {
-        setBatiments(bats)
-        if (!premierCadrage.current) return
-        premierCadrage.current = false
-        const proche = plusProche(bats, p, (b) => b.centre)
-        // Présélectionner suppose de savoir SUR QUELLE MAISON on est. Tant que
-        // la position n'est pas confirmée par l'adresse, on ne désigne rien :
-        // des chiffres justes sur la maison d'un autre sont pires que pas de
-        // chiffres, et c'est précisément ce que faisait l'outil.
-        if (!fiable) {
-          setZoom(18)
-          return
-        }
-        if (proche?.centre && distance(proche.centre, p) < 25) {
-          setChoisi(proche)
-          setNom(proche.nature && proche.nature !== 'Indifférenciée' ? proche.nature : 'Bâtiment')
-        } else if (bats.length) {
-          setZoom(18)
-        }
-      })
-      .catch(() => undefined)
+    void (async () => {
+      let bats = await batimentsAutour(lat, lon, 150, ctrl.signal)
+      // En ville, deux cents bâtiments ne couvrent pas toujours la fenêtre :
+      // la maison désignée doit y être, on la cherche au plus près.
+      if (cible && !bats.some((b) => b.cleabs === cible)) {
+        const pres = await batimentsAutour(lat, lon, 30, ctrl.signal).catch(() => [])
+        bats = [...bats, ...pres.filter((p) => !bats.some((b) => b.id === p.id))]
+      }
+      setBatiments(bats)
+    })().catch(() => undefined)
     return () => ctrl.abort()
-  }, [lon, lat, fiable])
+  }, [lon, lat, cible])
+
+  // La maison du chantier est sélectionnée d'office : l'artisan ouvre l'écran
+  // et lit ses mesures sans rien toucher. C'est tout l'objet de l'outil.
+  const preselection = useMemo(
+    () => (cible ? (batiments.find((b) => b.cleabs === cible) ?? null) : null),
+    [batiments, cible],
+  )
+  const choisi = choix === 'aucun' ? null : (choix ?? preselection)
+  // Les autres bâtiments chargés : ils disent quels murs de la maison sont accolés.
+  const voisins = useMemo(
+    () => batiments.filter((b) => b.id !== choisi?.id).map((b) => b.contour),
+    [batiments, choisi?.id],
+  )
+
+  // LA CLÔTURE : pour les métiers du terrain, la parcelle de la maison et ses
+  // côtés à cocher. Les côtés cochés sont gardés par maison : changer de
+  // maison ne reporte pas les choix de l'autre.
+  const terrain = vue === 'terrain'
+  const { data: parcelle, isLoading: parcelleEnCours } = useQuery({
+    queryKey: ['parcelle', choisi?.id],
+    enabled: terrain && !!choisi?.centre,
+    staleTime: 1000 * 60 * 60,
+    retry: 1,
+    queryFn: ({ signal }) => parcelleSous(choisi!.centre!, signal),
+  })
+  const [cotesPar, setCotesPar] = useState<Record<string, number[]>>({})
+  const cotesChoisis = useMemo(() => new Set(choisi ? (cotesPar[choisi.id] ?? []) : []), [cotesPar, choisi])
+  function basculerCote(i: number) {
+    if (!choisi) return
+    setCotesPar((avant) => {
+      const liste = avant[choisi.id] ?? []
+      return { ...avant, [choisi.id]: liste.includes(i) ? liste.filter((x) => x !== i) : [...liste, i] }
+    })
+  }
+  function enregistrerCloture() {
+    if (!parcelle || !choisi) return
+    const morceaux = troncons(parcelle, cotesChoisis)
+    let restants = morceaux.length
+    for (const t of morceaux) {
+      enregistrer.mutate(
+        {
+          affectation_token: affectationToken,
+          nom: `Clôture ${t.cotes.map((c) => c.orientation).join(', ')}`,
+          type: 'longueur',
+          geometrie: t.ligne,
+          source: 'dessin',
+        },
+        {
+          onSuccess: () => {
+            restants--
+            if (restants === 0) {
+              toast.success('Clôture enregistrée', {
+                description: formatM(morceaux.reduce((s, x) => s + x.cotes.reduce((a, c) => a + c.longueur, 0), 0)),
+              })
+              confirmerParLaMesure(choisi)
+            }
+          },
+          onError: (e) =>
+            toast.error('Clôture non enregistrée', { description: e instanceof Error ? e.message : undefined }),
+        },
+      )
+    }
+  }
+  // La maison proposée attend un « Oui » : le bandeau offre déjà d'en choisir une autre.
+  const aConfirmer =
+    !!choisi?.cleabs && choisi.cleabs === cible && choisi.cleabs !== retenue && maison?.confiance === 'a_confirmer'
+
+  /** Cette maison est celle du chantier : on la garde, pour l'agence et pour la suite. */
+  function retenirMaison(b: Batiment, apres?: () => void) {
+    if (!b.cleabs) return
+    const cleabs = b.cleabs
+    retenir.mutate(
+      { cleabs, point: b.centre, contour: b.contour, aire: b.emprise },
+      {
+        onSuccess: () => {
+          setRetenue(cleabs)
+          apres?.()
+        },
+        onError: (e) =>
+          apres &&
+          toast.error('Maison non retenue', { description: e instanceof Error ? e.message : undefined }),
+      },
+    )
+  }
+
+  /** Une mesure prise sur une maison vaut confirmation que c'est la bonne. */
+  function confirmerParLaMesure(b: Batiment) {
+    if (!b.cleabs || b.cleabs === retenue) return
+    if (!manuelle && b.cleabs === cible && maison?.confiance === 'confirmee') return
+    retenirMaison(b)
+  }
+
+  function allerA(a: Adresse) {
+    // Sans remise à zéro, l'emprise, la pente et l'alerte ABF de l'ancien
+    // bâtiment restaient à l'écran.
+    setTrace([])
+    setMurChoisi(null)
+    setMode('apercu')
+    setNom('')
+    setChoix(null)
+    setChercheOuverte(false)
+    setRecherche('')
+    const point: Point = [a.lon, a.lat]
+    const enCours = a.precise && !!a.id
+    setManuelle({ point, maison: null, enCours })
+    if (!enCours) return
+    const suite = (m: MaisonChantier | null) =>
+      setManuelle((x) => (x?.point === point ? { point, maison: m, enCours: false } : x))
+    maisonDeLAdresse(token, affectationToken, a).then(suite, () => suite(null))
+  }
 
   useEffect(() => {
     const q = recherche.trim()
@@ -181,33 +321,60 @@ export function FeuilleMetre({
 
   function recommencer() {
     setTrace([])
-    setChoisi(null)
+    setChoix('aucun')
     setMurChoisi(null)
     setMode('apercu')
     setNom('')
   }
 
   function garder(m: MesureAEnregistrer) {
+    const surQuelle = choisi
     enregistrer.mutate(
       { affectation_token: affectationToken, source: 'bati', ...m },
       {
         onSuccess: (r) => {
+          if (surQuelle) confirmerParLaMesure(surQuelle)
           // La surface RÉELLE quand elle existe : annoncer l'emprise au sol
           // après avoir affiché la toiture prêtait à confusion.
-          const retenue = r.surface_reelle_m2 ?? r.surface_m2
+          const surface = r.surface_reelle_m2 ?? r.surface_m2
           toast.success('Métré enregistré', {
-            description: retenue != null ? formatM2(Number(retenue)) : undefined,
+            description: surface != null ? formatM2(Number(surface)) : undefined,
           })
-          recommencer()
+          // On RESTE sur la maison : l'artisan enchaîne souvent toit puis
+          // façades. Tout réinitialiser l'obligeait à la re-toucher et à
+          // refaire ses réglages.
         },
         onError: (e) =>
-          toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
+          toast.error('Mesure non enregistrée', {
+            description: e instanceof Error ? e.message : undefined,
+          }),
       },
     )
   }
 
+  // LA CLÉ N'EST PAS DÉCORATIVE. Sans elle, React réutilise le même panneau
+  // d'un bâtiment à l'autre et garde son état : la pente saisie pour la maison
+  // A restait affichée sur la maison B, ainsi que le débord, le mur choisi et
+  // le versant retenu. Des chiffres justes sur la mauvaise maison — exactement
+  // ce que l'audit avait trouvé ailleurs.
+  const panneauMaison = choisi ? (
+    <PanneauBatiment
+      key={choisi.id}
+      token={token}
+      batiment={choisi}
+      enCours={enregistrer.isPending}
+      onEnregistrer={garder}
+      onMurChoisi={setMurChoisi}
+      voisins={voisins}
+      vue={vue}
+      titre={titre}
+      adresse={maison?.adresse_retrouvee ?? ctx?.client_adresse ?? null}
+      affectationToken={affectationToken}
+    />
+  ) : null
+
   return (
-    <Sheet open onOpenChange={(o) => !o && onClose()}>
+    <Sheet open onOpenChange={(o) => !o && fermerFeuille()}>
       <SheetContent side="bottom" className="flex h-[95dvh] max-h-[95dvh] flex-col gap-0 p-0">
         <SheetHeader className="shrink-0 border-b border-border p-3">
           <SheetTitle className="truncate text-base">{titre || 'Métré'}</SheetTitle>
@@ -228,7 +395,7 @@ export function FeuilleMetre({
             batimentChoisi={choisi?.id ?? null}
             murChoisi={murChoisi}
             onChoisirBatiment={(b) => {
-              setChoisi(b)
+              setChoix(b)
               setNom(b.nature && b.nature !== 'Indifférenciée' ? b.nature : 'Bâtiment')
             }}
             trace={trace}
@@ -236,7 +403,19 @@ export function FeuilleMetre({
             onBouger={(p) => {
               centreCarte.current = p
             }}
+            parcelle={terrain ? (parcelle ?? null) : null}
+            cotesChoisis={cotesChoisis}
+            onBasculerCote={basculerCote}
           />
+
+          {enRecherche && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[500] flex justify-center">
+              <span className="flex items-center gap-2 rounded-full bg-card px-3 py-1.5 text-xs shadow-card">
+                <Loader2 className="size-3.5 animate-spin" />
+                On cherche la maison…
+              </span>
+            </div>
+          )}
 
           {/* Mire de visée : elle désigne le point que « Recadrer » enregistrera. */}
           {mode === 'apercu' && !choisi && (
@@ -290,15 +469,7 @@ export function FeuilleMetre({
                   <button
                     key={a.label}
                     type="button"
-                    onClick={() => {
-                      // Sans remise à zéro, l'emprise, la pente et l'alerte
-                      // ABF de l'ancien bâtiment restaient à l'écran.
-                      recommencer()
-                      premierCadrage.current = true
-                      setRecadrage([a.lon, a.lat])
-                      setChercheOuverte(false)
-                      setRecherche('')
-                    }}
+                    onClick={() => allerA(a)}
                     className="flex w-full items-center gap-2 rounded-lg p-2 text-left text-xs hover:bg-accent"
                   >
                     <MapPin
@@ -317,16 +488,19 @@ export function FeuilleMetre({
                 onClick={() => setChercheOuverte(true)}
               >
                 <Search className="size-4" />
-                {fiable ? 'Autre adresse' : 'Chercher l’adresse'}
+                {cible ? 'Autre adresse' : 'Chercher l’adresse'}
               </Button>
             )}
           </div>
         </div>
 
         {/* Le panneau de mesure */}
-        <div className="shrink-0 space-y-3 border-t border-border p-3">
+        {/* Le panneau DÉFILE, et laisse au moins un tiers de l'écran à la carte :
+            sans défilement, sur un téléphone, le bas du panneau — et le bouton
+            d'enregistrement — sortait de l'écran sans qu'on puisse l'atteindre. */}
+        <div className="max-h-[62dvh] shrink-0 space-y-3 overflow-y-auto overscroll-contain border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {/* Ce qu'on sait — ou pas — de l'endroit où l'on est. */}
-          {situation?.message && (
+          {secours && situation?.message && (
             <div
               className={cn(
                 'flex items-start gap-2 rounded-xl border p-2.5',
@@ -351,29 +525,50 @@ export function FeuilleMetre({
               </p>
             </div>
           )}
+          {/* La maison : reliée à l'adresse, confirmée, ou « C'est bien elle ? ». */}
+          <BandeauMaison
+            maison={maison}
+            choisi={choisi}
+            retenue={retenue}
+            cherchee={!!manuelle}
+            enCours={retenir.isPending}
+            onOui={() => choisi && retenirMaison(choisi, () => toast.success('Maison confirmée'))}
+            onAutre={recommencer}
+          />
           {choisi ? (
             <>
-              <button
-                type="button"
-                onClick={recommencer}
-                className="w-full text-left text-xs text-muted-foreground underline underline-offset-2"
-              >
-                Ce n’est pas le bon bâtiment — en choisir un autre
-              </button>
-            {/* LA CLÉ N'EST PAS DÉCORATIVE. Sans elle, React réutilise le même
-                panneau d'un bâtiment à l'autre et garde son état : la pente
-                saisie pour la maison A restait affichée sur la maison B, ainsi
-                que le débord, le mur choisi et le versant retenu. Des chiffres
-                justes sur la mauvaise maison — exactement ce que l'audit avait
-                trouvé ailleurs. */}
-            <PanneauBatiment
-              key={choisi.id}
-              token={token}
-              batiment={choisi}
-              enCours={enregistrer.isPending}
-              onEnregistrer={garder}
-              onMurChoisi={setMurChoisi}
-            />
+              {!aConfirmer && (
+                <button
+                  type="button"
+                  onClick={recommencer}
+                  className="flex min-h-11 w-full items-center text-left text-xs text-muted-foreground underline underline-offset-2"
+                >
+                  Ce n’est pas le bon bâtiment — en choisir un autre
+                </button>
+              )}
+            {/* Le poseur de clôture chiffre le TERRAIN : sa parcelle passe
+                devant, la maison se replie. */}
+            {terrain && (
+              <PanneauCloture
+                parcelle={parcelle}
+                enCours={parcelleEnCours}
+                adresse={maison && maison.confiance !== 'confirmee' ? maison.point : null}
+                choisis={cotesChoisis}
+                onBasculer={basculerCote}
+                onEnregistrer={enregistrerCloture}
+                enregistrement={enregistrer.isPending}
+              />
+            )}
+            {terrain ? (
+              <details className="rounded-xl border border-border px-3 py-2">
+                <summary className="min-h-11 cursor-pointer select-none content-center text-sm font-medium">
+                  La maison : toit, façades
+                </summary>
+                <div className="mt-2 space-y-3">{panneauMaison}</div>
+              </details>
+            ) : (
+              panneauMaison
+            )}
             </>
           ) : dessin ? (
             <>
@@ -423,7 +618,7 @@ export function FeuilleMetre({
                           recommencer()
                         },
                         onError: (e) =>
-                          toast.error('Échec', {
+                          toast.error('Mesure non enregistrée', {
                             description: e instanceof Error ? e.message : undefined,
                           }),
                       },
@@ -446,9 +641,7 @@ export function FeuilleMetre({
             <>
               <p className="text-center text-sm text-muted-foreground">
                 {batiments.length > 0
-                  ? zoom === 18
-                    ? 'L’adresse est approximative : touchez le bon bâtiment.'
-                    : 'Touchez le bâtiment pour lire ses mesures.'
+                  ? 'Touchez la maison du chantier pour lire ses mesures.'
                   : 'Aucun bâtiment ici — dessinez, ou cherchez l’adresse.'}
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -509,32 +702,47 @@ export function FeuilleMetre({
             </>
           )}
 
-          {/* Les métrés déjà pris sur ce chantier */}
-          {!!ctx?.metres?.length && !choisi && !dessin && (
-            <div className="space-y-1 border-t border-border pt-2">
-              {ctx.metres.map((m) => (
-                <div key={m.id} className="flex items-center gap-2 text-xs">
-                  <span className="min-w-0 flex-1 truncate">
-                    {m.nom}
-                    <span className="text-muted-foreground">
-                      {' · '}
-                      {m.type === 'longueur'
-                        ? formatM(Number(m.longueur_m ?? 0))
-                        : formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))}
+          {/* Les métrés déjà pris sur ce chantier — TOUJOURS visibles : ils
+              étaient masqués dès qu'une maison était sélectionnée, c'est-à-dire
+              à chaque ouverture. */}
+          {!!ctx?.metres?.length && (
+            <details className="rounded-xl border border-border px-3 py-2">
+              <summary className="cursor-pointer select-none py-1 text-sm font-medium">
+                Déjà enregistré ({ctx.metres.length})
+              </summary>
+              <ul className="mt-1 divide-y divide-border">
+                {ctx.metres.map((m) => (
+                  <li key={m.id} className="flex min-h-11 items-center gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">
+                      {m.nom}
+                      <span className="text-muted-foreground">
+                        {' · '}
+                        {m.type === 'longueur'
+                          ? formatM(Number(m.longueur_m ?? 0))
+                          : formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))}
+                      </span>
                     </span>
-                  </span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7 shrink-0 text-muted-foreground"
-                    aria-label={`Supprimer ${m.nom}`}
-                    onClick={() => supprimer.mutate(m.id)}
-                  >
-                    <X className="size-3.5" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-11 shrink-0 text-muted-foreground"
+                      aria-label={`Supprimer ${m.nom}`}
+                      disabled={supprimer.isPending}
+                      onClick={() => {
+                        // Une suppression sans confirmation, à côté d'un doigt de chantier…
+                        if (!window.confirm(`Supprimer « ${m.nom} » ?`)) return
+                        supprimer.mutate(m.id, {
+                          onSuccess: () => toast.success('Mesure supprimée'),
+                          onError: () => toast.error('Suppression impossible'),
+                        })
+                      }}
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           <p className="text-center text-[11px] leading-snug text-muted-foreground">

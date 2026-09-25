@@ -131,6 +131,14 @@ export const AUTOMATISATIONS: Automatisation[] = [
       'Vérifie chaque nuit que les montants, statuts et commissions concordent, et signale les écarts.',
     declencheur: 'Chaque jour à 7 h',
   },
+  {
+    cle: 'auto_pre_metre',
+    famille: 'planifie',
+    titre: 'Pré-mesure des chantiers',
+    description:
+      'Mesure à l’avance le toit, les façades et le terrain des chantiers attribués, et les confronte à ce qu’a dit le client : l’artisan trouve ses métrés prêts. Seules les maisons reliées à leur adresse sont mesurées.',
+    declencheur: 'Toutes les 10 minutes, six chantiers au plus',
+  },
 
   // ---- Notifications internes ----------------------------------------
   {

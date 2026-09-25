@@ -1,0 +1,219 @@
+{
+ "nom": "dissymetrique",
+ "description": "Toit dissymétrique : un long pan nord à 58 %, un court pan sud à 56 % (Bromines, Sillingy)",
+ "cleabs": "BATIMENT0000000298331212",
+ "contour": [
+  [
+   6.06968463,
+   45.94854294
+  ],
+  [
+   6.06973097,
+   45.94853988
+  ],
+  [
+   6.06973286,
+   45.94855064
+  ],
+  [
+   6.06978813,
+   45.94854553
+  ],
+  [
+   6.06979834,
+   45.94861285
+  ],
+  [
+   6.06978802,
+   45.94861313
+  ],
+  [
+   6.06979216,
+   45.94864095
+  ],
+  [
+   6.0697034,
+   45.94864786
+  ],
+  [
+   6.06970714,
+   45.94866849
+  ],
+  [
+   6.06964537,
+   45.94867287
+  ],
+  [
+   6.06963725,
+   45.94861992
+  ],
+  [
+   6.06969639,
+   45.94861471
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": true,
+  "motif": null,
+  "pente": 58,
+  "incertitude": 3,
+  "pixels": 346,
+  "versants": [
+   {
+    "orientation": "nord",
+    "part": 0.6888217522658611
+   },
+   {
+    "orientation": "sud",
+    "part": 0.21148036253776434
+   }
+  ],
+  "source": "LiDAR HD de l’IGN, grille de 50 cm",
+  "murs": [
+   {
+    "i": 0,
+    "longueur": 3.61,
+    "surface": 14.9,
+    "hauteur_moyenne": 4.1,
+    "hauteur_min": 3.5,
+    "hauteur_max": 4.6,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 1,
+    "longueur": 1.2,
+    "surface": 5.6,
+    "hauteur_moyenne": 4.7,
+    "hauteur_min": 4.6,
+    "hauteur_max": 4.8,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 2,
+    "longueur": 4.32,
+    "surface": 24.4,
+    "hauteur_moyenne": 5.7,
+    "hauteur_min": 5.1,
+    "hauteur_max": 6.6,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 3,
+    "longueur": 7.52,
+    "surface": 40.4,
+    "hauteur_moyenne": 5.4,
+    "hauteur_min": 3.8,
+    "hauteur_max": 6.4,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 4,
+    "longueur": 0.8,
+    "surface": 3.1,
+    "hauteur_moyenne": 3.9,
+    "hauteur_min": 3.8,
+    "hauteur_max": 3.9,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 5,
+    "longueur": 3.11,
+    "surface": 8.6,
+    "hauteur_moyenne": 2.8,
+    "hauteur_min": 1.9,
+    "hauteur_max": 3.5,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 6,
+    "longueur": 6.92,
+    "surface": 13.6,
+    "hauteur_moyenne": 2,
+    "hauteur_min": 0.9,
+    "hauteur_max": 3.8,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 7,
+    "longueur": 2.31,
+    "surface": 6.5,
+    "hauteur_moyenne": 2.8,
+    "hauteur_min": 1.7,
+    "hauteur_max": 3.5,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 8,
+    "longueur": 4.81,
+    "surface": 9.8,
+    "hauteur_moyenne": 2,
+    "hauteur_min": 1.9,
+    "hauteur_max": 2.2,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 9,
+    "longueur": 5.91,
+    "surface": 20.9,
+    "hauteur_moyenne": 3.5,
+    "hauteur_min": 1.9,
+    "hauteur_max": 4.6,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 10,
+    "longueur": 4.62,
+    "surface": 18.5,
+    "hauteur_moyenne": 4,
+    "hauteur_min": 3.9,
+    "hauteur_max": 4.1,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 11,
+    "longueur": 8.02,
+    "surface": 34.8,
+    "hauteur_moyenne": 4.3,
+    "hauteur_min": 3.5,
+    "hauteur_max": 5.3,
+    "valide": 1,
+    "accole": false
+   }
+  ],
+  "hauteur_gouttiere": 2.3,
+  "hauteur_faitage": 6.3,
+  "facteur": 1.151,
+  "part_plate": 0.03,
+  "pans": [
+   {
+    "orientation": "nord",
+    "part": 0.66,
+    "pente": 58,
+    "incertitude": 2
+   },
+   {
+    "orientation": "sud",
+    "part": 0.2,
+    "pente": 56,
+    "incertitude": 6
+   }
+  ]
+ }
+}

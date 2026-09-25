@@ -1,3 +1,6 @@
+import { quantitesDuChantier } from '@/features/metre/catalogue-metrage'
+import { valeurLisible } from '@/features/metre/affichage-metrage'
+
 /**
  * Checklist d'un appel : ce qu'il reste à demander avant de raccrocher.
  *
@@ -22,6 +25,11 @@ export interface LeadExtrait {
   metiers?: string[]
   probleme?: string
   surface?: string
+  /**
+   * Les quantités que le client a DONNÉES, avec sa phrase : elles entrent au
+   * dossier de métrés comme « dit par le client », à vérifier par la mesure.
+   */
+  mesures?: MesureDite[]
   sinistre?: string
   assurance?: string
   delai?: string
@@ -34,6 +42,14 @@ export interface LeadExtrait {
   /** Métier et zone de l'artisan, quand il en est un — utile au recrutement. */
   artisan_metier?: string
   confiance?: Record<string, number>
+}
+
+export interface MesureDite {
+  cle: string
+  valeur: number
+  unite: 'm2' | 'ml' | 'm' | 'pct' | 'u' | 'oui_non'
+  citation: string
+  confiance?: number
 }
 
 export type EtatChamp = 'obtenu' | 'a_confirmer' | 'manquant' | 'saisi'
@@ -109,17 +125,39 @@ function texte(v: unknown): string {
   return String(v).trim()
 }
 
+/**
+ * La question de dimension, propre au métier.
+ *
+ * « Quelle surface, à peu près ? » ne veut rien dire pour une clôture : le
+ * poseur veut une longueur. La question vient du catalogue des métrés, et la
+ * réponse de la mesure que le client a donnée — son chiffre, avec sa phrase.
+ */
+function dimensionDuMetier(l: LeadExtrait): { label: string; question: string; valeur: string; confiance: number } | null {
+  const q = quantitesDuChantier(l.metiers ?? [])[0]
+  if (!q) return null
+  const m = l.mesures?.find((x) => x.cle === q.cle)
+  return {
+    label: q.libelle,
+    question: q.question,
+    valeur: m ? valeurLisible(m.valeur, m.unite) : '',
+    confiance: m?.confiance ?? 1,
+  }
+}
+
 export function construireChecklist(
   lead: LeadExtrait | null,
   saisies: Saisies = {},
 ): LigneChecklist[] {
   const l = lead ?? {}
+  const dimension = dimensionDuMetier(l)
   return DEFINITIONS.filter((d) => !d.pertinent || d.pertinent(l)).map((d) => {
-    const auto = texte(l[d.cle])
+    const propre = d.cle === 'surface' && dimension
+    // La mesure structurée d'abord ; la surface en texte libre à défaut.
+    const auto = propre && dimension.valeur ? dimension.valeur : texte(l[d.cle])
     const manuelle = (saisies[d.cle] ?? '').trim()
     const manuel = manuelle.length > 0
     const valeur = manuel ? manuelle : auto
-    const score = l.confiance?.[d.cle] ?? (auto ? 1 : 0)
+    const score = propre && dimension.valeur ? dimension.confiance : (l.confiance?.[d.cle] ?? (auto ? 1 : 0))
 
     const etat: EtatChamp = manuel
       ? 'saisi'
@@ -131,8 +169,8 @@ export function construireChecklist(
 
     return {
       cle: d.cle,
-      label: d.label,
-      question: d.question,
+      label: propre ? dimension.label : d.label,
+      question: propre ? dimension.question : d.question,
       etat,
       valeur,
       essentiel: d.essentiel,

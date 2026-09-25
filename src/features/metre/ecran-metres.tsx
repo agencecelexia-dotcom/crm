@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/empty-state'
 import type { ProjetEspace } from '@/types/database'
 import { FeuilleMetreDifferee } from './feuille-metre-differee'
+import { useEtatsMetrage } from './use-metrage'
 
 /**
  * L'écran « Métrés ».
@@ -18,6 +19,9 @@ import { FeuilleMetreDifferee } from './feuille-metre-differee'
 export function EcranMetres({ token, projets }: { token: string; projets: ProjetEspace[] }) {
   const [recherche, setRecherche] = useState('')
   const [choisi, setChoisi] = useState<ProjetEspace | null>(null)
+  // Les métrés préparés à l'avance (pré-mesure) : l'artisan voit d'un coup
+  // d'œil les chantiers dont les chiffres l'attendent.
+  const { data: etats } = useEtatsMetrage(token)
 
   const liste = useMemo(() => {
     const q = recherche.trim().toLowerCase()
@@ -79,8 +83,17 @@ export function EcranMetres({ token, projets }: { token: string; projets: Projet
                     <Ruler className="size-5 text-primary" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {p.client_nom || 'Client'}
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-medium">{p.client_nom || 'Client'}</span>
+                      {(etats?.get(p.token)?.a_verifier ?? 0) > 0 ? (
+                        <span className="shrink-0 rounded-full bg-[#F59E0B]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#B45309]">
+                          métrés à vérifier
+                        </span>
+                      ) : (etats?.get(p.token)?.retenues ?? 0) > 0 ? (
+                        <span className="shrink-0 rounded-full bg-[#22C55E]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#16A34A]">
+                          métrés prêts
+                        </span>
+                      ) : null}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {[p.client_adresse, p.client_ville].filter(Boolean).join(' · ') ||

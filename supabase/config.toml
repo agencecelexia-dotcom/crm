@@ -20,3 +20,17 @@ verify_jwt = true
 
 [functions.upload-devis]
 verify_jwt = true
+
+# Espace artisan : appelée avec la clé publique, qui n'est pas un JWT. L'accès
+# est vérifié DANS la fonction, par le jeton de l'artisan (comme les RPC
+# `*_by_token`).
+[functions.batiment-chantier]
+verify_jwt = false
+
+[functions.toiture-lidar]
+verify_jwt = false
+
+# Pré-mesure : appelée par la tâche planifiée `pre_metre_tick` (pg_net), sans
+# JWT. Elle n'accepte que la clé partagée PRE_METRE_CLE (coffre de la base).
+[functions.pre-metre]
+verify_jwt = false

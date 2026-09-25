@@ -1,0 +1,108 @@
+{
+ "nom": "photogrammetrie",
+ "description": "Hors LiDAR : photogrammétrie à 1 m (Moëlan-sur-Mer)",
+ "cleabs": "BATIMENT0000000316210699",
+ "contour": [
+  [
+   -3.63183309,
+   47.81385919
+  ],
+  [
+   -3.63188723,
+   47.8138525
+  ],
+  [
+   -3.63190193,
+   47.81389502
+  ],
+  [
+   -3.63207877,
+   47.81387235
+  ],
+  [
+   -3.63205303,
+   47.81378439
+  ],
+  [
+   -3.63189472,
+   47.81380511
+  ],
+  [
+   -3.63186464,
+   47.81371469
+  ],
+  [
+   -3.63180396,
+   47.81372265
+  ],
+  [
+   -3.63181769,
+   47.81378961
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES.MNS": "ELEVATION_ELEVATIONGRIDCOVERAGE_HIGHRES_MNS.tif",
+  "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES": "ELEVATION_ELEVATIONGRIDCOVERAGE_HIGHRES.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": true,
+  "motif": null,
+  "pente": 54,
+  "incertitude": 29,
+  "pixels": 137,
+  "versants": [
+   {
+    "orientation": "sud",
+    "part": 0.2692307692307692
+   },
+   {
+    "orientation": "nord",
+    "part": 0.23846153846153847
+   },
+   {
+    "orientation": "ouest",
+    "part": 0.15384615384615385
+   },
+   {
+    "orientation": "sud-ouest",
+    "part": 0.12307692307692308
+   }
+  ],
+  "source": "Photogrammétrie de l’IGN, grille de 1 m",
+  "murs": null,
+  "hauteur_gouttiere": null,
+  "hauteur_faitage": null,
+  "facteur": 1.173,
+  "part_plate": 0.03,
+  "pans": [
+   {
+    "orientation": "sud",
+    "part": 0.26,
+    "pente": 78,
+    "incertitude": 38
+   },
+   {
+    "orientation": "nord",
+    "part": 0.23,
+    "pente": 62,
+    "incertitude": 29
+   },
+   {
+    "orientation": "ouest",
+    "part": 0.15,
+    "pente": 35,
+    "incertitude": 2
+   },
+   {
+    "orientation": "sud-ouest",
+    "part": 0.12,
+    "pente": 56,
+    "incertitude": 17
+   }
+  ]
+ }
+}

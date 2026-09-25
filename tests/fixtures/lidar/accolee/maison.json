@@ -1,0 +1,107 @@
+{
+ "nom": "accolee",
+ "description": "Maison dont deux murs touchent un autre volume (Keskastel)",
+ "cleabs": "BATIMENT0000002222378480",
+ "contour": [
+  [
+   7.04786027,
+   48.97330573
+  ],
+  [
+   7.04794348,
+   48.97323269
+  ],
+  [
+   7.04809833,
+   48.9733067
+  ],
+  [
+   7.04801792,
+   48.97338054
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": true,
+  "motif": null,
+  "pente": 71,
+  "incertitude": 4,
+  "pixels": 498,
+  "versants": [
+   {
+    "orientation": "nord-ouest",
+    "part": 0.4908350305498982
+   },
+   {
+    "orientation": "sud-est",
+    "part": 0.46028513238289204
+   }
+  ],
+  "source": "LiDAR HD de l’IGN, grille de 50 cm",
+  "murs": [
+   {
+    "i": 0,
+    "longueur": 10.15,
+    "surface": 66,
+    "hauteur_moyenne": 6.5,
+    "hauteur_min": 4.1,
+    "hauteur_max": 8.2,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 1,
+    "longueur": 14.01,
+    "surface": 67.3,
+    "hauteur_moyenne": 4.8,
+    "hauteur_min": 4.5,
+    "hauteur_max": 5.3,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 2,
+    "longueur": 10.1,
+    "surface": 64.8,
+    "hauteur_moyenne": 6.4,
+    "hauteur_min": 4.8,
+    "hauteur_max": 8.1,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 3,
+    "longueur": 14.23,
+    "surface": 63.7,
+    "hauteur_moyenne": 4.5,
+    "hauteur_min": 4.2,
+    "hauteur_max": 5.7,
+    "valide": 1,
+    "accole": false
+   }
+  ],
+  "hauteur_gouttiere": 4.9,
+  "hauteur_faitage": 8.2,
+  "facteur": 1.227,
+  "part_plate": 0.01,
+  "pans": [
+   {
+    "orientation": "nord-ouest",
+    "part": 0.48,
+    "pente": 72,
+    "incertitude": 3
+   },
+   {
+    "orientation": "sud-est",
+    "part": 0.45,
+    "pente": 71,
+    "incertitude": 4
+   }
+  ]
+ }
+}

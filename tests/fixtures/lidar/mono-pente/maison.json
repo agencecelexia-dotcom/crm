@@ -1,0 +1,135 @@
+{
+ "nom": "mono-pente",
+ "description": "Un seul pan à 28 %, exposé au sud (Nîmes)",
+ "cleabs": "BATIMENT0000000027692677",
+ "contour": [
+  [
+   4.38169085,
+   43.8587659
+  ],
+  [
+   4.38184738,
+   43.85875762
+  ],
+  [
+   4.38189955,
+   43.85875426
+  ],
+  [
+   4.38189732,
+   43.85871379
+  ],
+  [
+   4.38184261,
+   43.85871448
+  ],
+  [
+   4.38168972,
+   43.85871912
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": true,
+  "motif": null,
+  "pente": 28,
+  "incertitude": 5,
+  "pixels": 253,
+  "versants": [
+   {
+    "orientation": "sud",
+    "part": 0.7882882882882883
+   },
+   {
+    "orientation": "est",
+    "part": 0.10810810810810811
+   }
+  ],
+  "source": "LiDAR HD de l’IGN, grille de 50 cm",
+  "murs": [
+   {
+    "i": 0,
+    "longueur": 12.62,
+    "surface": 47.9,
+    "hauteur_moyenne": 3.8,
+    "hauteur_min": 2.3,
+    "hauteur_max": 4.5,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 1,
+    "longueur": 4.21,
+    "surface": 12.3,
+    "hauteur_moyenne": 2.9,
+    "hauteur_min": 1.5,
+    "hauteur_max": 5.2,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 2,
+    "longueur": 4.5,
+    "surface": 16.7,
+    "hauteur_moyenne": 3.7,
+    "hauteur_min": 2.5,
+    "hauteur_max": 4.8,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 3,
+    "longueur": 4.4,
+    "surface": 11.8,
+    "hauteur_moyenne": 2.7,
+    "hauteur_min": 2.1,
+    "hauteur_max": 4,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 4,
+    "longueur": 12.3,
+    "surface": 40.7,
+    "hauteur_moyenne": 3.3,
+    "hauteur_min": 2.5,
+    "hauteur_max": 3.7,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 5,
+    "longueur": 5.2,
+    "surface": 16,
+    "hauteur_moyenne": 3.1,
+    "hauteur_min": 2.2,
+    "hauteur_max": 3.5,
+    "valide": 1,
+    "accole": true
+   }
+  ],
+  "hauteur_gouttiere": 2,
+  "hauteur_faitage": 4.7,
+  "facteur": 1.032,
+  "part_plate": 0.11,
+  "pans": [
+   {
+    "orientation": "sud",
+    "part": 0.69,
+    "pente": 27,
+    "incertitude": 3
+   },
+   {
+    "orientation": "est",
+    "part": 0.09,
+    "pente": 154,
+    "incertitude": 53
+   }
+  ]
+ }
+}

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, ChevronRight, Euro, Inbox, RotateCcw, Wallet } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Euro, Inbox, RotateCcw, Ruler, Wallet } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,6 +18,8 @@ interface ATraiter {
   a_verser: number
   chez_artisan: number
   chez_artisan_dormants: number
+  /** Chantiers où la parole du client et la mesure divergent (0173). */
+  metrages_a_verifier?: number
 }
 
 /**
@@ -75,6 +77,15 @@ export function ATraiter() {
         data.repris_en_cours > 0
           ? `${data.repris_en_cours} déjà repris par un commercial`
           : 'plus aucun artisan dessus',
+      urgent: false,
+    },
+    {
+      cle: 'metrages',
+      actif: (data.metrages_a_verifier ?? 0) > 0,
+      to: '/metres-a-verifier',
+      icone: Ruler,
+      titre: `${data.metrages_a_verifier} métré${(data.metrages_a_verifier ?? 0) > 1 ? 's' : ''} à vérifier`,
+      detail: 'ce que dit le client ne concorde pas avec la mesure',
       urgent: false,
     },
     {

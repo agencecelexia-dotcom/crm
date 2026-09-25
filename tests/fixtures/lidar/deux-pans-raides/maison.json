@@ -1,0 +1,107 @@
+{
+ "nom": "deux-pans-raides",
+ "description": "Deux pans à 84 %, LiDAR (Saint-Urbain, Finistère)",
+ "cleabs": "BATIMENT0000002490883391",
+ "contour": [
+  [
+   -4.23026611,
+   48.40835513
+  ],
+  [
+   -4.23024001,
+   48.40823476
+  ],
+  [
+   -4.23010986,
+   48.40824543
+  ],
+  [
+   -4.23013192,
+   48.40836604
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": true,
+  "motif": null,
+  "pente": 84,
+  "incertitude": 2,
+  "pixels": 437,
+  "versants": [
+   {
+    "orientation": "ouest",
+    "part": 0.5
+   },
+   {
+    "orientation": "est",
+    "part": 0.46919431279620855
+   }
+  ],
+  "source": "LiDAR HD de l’IGN, grille de 50 cm",
+  "murs": [
+   {
+    "i": 0,
+    "longueur": 13.52,
+    "surface": 30.7,
+    "hauteur_moyenne": 2.3,
+    "hauteur_min": 0.8,
+    "hauteur_max": 2.6,
+    "valide": 0.98,
+    "accole": false
+   },
+   {
+    "i": 1,
+    "longueur": 9.7,
+    "surface": 46.2,
+    "hauteur_moyenne": 4.8,
+    "hauteur_min": 2,
+    "hauteur_max": 6.7,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 2,
+    "longueur": 13.51,
+    "surface": 37.9,
+    "hauteur_moyenne": 2.8,
+    "hauteur_min": 1.8,
+    "hauteur_max": 2.9,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 3,
+    "longueur": 10,
+    "surface": 40.2,
+    "hauteur_moyenne": 4,
+    "hauteur_min": 0.3,
+    "hauteur_max": 5.6,
+    "valide": 1,
+    "accole": false
+   }
+  ],
+  "hauteur_gouttiere": 2.9,
+  "hauteur_faitage": 6.7,
+  "facteur": 1.303,
+  "part_plate": 0.02,
+  "pans": [
+   {
+    "orientation": "ouest",
+    "part": 0.49,
+    "pente": 85,
+    "incertitude": 3
+   },
+   {
+    "orientation": "est",
+    "part": 0.46,
+    "pente": 84,
+    "incertitude": 2
+   }
+  ]
+ }
+}

@@ -1,0 +1,179 @@
+{
+ "nom": "sans-pan-dominant",
+ "description": "Toit découpé, pas de pente unique (Strasbourg)",
+ "cleabs": "BATIMENT0000002223303655",
+ "contour": [
+  [
+   7.76895479,
+   48.5306502
+  ],
+  [
+   7.76897548,
+   48.53065388
+  ],
+  [
+   7.76911702,
+   48.53067343
+  ],
+  [
+   7.76913407,
+   48.53062228
+  ],
+  [
+   7.76904329,
+   48.5306088
+  ],
+  [
+   7.7690346,
+   48.53063258
+  ],
+  [
+   7.76896189,
+   48.53062378
+  ]
+ ],
+ "grilles": {
+  "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNS_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif",
+  "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93": "IGNF_LIDAR_HD_MNH_ELEVATION_ELEVATIONGRIDCOVERAGE_LAMB93.tif"
+ },
+ "attendu": {
+  "ok": true,
+  "couvert": true,
+  "fiable": false,
+  "motif": "toit_sans_pan_dominant",
+  "pente": 65,
+  "incertitude": 51,
+  "pixels": 165,
+  "versants": [
+   {
+    "orientation": "ouest",
+    "part": 0.2702702702702703
+   },
+   {
+    "orientation": "sud",
+    "part": 0.18243243243243243
+   },
+   {
+    "orientation": "sud-est",
+    "part": 0.16216216216216217
+   },
+   {
+    "orientation": "nord",
+    "part": 0.14189189189189189
+   },
+   {
+    "orientation": "est",
+    "part": 0.10135135135135136
+   }
+  ],
+  "source": "LiDAR HD de l’IGN, grille de 50 cm",
+  "murs": [
+   {
+    "i": 0,
+    "longueur": 1.58,
+    "surface": 8.5,
+    "hauteur_moyenne": 5.4,
+    "hauteur_min": 5.2,
+    "hauteur_max": 5.5,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 1,
+    "longueur": 10.67,
+    "surface": 84.5,
+    "hauteur_moyenne": 7.9,
+    "hauteur_min": 3.8,
+    "hauteur_max": 9.8,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 2,
+    "longueur": 5.82,
+    "surface": 43.1,
+    "hauteur_moyenne": 7.4,
+    "hauteur_min": 5.5,
+    "hauteur_max": 8.5,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 3,
+    "longueur": 6.87,
+    "surface": 43.5,
+    "hauteur_moyenne": 6.3,
+    "hauteur_min": 1.8,
+    "hauteur_max": 7.1,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 4,
+    "longueur": 2.72,
+    "surface": 20.3,
+    "hauteur_moyenne": 7.5,
+    "hauteur_min": 6.9,
+    "hauteur_max": 8.8,
+    "valide": 1,
+    "accole": true
+   },
+   {
+    "i": 5,
+    "longueur": 5.46,
+    "surface": 35,
+    "hauteur_moyenne": 6.4,
+    "hauteur_min": 5.2,
+    "hauteur_max": 8.9,
+    "valide": 1,
+    "accole": false
+   },
+   {
+    "i": 6,
+    "longueur": 2.98,
+    "surface": 16.1,
+    "hauteur_moyenne": 5.4,
+    "hauteur_min": 4.9,
+    "hauteur_max": 5.5,
+    "valide": 1,
+    "accole": true
+   }
+  ],
+  "hauteur_gouttiere": 5.4,
+  "hauteur_faitage": 10.2,
+  "facteur": 1.268,
+  "part_plate": 0.07,
+  "pans": [
+   {
+    "orientation": "ouest",
+    "part": 0.24,
+    "pente": 35,
+    "incertitude": 18
+   },
+   {
+    "orientation": "sud",
+    "part": 0.17,
+    "pente": 129,
+    "incertitude": 33
+   },
+   {
+    "orientation": "sud-est",
+    "part": 0.15,
+    "pente": 99,
+    "incertitude": 42
+   },
+   {
+    "orientation": "nord",
+    "part": 0.13,
+    "pente": 60,
+    "incertitude": 11
+   },
+   {
+    "orientation": "est",
+    "part": 0.1,
+    "pente": 165,
+    "incertitude": 217
+   }
+  ]
+ }
+}
