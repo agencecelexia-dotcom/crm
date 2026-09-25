@@ -134,3 +134,21 @@ export function useCorrigerMetrageArtisan(token: string | undefined, affectation
     onSuccess: () => qc.invalidateQueries({ queryKey: ['metrage-artisan', token ?? null, affectationToken] }),
   })
 }
+
+/** Pour chaque chantier de l'artisan : ses métrés sont-ils prêts, ou à vérifier ? */
+export function useEtatsMetrage(token: string | undefined) {
+  return useQuery({
+    queryKey: ['etats-metrage', token ?? null],
+    enabled: !!token,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async (): Promise<Map<string, { retenues: number; a_verifier: number }>> => {
+      const { data, error } = await supabase.rpc('etats_metrage_by_token', { p_token: token })
+      if (error) throw error
+      const r = data as {
+        ok: boolean
+        chantiers?: { affectation_token: string; retenues: number; a_verifier: number }[]
+      }
+      return new Map((r.ok ? (r.chantiers ?? []) : []).map((c) => [c.affectation_token, c]))
+    },
+  })
+}
