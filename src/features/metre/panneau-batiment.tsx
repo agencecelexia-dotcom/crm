@@ -48,6 +48,17 @@ const DEBORDS = [0, 30, 40, 50, 70]
 const formatHauteur = (n: number) => `${n.toFixed(1).replace('.', ',')} m`
 const DEBORD_DEFAUT = 40
 
+/**
+ * Hauteur approchée à la gouttière selon le nombre de niveaux : un rez-de-
+ * chaussée fait environ 2,8 m sous plafond, un étage courant 2,7 m, plus les
+ * planchers. Une approximation, dite comme telle à l'écran.
+ */
+const NIVEAUX = [
+  { libelle: 'Plain-pied', hauteur: 3 },
+  { libelle: '1 étage', hauteur: 5.8 },
+  { libelle: '2 étages', hauteur: 8.6 },
+]
+
 /** Surface moyenne d'une ouverture de maison : une fenêtre standard. */
 const OUVERTURE_TYPE = 1.8
 
@@ -676,6 +687,35 @@ export function PanneauBatiment({
                   Sur {formatM(longueurTouchee)}, ce mur touche un autre bâtiment — maison
                   mitoyenne ou annexe accolée. Cette partie n’est peut-être pas à traiter.
                 </p>
+              )}
+
+              {/* SANS RELEVÉ, UNE QUESTION PLUTÔT QU'UN CHIFFRE À TAPER. Le
+                  client sait combien sa maison a de niveaux ; il ne connaît pas
+                  la hauteur de sa gouttière. Un appui donne une hauteur
+                  approchée, annoncée comme telle. */}
+              {origineHauteur !== 'lidar' && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Combien de niveaux&nbsp;?</span>
+                  {NIVEAUX.map((n) => {
+                    const actif = hauteurSaisie === String(n.hauteur)
+                    return (
+                      <button
+                        key={n.libelle}
+                        type="button"
+                        onClick={() => setHauteurSaisie(actif ? '' : String(n.hauteur))}
+                        className={cn(
+                          'min-h-11 rounded-full border px-3 text-sm transition-colors',
+                          actif ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border bg-card hover:bg-accent',
+                        )}
+                      >
+                        {n.libelle}
+                      </button>
+                    )
+                  })}
+                  {NIVEAUX.some((n) => hauteurSaisie === String(n.hauteur)) && (
+                    <span className="text-xs text-muted-foreground">≈ {formatM(parseFloat(hauteurSaisie))} à la gouttière</span>
+                  )}
+                </div>
               )}
 
               <div className="flex items-end gap-2">
