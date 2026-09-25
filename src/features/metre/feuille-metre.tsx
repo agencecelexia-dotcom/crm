@@ -336,9 +336,9 @@ export function FeuilleMetre({
           if (surQuelle) confirmerParLaMesure(surQuelle)
           // La surface RÉELLE quand elle existe : annoncer l'emprise au sol
           // après avoir affiché la toiture prêtait à confusion.
-          const retenue = r.surface_reelle_m2 ?? r.surface_m2
+          const surface = r.surface_reelle_m2 ?? r.surface_m2
           toast.success('Métré enregistré', {
-            description: retenue != null ? formatM2(Number(retenue)) : undefined,
+            description: surface != null ? formatM2(Number(surface)) : undefined,
           })
           // On RESTE sur la maison : l'artisan enchaîne souvent toit puis
           // façades. Tout réinitialiser l'obligeait à la re-toucher et à
