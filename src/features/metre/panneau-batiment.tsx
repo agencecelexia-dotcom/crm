@@ -222,8 +222,9 @@ export function PanneauBatiment({
                     ? `Versant ${versantChoisi} à ${pente} %`
                     : `Toiture à ${pente} %`
               }
-              valeur={surfaceRetenue != null ? formatM2(surfaceRetenue) : 'Choisissez la pente'}
+              valeur={surfaceRetenue != null ? formatM2(surfaceRetenue) : 'Pente à choisir'}
               fort
+              enAttente={surfaceRetenue == null}
             />
             {batiment.encombrement && (
               <Chiffre
@@ -722,11 +723,32 @@ function Garder({
   )
 }
 
-function Chiffre({ titre, valeur, fort }: { titre: string; valeur: string; fort?: boolean }) {
+function Chiffre({
+  titre,
+  valeur,
+  fort,
+  enAttente,
+}: {
+  titre: string
+  valeur: string
+  fort?: boolean
+  /** Pas encore de chiffre : une consigne, écrite plus petit pour tenir dans la case. */
+  enAttente?: boolean
+}) {
   return (
     <div className={cn('rounded-xl border border-border p-2.5', fort && 'bg-primary/5')}>
-      <p className="truncate text-xs text-muted-foreground">{titre}</p>
-      <p className={cn('montant truncate', fort ? 'text-lg font-semibold text-primary' : 'text-sm')}>
+      {/* Sur deux lignes plutôt que coupé : « (mesurés) » disparaissait. */}
+      <p className="line-clamp-2 text-xs leading-tight text-muted-foreground">{titre}</p>
+      <p
+        className={cn(
+          'montant truncate',
+          enAttente
+            ? 'pt-1 text-sm font-medium text-[#B45309]'
+            : fort
+              ? 'text-lg font-semibold text-primary'
+              : 'text-sm',
+        )}
+      >
         {valeur}
       </p>
     </div>

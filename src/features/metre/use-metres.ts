@@ -79,6 +79,8 @@ const MESSAGES: Record<string, string> = {
   ouvertures_superieures_au_mur: 'Les ouvertures dépassent la surface du mur : vérifiez leur nombre.',
   pente_requise: 'Choisissez la pente du toit avant d’enregistrer.',
   trace_demesure: 'Ce tracé est démesuré (plus de 2 km) : vérifiez-le.',
+  batiment_invalide: 'Ce bâtiment ne peut pas être retenu : touchez-le à nouveau.',
+  acces_refuse: 'Votre lien n’est plus valable. Demandez-en un nouveau à Celexia.',
 }
 
 export function messageMetre(code?: string | null): string {
@@ -180,6 +182,8 @@ export function useCorrigerPosition(token: string | undefined) {
 
 /** Recherche d'adresse (Base Adresse Nationale) — gratuite, sans clé. */
 export interface Adresse {
+  /** Identifiant BAN : il relie l'adresse à son bâtiment dans le RNB. */
+  id: string
   label: string
   lat: number
   lon: number
@@ -194,10 +198,14 @@ export async function chercherAdresse(q: string, signal?: AbortSignal): Promise<
   const rep = await fetch(url, { signal })
   if (!rep.ok) return []
   const j = (await rep.json()) as {
-    features?: { properties?: { label?: string; type?: string }; geometry?: { coordinates?: number[] } }[]
+    features?: {
+      properties?: { id?: string; label?: string; type?: string }
+      geometry?: { coordinates?: number[] }
+    }[]
   }
   return (j.features ?? [])
     .map((f) => ({
+      id: f.properties?.id ?? '',
       label: f.properties?.label ?? '',
       lon: f.geometry?.coordinates?.[0] ?? 0,
       lat: f.geometry?.coordinates?.[1] ?? 0,
