@@ -85,6 +85,9 @@ const MESSAGES: Record<string, string> = {
   quantite_invalide: 'Cette quantité ne peut pas être enregistrée : rechargez la page.',
   valeur_invalide: 'Cette valeur n’est pas plausible.',
   acces_refuse: 'Votre lien n’est plus valable. Demandez-en un nouveau à Celexia.',
+  releve_introuvable: 'Le relevé LiDAR de cette maison a changé : rouvrez la maison et réessayez.',
+  aucun_pan: 'Gardez au moins un pan du toit pour enregistrer.',
+  facade_introuvable: 'Cette façade n’a pas de partie à traiter (mur mitoyen) : choisissez-en une autre.',
 }
 
 export function messageMetre(code?: string | null): string {
@@ -106,11 +109,19 @@ export function useEnregistrerMetre(token: string | undefined) {
       azimut?: number | null
       pente_source?: 'altitudes' | 'saisie' | 'lidar' | 'photogrammetrie' | null
       hauteur_source?: 'bati' | 'saisie' | 'lidar' | null
-      /** Débord de toiture, en mètres. Saisi, pas mesuré : le LiDAR ne le voit pas. */
+      /** Débord de toiture, en mètres : saisi, ou mesuré par le relevé. */
       debord_m?: number | null
       /** Part du toit retenue, dans ]0,1] — un seul versant plutôt que l'ensemble. */
       part_toiture?: number | null
       versant?: string | null
+      /**
+       * Le relevé LiDAR sur lequel s'appuie la mesure. Le serveur relit alors
+       * ce relevé et en fait la somme — des pans retenus (tous si `pans` est
+       * nul), ou des murs de `facade_orientation`.
+       */
+      releve_id?: string | null
+      pans?: number[] | null
+      facade_orientation?: string | null
     }) => {
       const { data, error } = await supabase.rpc('enregistrer_metre_by_token', {
         p_token: token,
@@ -128,6 +139,9 @@ export function useEnregistrerMetre(token: string | undefined) {
         p_debord_m: p.debord_m ?? 0,
         p_part_toiture: p.part_toiture ?? 1,
         p_versant: p.versant ?? null,
+        p_releve_id: p.releve_id ?? null,
+        p_pans: p.pans ?? null,
+        p_facade_orientation: p.facade_orientation ?? null,
       })
       if (error) throw error
       const r = data as { ok: boolean; error?: string }
