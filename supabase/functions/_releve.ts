@@ -36,8 +36,12 @@ import {
   type Recalage,
 } from './_recalage.ts'
 
-/** À changer quand un calcul change : les relevés plus anciens seront refaits. */
-export const VERSION_RELEVE = 1
+/**
+ * À changer quand un calcul change : les relevés plus anciens seront refaits.
+ * 2 : tronçons mitoyens et côté rue de chaque façade.
+ * 3 : un côté illisible ne rabaisse la confiance que s'il pèse.
+ */
+export const VERSION_RELEVE = 3
 
 /**
  * Du dessus du toit au dessous de la couverture, au droit du mur : tuiles,
@@ -78,8 +82,16 @@ export interface FacadeReleve {
   b: Point
   /** Arêtes du contour qui composent ce mur. */
   aretes: number[]
-  /** Longueur touchée par un autre bâtiment. */
+  /** Longueur touchée par un autre bâtiment, et où (de, à — en mètres le long du mur). */
   accole: number
+  mitoyen: [number, number][]
+  /**
+   * Distance du mur à la route qu'il regarde, sans bâtiment entre les deux
+   * (m) ; null s'il n'en voit aucune à moins de 40 m.
+   */
+  distanceRue: number | null
+  /** Le côté rue : la façade la plus proche d'une route vue (et celles à 3 m près d'elle). */
+  rue: boolean
   /** Gouttereau (hauteur constante), pignon (pointe au milieu), ou entre les deux. */
   type: 'gouttereau' | 'pignon' | 'mixte'
   /** Plus basse et plus haute hauteur du mur, en mètres. */
@@ -121,6 +133,8 @@ export interface EntreeReleve {
   contour: Point[]
   /** Les contours des bâtiments voisins. */
   voisins: Point[][]
+  /** Les routes alentour (BD TOPO), pour dire quel côté donne sur la rue. */
+  routes?: Point[][]
   vol: string | null
 }
 
@@ -150,6 +164,11 @@ export function releverBatiment(e: EntreeReleve): Releve {
   const lus = bords.filter((b) => b.debord !== null && b.etat !== 'accole').map((b) => b.debord!).sort((a, b) => a - b)
   const debordDefaut = lus.length ? lus[Math.floor(lus.length / 2)] : DEBORD_PAR_DEFAUT
   const estime = bords.some((b) => b.debord === null)
+  // Un côté illisible ne compte que s'il pèse : plus d'un cinquième du tour
+  // libre (hors mitoyens et hors décrochés de moins d'un mètre).
+  const libres = bords.filter((b) => b.etat !== 'accole' && b.longueur >= 1)
+  const tourLibre = libres.reduce((s, b) => s + b.longueur, 0)
+  const illisible = libres.filter((b) => b.debord === null).reduce((s, b) => s + b.longueur, 0)
   const toit = decaler(Pr, bords.map((b) => b.debord ?? debordDefaut))
 
   // 3. Les pans.
@@ -159,12 +178,13 @@ export function releverBatiment(e: EntreeReleve): Releve {
   const densite = lecture.airePlan ? pointsToit / lecture.airePlan : 0
 
   // 4. Les façades.
-  const facades = facadesDe(Pr, Vr, lecture.pans, toit[0], sol)
+  const routes = (e.routes ?? []).map((l) => l.map(([lon, lat]) => versLambert93(lon, lat)))
+  const facades = facadesDe(Pr, Vr, lecture.pans, toit[0], sol, routes)
 
   const raisons: string[] = []
   const absente = recalage.motif === 'maison_absente' || !lecture.pans.length
   if (!recalage.fiable) raisons.push(recalage.motif ?? 'recalage_incertain')
-  if (estime) raisons.push('debord_estime')
+  if (tourLibre > 0 && illisible / tourLibre > 0.2) raisons.push('debord_estime')
   if (lecture.aireSansPoints > 0.15 * lecture.airePlan) raisons.push('toit_en_partie_cache')
   if (densite < 8) raisons.push('peu_de_points')
   const confiance = absente || !recalage.fiable || densite < 4 ? 'basse' : raisons.length ? 'moyenne' : 'haute'
@@ -232,6 +252,7 @@ function facadesDe(
   pans: { a: number; b: number; c: number; contour: Pt[] }[],
   origine: Pt,
   sol: (x: number, y: number) => number,
+  routes: Pt[][],
 ): FacadeReleve[] {
   if (!pans.length) return []
   const enLonLat = Pr.map(enDegres)
@@ -248,8 +269,10 @@ function facadesDe(
     const q = pans[meilleur]
     return q.a * (p[0] - origine[0]) + q.b * (p[1] - origine[1]) + q.c
   }
-  return mursDe(enLonLat).map((mur) => {
+  const facades = mursDe(enLonLat).map((mur): FacadeReleve => {
     const profil: [number, number][] = []
+    const mitoyen: [number, number][] = []
+    let distanceRue: number | null = null
     let s0 = 0, accole = 0, surface = 0, surfaceLibre = 0
     for (const i of mur.aretes) {
       const a = Pr[i], b = Pr[(i + 1) % Pr.length]
@@ -271,9 +294,16 @@ function facadesDe(
         const tranche = L / k
         const touche = Vr.some((Q) => Q.some((q, m) => distanceSegment(p, q, Q[(m + 1) % Q.length]) <= 0.6))
         surface += haut * tranche
-        if (touche) accole += tranche
-        else surfaceLibre += haut * tranche
+        if (touche) {
+          accole += tranche
+          const de = r2(s0 + j * tranche), a = r2(s0 + (j + 1) * tranche)
+          const dernier = mitoyen[mitoyen.length - 1]
+          if (dernier && Math.abs(dernier[1] - de) < 0.01) dernier[1] = a
+          else mitoyen.push([de, a])
+        } else surfaceLibre += haut * tranche
       }
+      const d = versLaRue(a, b, n, routes, Vr)
+      if (d !== null && (distanceRue === null || d < distanceRue)) distanceRue = d
       s0 += L
     }
     const hs = profil.map((p) => p[1])
@@ -289,6 +319,9 @@ function facadesDe(
       b: mur.b,
       aretes: mur.aretes,
       accole: r1(accole),
+      mitoyen,
+      distanceRue: distanceRue === null ? null : r1(distanceRue),
+      rue: false,
       type: haut - bas < 0.6 ? 'gouttereau' : haut - bas > 1 && auMilieu ? 'pignon' : 'mixte',
       hauteurBasse: r2(bas),
       hauteurHaute: r2(haut),
@@ -297,6 +330,49 @@ function facadesDe(
       surfaceLibre: r1(surfaceLibre),
     }
   })
+  // Le côté rue : la façade la plus proche d'une route qu'elle voit, et celles
+  // qui en sont à trois mètres près (une maison d'angle en a deux).
+  const vues = facades.map((f) => f.distanceRue).filter((d): d is number => d !== null)
+  if (vues.length) {
+    const d0 = Math.min(...vues)
+    for (const f of facades) f.rue = f.distanceRue !== null && f.distanceRue <= Math.min(d0 + 3, 30)
+  }
+  return facades
+}
+
+/** Jusqu'où l'on cherche la rue devant un mur. */
+const PORTEE_RUE = 40
+
+/**
+ * La distance du mur à la première route croisée en le regardant de face
+ * (cinq visées le long du mur), si aucun bâtiment ne la cache.
+ */
+function versLaRue(a: Pt, b: Pt, n: Pt, routes: Pt[][], obstacles: Pt[][]): number | null {
+  if (!routes.length) return null
+  let meilleure: number | null = null
+  for (const t of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+    const o: Pt = [a[0] + (b[0] - a[0]) * t + n[0] * 0.3, a[1] + (b[1] - a[1]) * t + n[1] * 0.3]
+    let route = Infinity
+    for (const l of routes) for (let i = 0; i + 1 < l.length; i++) route = Math.min(route, rayon(o, n, l[i], l[i + 1]))
+    if (route > PORTEE_RUE) continue
+    let obstacle = Infinity
+    for (const Q of obstacles) for (let i = 0; i < Q.length; i++) obstacle = Math.min(obstacle, rayon(o, n, Q[i], Q[(i + 1) % Q.length]))
+    if (obstacle < route) continue
+    const d = route + 0.3
+    if (meilleure === null || d < meilleure) meilleure = d
+  }
+  return meilleure
+}
+
+/** Distance, le long du rayon (o, n), jusqu'au segment [p, q] ; Infinity s'il ne le croise pas. */
+function rayon(o: Pt, n: Pt, p: Pt, q: Pt): number {
+  const ex = q[0] - p[0], ey = q[1] - p[1]
+  const den = n[0] * ey - n[1] * ex
+  if (Math.abs(den) < 1e-12) return Infinity
+  const wx = p[0] - o[0], wy = p[1] - o[1]
+  const t = (wx * ey - wy * ex) / den
+  const u = (wx * n[1] - wy * n[0]) / den
+  return t >= 0 && u >= 0 && u <= 1 ? t : Infinity
 }
 
 function dedans(p: Pt, P: Pt[]): boolean {

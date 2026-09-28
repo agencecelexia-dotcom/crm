@@ -1,0 +1,195 @@
+{
+  "source": "Rendu par la base (numeric) pour les relevés figés de tests/fixtures/copc — mêmes additions que enregistrer_metre_by_token (0178).",
+  "releves": [
+    {
+      "nom": "accolee",
+      "tout": {
+        "plan": 159.6,
+        "vrai": 196.1,
+        "pente": 71.4
+      },
+      "pan1": {
+        "plan": 81.9,
+        "vrai": 100.4,
+        "pente": 70.9
+      },
+      "facades": [
+        {
+          "orientation": "nord-est",
+          "surface": 62.4,
+          "longueur": 10.1
+        },
+        {
+          "orientation": "nord-ouest",
+          "surface": 62.4,
+          "longueur": 13.72
+        },
+        {
+          "orientation": "sud-est",
+          "surface": 58.5,
+          "longueur": 13.5
+        },
+        {
+          "orientation": "sud-ouest",
+          "surface": 0,
+          "longueur": 0
+        }
+      ]
+    },
+    {
+      "nom": "croupe",
+      "tout": {
+        "plan": 195,
+        "vrai": 204.8,
+        "pente": 32.1
+      },
+      "pan1": {
+        "plan": 44.1,
+        "vrai": 46.3,
+        "pente": 32
+      },
+      "facades": [
+        {
+          "orientation": "est",
+          "surface": 43.1,
+          "longueur": 15.28
+        },
+        {
+          "orientation": "nord",
+          "surface": 8.5,
+          "longueur": 2.87
+        },
+        {
+          "orientation": "nord-est",
+          "surface": 33.9,
+          "longueur": 7.57
+        },
+        {
+          "orientation": "nord-ouest",
+          "surface": 47.1,
+          "longueur": 8.88
+        },
+        {
+          "orientation": "ouest",
+          "surface": 33.1,
+          "longueur": 11.64
+        },
+        {
+          "orientation": "sud",
+          "surface": 31.7,
+          "longueur": 11.88
+        },
+        {
+          "orientation": "sud-ouest",
+          "surface": 11.5,
+          "longueur": 3.8
+        }
+      ]
+    },
+    {
+      "nom": "deux-pans-raides",
+      "tout": {
+        "plan": 127.3,
+        "vrai": 166.7,
+        "pente": 84.5
+      },
+      "pan1": {
+        "plan": 63.6,
+        "vrai": 83.4,
+        "pente": 84.8
+      },
+      "facades": [
+        {
+          "orientation": "est",
+          "surface": 33.3,
+          "longueur": 13.52
+        },
+        {
+          "orientation": "nord",
+          "surface": 44,
+          "longueur": 9.98
+        },
+        {
+          "orientation": "ouest",
+          "surface": 31.9,
+          "longueur": 13.54
+        },
+        {
+          "orientation": "sud",
+          "surface": 44.3,
+          "longueur": 9.69
+        }
+      ]
+    },
+    {
+      "nom": "deux-pans-simple",
+      "tout": {
+        "plan": 102.2,
+        "vrai": 108.3,
+        "pente": 35.1
+      },
+      "pan1": {
+        "plan": 36.6,
+        "vrai": 38.8,
+        "pente": 35.2
+      },
+      "facades": [
+        {
+          "orientation": "nord-est",
+          "surface": 71.6,
+          "longueur": 12.2
+        },
+        {
+          "orientation": "nord-ouest",
+          "surface": 37.6,
+          "longueur": 6.59
+        },
+        {
+          "orientation": "sud-est",
+          "surface": 39.3,
+          "longueur": 6.51
+        },
+        {
+          "orientation": "sud-ouest",
+          "surface": 70.6,
+          "longueur": 12.26
+        }
+      ]
+    },
+    {
+      "nom": "dissymetrique",
+      "tout": {
+        "plan": 164.6,
+        "vrai": 190.7,
+        "pente": 58.5
+      },
+      "pan1": {
+        "plan": 67.3,
+        "vrai": 78.1,
+        "pente": 58.9
+      },
+      "facades": [
+        {
+          "orientation": "est",
+          "surface": 59.7,
+          "longueur": 12.48
+        },
+        {
+          "orientation": "nord",
+          "surface": 29.4,
+          "longueur": 11.72
+        },
+        {
+          "orientation": "ouest",
+          "surface": 49.2,
+          "longueur": 13.46
+        },
+        {
+          "orientation": "sud",
+          "surface": 14,
+          "longueur": 4.63
+        }
+      ]
+    }
+  ]
+}

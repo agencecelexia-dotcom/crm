@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { depuisLambert93, versLambert93 } from '../../supabase/functions/_calcul-toit'
-import { decoderNuage } from '../../supabase/functions/_nuage'
+import { decoderNuage, encoderNuage } from '../../supabase/functions/_nuage'
 import { releverBatiment, type Releve } from '../../supabase/functions/_releve'
+import { facadeRetenue, orientationsDesFacades, toitRetenu } from '../../supabase/functions/_releve-retenu'
+import { quantitesDuReleve } from '../../supabase/functions/_mesures-chantier'
 import { contourDe, deuxPans, nuageDe, quatrePans, type Scene } from './aide-nuage'
 
 // Le relevé d'une maison dans son nuage de points LiDAR.
@@ -171,6 +173,7 @@ interface Jeu {
   nom: string
   contour: [number, number][]
   voisins?: { contour: [number, number][] }[]
+  routes?: [number, number][][]
   zone: { minX: number; minY: number; maxX: number; maxY: number }
   dalles: { vol: string | null }[]
 }
@@ -186,6 +189,7 @@ function relever(j: Jeu): Releve {
     zone: j.zone,
     contour: j.contour,
     voisins: (j.voisins ?? []).map((v) => v.contour),
+    routes: j.routes ?? [],
     vol: j.dalles[0]?.vol ?? null,
   })
 }
@@ -249,4 +253,60 @@ describe.each(jeux)('maison réelle : $nom', (j) => {
     }
     expect(Math.abs(r.recalage.dx)).toBeLessThanOrEqual(6)
   })
+})
+
+// ---------- Enregistré = affiché ----------
+//
+// L'écran additionne les pans retenus (et les murs d'une façade) ; la base
+// refait la même addition en `numeric` à l'enregistrement (0178). Les valeurs
+// de référence sont celles que la base a rendues pour les relevés figés.
+
+describe('enregistré = affiché : les additions du relevé', () => {
+  const reference = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../fixtures/releve-reference-sql.json', import.meta.url)), 'utf8'),
+  ) as {
+    releves: {
+      nom: string
+      tout: { plan: number; vrai: number; pente: number }
+      pan1: { plan: number; vrai: number; pente: number }
+      facades: { orientation: string; surface: number; longueur: number }[]
+    }[]
+  }
+
+  it.each(reference.releves)('$nom : même toit, même façades que la base', (ref) => {
+    const r = JSON.parse(readFileSync(join(DOSSIER, ref.nom, 'releve.json'), 'utf8')) as Releve
+    const tout = toitRetenu(r, null)
+    expect({ plan: tout.plan, vrai: tout.vrai, pente: tout.pente }).toEqual(ref.tout)
+    const pan1 = toitRetenu(r, [1])
+    expect({ plan: pan1.plan, vrai: pan1.vrai, pente: pan1.pente }).toEqual(ref.pan1)
+    for (const f of ref.facades) {
+      const e = facadeRetenue(r, f.orientation)
+      expect({ orientation: f.orientation, surface: e.surface, longueur: e.longueur }).toEqual(f)
+    }
+  })
+})
+
+describe('pré-mesure = écran : le dossier reçoit les chiffres que l’écran affiche', () => {
+  it.each(jeux)('$nom', (j) => {
+    const r = JSON.parse(readFileSync(join(DOSSIER, j.nom, 'releve.json'), 'utf8')) as Releve
+    const q = Object.fromEntries(quantitesDuReleve(r).map((x) => [x.cle, x.valeur]))
+    // Ce que lit l'artisan (panneau-batiment.tsx) : la somme des pans, les
+    // façades hors mitoyen, la gouttière mesurée.
+    expect(q.toit_surface).toBe(toitRetenu(r, null).vrai)
+    expect(q.toit_pente).toBe(toitRetenu(r, null).pente)
+    expect(q.toit_pans).toBe(r.pans.length)
+    const facades = orientationsDesFacades(r).reduce((s, o) => s + facadeRetenue(r, o).surface, 0)
+    expect(q.facades_total).toBe(Math.round(facades * 100) / 100)
+    expect(q.hauteur_murs ?? null).toBe(r.hauteurs.gouttiere)
+  })
+})
+
+it('garde l’extrait d’un grand bâtiment sans déborder la pile', () => {
+  // 300 000 points : `Math.min(...z)` faisait « Maximum call stack size exceeded ».
+  const n = 300_000
+  const nu = { x: new Float64Array(n).fill(845000), y: new Float64Array(n).fill(6525000), z: new Float64Array(n).map((_, i) => 200 + (i % 1000) / 100), classe: new Uint8Array(n).fill(2), nb: n }
+  const zone = { minX: 844990, minY: 6524990, maxX: 845010, maxY: 6525010 }
+  const lu = decoderNuage(encoderNuage([nu], zone))
+  expect(lu.nb).toBe(n)
+  expect(lu.z[999]).toBeCloseTo(209.99, 2)
 })

@@ -1,15 +1,23 @@
 // Edge Function : le relevé d'une maison dans le nuage de points LiDAR HD.
 //
-// VERSION D'ESSAI (lot 0 du plan « mesurer dans les points ») : elle lit les
-// points classés autour de la maison et rend ce que cela coûte — octets,
-// requêtes, temps de décodage — pour décider si le relevé tient dans les
-// limites des fonctions (2 s de calcul, 256 Mo). Les lots suivants y
-// ajouteront le recalage, les pans, les murs et le cache.
+// Le toit pan par pan, le débord mesuré côté par côté, le contour recalé sur
+// le toit, les façades avec leur silhouette : tout vient des points classés
+// de l'IGN (`_releve.ts`). Ici, l'accès (jeton de l'artisan) et le cache.
+//
+// POURQUOI EN ARRIÈRE-PLAN
+//
+// Le serveur de l'IGN met 20 à 75 secondes à servir les morceaux d'une maison.
+// La fonction répond donc aussitôt « en cours », mène le relevé après sa
+// réponse (`EdgeRuntime.waitUntil`), et l'écran redemande toutes les quelques
+// secondes. Le relevé est gardé par bâtiment : deux chantiers sur la même
+// maison, ou la pré-mesure puis l'artisan, ne relisent pas l'IGN.
+//
+// Le contour vient de la BD TOPO, relu ici même : jamais du navigateur, car
+// le relevé gardé sert à tous.
 
-import { CLASSES_UTILES, lireEntete, lirePoints, noeudsDansZone, type Decompresseur, type Nuage, type Zone } from '../_copc.ts'
-import { versLambert93 } from '../_calcul-toit.ts'
-import { dallesPour, lecteurHttp, type Journal } from '../_lidar-hd.ts'
-import { decompresserLaz } from '../_laz.ts'
+import { reserverReleve, releverEtGarder, rpcService } from '../_releve-serveur.ts'
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
 
 const ORIGINES = [
   'http://localhost:5173',
@@ -28,95 +36,37 @@ function cors(origin: string | null) {
 const json = (b: unknown, s: number, h: Record<string, string>) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...h, 'content-type': 'application/json' } })
 
-async function rpc(nom: string, params: unknown) {
-  const cle = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/rest/v1/rpc/${nom}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', apikey: cle, authorization: `Bearer ${cle}` },
-    body: JSON.stringify(params),
-  })
-  if (!res.ok) throw new Error(`${nom} ${res.status}`)
-  return await res.json()
-}
+const estPoint = (p: unknown): p is [number, number] =>
+  Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && Number.isFinite(v)) &&
+  p[0] > -6 && p[0] < 10 && p[1] > 41 && p[1] < 52
 
 Deno.serve(async (req) => {
   const CORS = cors(req.headers.get('origin'))
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   try {
-    const { token, contour, marge } = ((await req.json().catch(() => ({}))) ?? {}) as {
+    const { token, cleabs, point } = ((await req.json().catch(() => ({}))) ?? {}) as {
       token?: string
-      contour?: [number, number][]
-      marge?: number
+      cleabs?: string
+      point?: unknown
     }
-    if (typeof token !== 'string' || !Array.isArray(contour) || contour.length < 3) {
+    if (typeof token !== 'string' || typeof cleabs !== 'string' || !/^BATIMENT\d{16}$/.test(cleabs)) {
       return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
     }
-    if ((await rpc('token_artisan_valide', { p_token: token })) !== true) {
-      return json({ ok: false, error: 'token_invalide' }, 403, CORS)
-    }
+    const lire = () => rpcService('releve_by_token', { p_token: token, p_cleabs: cleabs }) as Promise<{
+      trouve?: boolean
+      error?: string
+    }>
+    const actuel = await lire()
+    if (actuel.error === 'token_invalide') return json({ ok: false, error: 'token_invalide' }, 403, CORS)
 
-    const t0 = performance.now()
-    const poly = contour.map(([lon, lat]) => versLambert93(lon, lat))
-    const m = typeof marge === 'number' && marge >= 0 && marge <= 20 ? marge : 8
-    const zone: Zone = {
-      minX: Math.min(...poly.map((p) => p[0])) - m,
-      minY: Math.min(...poly.map((p) => p[1])) - m,
-      maxX: Math.max(...poly.map((p) => p[0])) + m,
-      maxY: Math.max(...poly.map((p) => p[1])) + m,
+    // La base dit s'il faut relever : absent, périmé, ou échec ancien.
+    if (await reserverReleve(cleabs)) {
+      // Le relevé fait, les dossiers de métrés des chantiers de cette maison
+      // en reçoivent les chiffres (sous l'interrupteur de la pré-mesure).
+      EdgeRuntime.waitUntil(releverEtGarder(cleabs, estPoint(point) ? point : null))
+      return json({ ok: true, trouve: true, statut: 'en_cours' }, 200, CORS)
     }
-    const dalles = await dallesPour(zone)
-    if (!dalles.length) return json({ ok: true, couvert: false, motif: 'hors_couverture' }, 200, CORS)
-
-    const compteur: Journal = { requetes: 0, octets: 0, detail: [] }
-    let tDecodage = 0
-    const decompresser: Decompresseur = async (...a) => {
-      const t = performance.now()
-      const r = await decompresserLaz(...a)
-      tDecodage += performance.now() - t
-      return r
-    }
-    const nuages: Nuage[] = []
-    let noeuds = 0
-    let pointsLus = 0
-    const tDalles = performance.now()
-    for (const d of dalles) {
-      const lire = lecteurHttp(d.url, compteur)
-      const e = await lireEntete(lire)
-      const n = await noeudsDansZone(lire, e, zone)
-      noeuds += n.length
-      pointsLus += n.reduce((s, x) => s + x.nbPoints, 0)
-      nuages.push((await lirePoints(lire, e, n, decompresser, zone, CLASSES_UTILES)).nuage)
-    }
-    const parClasse: Record<number, number> = {}
-    let gardes = 0
-    for (const nu of nuages) {
-      gardes += nu.nb
-      for (let i = 0; i < nu.nb; i++) parClasse[nu.classe[i]] = (parClasse[nu.classe[i]] ?? 0) + 1
-    }
-    const surface = (zone.maxX - zone.minX) * (zone.maxY - zone.minY)
-    return json(
-      {
-        ok: true,
-        couvert: true,
-        dalles: dalles.map((d) => ({ vol: d.vol, fichier: d.url.split('/').pop() })),
-        noeuds,
-        points_lus: pointsLus,
-        points_gardes: gardes,
-        densite: Math.round((gardes / surface) * 10) / 10,
-        par_classe: parClasse,
-        octets: compteur.octets,
-        requetes: compteur.requetes,
-        journal: compteur.detail,
-        ms: {
-          metadonnees: Math.round(tDalles - t0),
-          lecture_et_decodage: Math.round(performance.now() - tDalles),
-          decodage: Math.round(tDecodage),
-          total: Math.round(performance.now() - t0),
-        },
-      },
-      200,
-      CORS,
-    )
+    return json({ ok: true, ...(await lire()) }, 200, CORS)
   } catch (e) {
     console.error('releve-lidar', e)
     return json({ ok: false, error: String(e instanceof Error ? e.message : e) }, 500, CORS)

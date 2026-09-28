@@ -13,7 +13,11 @@ const MAGIE = 0x4e554147 // « NUAG »
 
 export function encoderNuage(nuages: Nuage[], zone: Zone): Uint8Array {
   const n = nuages.reduce((s, x) => s + x.nb, 0)
-  const z0 = Math.floor(Math.min(...nuages.flatMap((nu) => (nu.nb ? [Math.min(...nu.z)] : [0]))))
+  // Une boucle, pas `Math.min(...z)` : au-delà de cent mille points (un
+  // immeuble de Villeurbanne), l'étalement fait déborder la pile.
+  let zMin = Infinity
+  for (const nu of nuages) for (let i = 0; i < nu.nb; i++) if (nu.z[i] < zMin) zMin = nu.z[i]
+  const z0 = Number.isFinite(zMin) ? Math.floor(zMin) : 0
   const octets = new Uint8Array(32 + n * 13)
   const dv = new DataView(octets.buffer)
   dv.setUint32(0, MAGIE, true)

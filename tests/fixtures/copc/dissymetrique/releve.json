@@ -1,11 +1,9 @@
 {
- "version": 1,
+ "version": 3,
  "vol": "2021-06-12",
  "motif": null,
- "confiance": "moyenne",
- "raisons": [
-  "debord_estime"
- ],
+ "confiance": "haute",
+ "raisons": [],
  "points": {
   "total": 14991,
   "toit": 2423,
@@ -535,6 +533,14 @@
     0
    ],
    "accole": 3.6,
+   "mitoyen": [
+    [
+     0,
+     3.61
+    ]
+   ],
+   "distanceRue": null,
+   "rue": false,
    "type": "pignon",
    "hauteurBasse": 3.8,
    "hauteurHaute": 4.9,
@@ -592,6 +598,14 @@
     1
    ],
    "accole": 1.2,
+   "mitoyen": [
+    [
+     0,
+     1.2
+    ]
+   ],
+   "distanceRue": null,
+   "rue": false,
    "type": "mixte",
    "hauteurBasse": 4.89,
    "hauteurHaute": 5.58,
@@ -629,6 +643,14 @@
     2
    ],
    "accole": 4.3,
+   "mitoyen": [
+    [
+     0,
+     4.32
+    ]
+   ],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 5.05,
    "hauteurHaute": 5.57,
@@ -694,6 +716,14 @@
     3
    ],
    "accole": 0.5,
+   "mitoyen": [
+    [
+     0,
+     0.5
+    ]
+   ],
+   "distanceRue": null,
+   "rue": false,
    "type": "pignon",
    "hauteurBasse": 4.53,
    "hauteurHaute": 6.59,
@@ -783,6 +813,9 @@
     5
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "mixte",
    "hauteurBasse": 2.74,
    "hauteurHaute": 4.61,
@@ -836,6 +869,9 @@
     6
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "pignon",
    "hauteurBasse": 1.42,
    "hauteurHaute": 4.34,
@@ -921,6 +957,9 @@
     7
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "mixte",
    "hauteurBasse": 2.84,
    "hauteurHaute": 4.47,
@@ -970,6 +1009,9 @@
     8
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.12,
    "hauteurHaute": 2.6,
@@ -1039,6 +1081,9 @@
     9
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "pignon",
    "hauteurBasse": 2.27,
    "hauteurHaute": 3.62,
@@ -1116,6 +1161,9 @@
     10
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.92,
    "hauteurHaute": 3.28,
@@ -1181,6 +1229,14 @@
     11
    ],
    "accole": 0.5,
+   "mitoyen": [
+    [
+     7.52,
+     8.02
+    ]
+   ],
+   "distanceRue": 12,
+   "rue": true,
    "type": "pignon",
    "hauteurBasse": 3.07,
    "hauteurHaute": 5.02,

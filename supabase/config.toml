@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.toiture-lidar]
 verify_jwt = false
 
+[functions.releve-lidar]
+verify_jwt = false
+
 # Pré-mesure : appelée par la tâche planifiée `pre_metre_tick` (pg_net), sans
 # JWT. Elle n'accepte que la clé partagée PRE_METRE_CLE (coffre de la base).
 [functions.pre-metre]

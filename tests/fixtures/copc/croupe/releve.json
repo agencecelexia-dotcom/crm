@@ -1,11 +1,9 @@
 {
- "version": 1,
+ "version": 3,
  "vol": "2022-06-18",
  "motif": null,
- "confiance": "moyenne",
- "raisons": [
-  "debord_estime"
- ],
+ "confiance": "haute",
+ "raisons": [],
  "points": {
   "total": 23275,
   "toit": 3591,
@@ -741,6 +739,9 @@
     0
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "mixte",
    "hauteurBasse": 2.55,
    "hauteurHaute": 3.34,
@@ -894,6 +895,9 @@
     1
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "mixte",
    "hauteurBasse": 3.34,
    "hauteurHaute": 5.19,
@@ -983,6 +987,9 @@
     2
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 5.26,
    "hauteurHaute": 5.34,
@@ -1084,6 +1091,9 @@
     3
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.89,
    "hauteurHaute": 3.22,
@@ -1145,6 +1155,9 @@
     4
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.86,
    "hauteurHaute": 2.91,
@@ -1182,6 +1195,9 @@
     5
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.9,
    "hauteurHaute": 3.03,
@@ -1235,6 +1251,9 @@
     6
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.69,
    "hauteurHaute": 3.11,
@@ -1324,6 +1343,9 @@
     7
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": 35.4,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.57,
    "hauteurHaute": 2.75,
@@ -1401,6 +1423,9 @@
     8
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.57,
    "hauteurHaute": 2.74,
@@ -1458,6 +1483,9 @@
     9
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": 35.2,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.58,
    "hauteurHaute": 2.71,

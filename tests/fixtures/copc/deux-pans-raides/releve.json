@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 3,
  "vol": "2024-12-12",
  "motif": null,
  "confiance": "haute",
@@ -211,6 +211,9 @@
     0
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": 37.8,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.11,
    "hauteurHaute": 2.58,
@@ -348,6 +351,9 @@
     1
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "pignon",
    "hauteurBasse": 2.53,
    "hauteurHaute": 6.45,
@@ -453,6 +459,9 @@
     2
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": null,
+   "rue": false,
    "type": "gouttereau",
    "hauteurBasse": 2.4,
    "hauteurHaute": 2.52,
@@ -590,6 +599,9 @@
     3
    ],
    "accole": 0,
+   "mitoyen": [],
+   "distanceRue": 5.1,
+   "rue": true,
    "type": "pignon",
    "hauteurBasse": 2.15,
    "hauteurHaute": 6.43,

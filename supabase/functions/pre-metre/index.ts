@@ -24,14 +24,24 @@
 import { identifierMaison, maisonConfirmee, type Dossier } from '../_batiment.ts'
 import { mesurerToit, type MurMesure, type Pan, type ResultatToit } from '../_calcul-toit.ts'
 import { centre, type Point } from '../_geometrie.ts'
-import { quantitesDeLaMaison, type QuantiteMesuree } from '../_mesures-chantier.ts'
+import { quantitesDeLaMaison, quantitesDuReleve, type QuantiteMesuree } from '../_mesures-chantier.ts'
 import { clesDuChantier } from '../_metrage.ts'
 import { parcelleSous } from '../_parcelle.ts'
+import type { Releve } from '../_releve.ts'
+import { releveUtilisable } from '../_releve-retenu.ts'
+import { releveGarde, releverEtGarder, reserverReleve } from '../_releve-serveur.ts'
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
 
 const MAX_PAR_PASSAGE = 6
 const ESPACEMENT_MS = 4000
+/**
+ * Relevés LiDAR menés par passage : l'IGN met 20 à 75 s par maison, et la
+ * fonction ne vit que quelques minutes. Au-delà, la grille d'altitudes sert,
+ * et le relevé viendra à l'ouverture de l'écran (qui mettra le dossier à jour).
+ */
+const RELEVES_PAR_PASSAGE = 2
+let relevesRestants = RELEVES_PAR_PASSAGE
 
 const URL_BASE = () => Deno.env.get('SUPABASE_URL')!
 const CLE_SERVICE = () => Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -120,6 +130,18 @@ async function toitDe(cleabs: string, contour: Point[]): Promise<ResultatToit> {
   return r
 }
 
+/** Le relevé LiDAR de la maison : gardé, sinon mené maintenant s'il reste de quoi. */
+async function releveDe(cleabs: string, point: Point | null): Promise<Releve | null> {
+  const garde = await releveGarde(cleabs)
+  if (garde) return garde
+  if (relevesRestants <= 0) return null
+  if (!(await reserverReleve(cleabs))) return null
+  relevesRestants--
+  // Le dossier de CE chantier s'écrit plus bas ; les autres chantiers de la
+  // maison n'ont pas de dossier à suivre ici.
+  return (await releverEtGarder(cleabs, point, { reporter: false })).releve ?? null
+}
+
 /** Ce que l'outil sait mesurer sans personne : au toit et aux murs (LiDAR), au terrain (cadastre). */
 const PAR_LE_LIDAR = ['toit_surface', 'toit_pente', 'toit_pans', 'facades_total', 'hauteur_murs']
 
@@ -167,8 +189,15 @@ async function premesurer(p: ProjetAMesurer): Promise<string> {
   const quantites: QuantiteMesuree[] = []
   if (auLidar) {
     await pause(ESPACEMENT_MS)
-    const toit = await toitDe(maison.cleabs, maison.contour)
-    quantites.push(...quantitesDeLaMaison(maison.contour, toit).filter((q) => cles.has(q.cle)))
+    // Le relevé dans les points d'abord (toit pan par pan, débord mesuré) ;
+    // la grille d'altitudes à défaut (hors couverture, relevé incertain).
+    const releve = await releveDe(maison.cleabs, centre(maison.contour))
+    if (releveUtilisable(releve)) {
+      quantites.push(...quantitesDuReleve(releve).filter((q) => cles.has(q.cle)))
+    } else {
+      const toit = await toitDe(maison.cleabs, maison.contour)
+      quantites.push(...quantitesDeLaMaison(maison.contour, toit).filter((q) => cles.has(q.cle)))
+    }
   }
 
   // 3. Le terrain : la parcelle sous la maison.
@@ -199,6 +228,7 @@ async function premesurer(p: ProjetAMesurer): Promise<string> {
         unite: q.unite,
         valeur_mesuree: q.valeur,
         mesure_source: q.source,
+        mesure_precision: q.precision ?? null,
         mesure_detail: q.detail ?? null,
         mesuree_le: new Date().toISOString(),
       })),
@@ -209,6 +239,7 @@ async function premesurer(p: ProjetAMesurer): Promise<string> {
 }
 
 async function traiter(projets: ProjetAMesurer[]) {
+  relevesRestants = RELEVES_PAR_PASSAGE
   for (const p of projets) {
     const bilan = await premesurer(p).catch((e) => `échec : ${e instanceof Error ? e.message : e}`)
     console.log('pre-metre', p.id, bilan)

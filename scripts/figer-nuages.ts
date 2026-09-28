@@ -6,8 +6,8 @@
 // Lit le contour de tests/fixtures/lidar/<nom>/maison.json, et écrit
 // tests/fixtures/copc/<nom>/ : `nuage.bin.gz` (points en centimètres autour de
 // l'origine de la zone, avec leur classe) et `maison.json` (contour, voisins
-// de la BD TOPO, zone, dalle, date du vol). `--voisins` ne relit que les
-// voisins, sans retélécharger les points.
+// et routes de la BD TOPO, zone, dalle, date du vol). `--voisins` ne relit
+// que les voisins et les routes, sans retélécharger les points.
 //
 // `--releve` refige, sans réseau, le relevé attendu (`releve.json`) : à faire
 // quand un calcul change VOLONTAIREMENT — le test « rend le même relevé »
@@ -23,6 +23,7 @@ import { decompresserNode } from './laz-node.ts'
 import { decoderNuage, encoderNuage } from '../supabase/functions/_nuage.ts'
 import { releverBatiment } from '../supabase/functions/_releve.ts'
 import { autour } from '../supabase/functions/_batiment.ts'
+import { routesAutour } from '../supabase/functions/_lecture-releve.ts'
 
 /** Les bâtiments de la BD TOPO qui touchent la zone, sauf la maison. */
 async function voisinsDe(cleabs: string, contour: [number, number][], zone: Zone) {
@@ -55,6 +56,7 @@ for (const nom of process.argv.slice(2).filter((a) => !a.startsWith('--'))) {
       zone: m.zone,
       contour: m.contour,
       voisins: (m.voisins ?? []).map((v: { contour: [number, number][] }) => v.contour),
+      routes: m.routes ?? [],
       vol: m.dalles[0]?.vol ?? null,
     })
     writeFileSync(join(dossier, 'releve.json'), JSON.stringify(r, null, 1) + '\n')
@@ -66,9 +68,10 @@ for (const nom of process.argv.slice(2).filter((a) => !a.startsWith('--'))) {
     if (!existsSync(fichier)) throw new Error(`${nom} : pas encore figé`)
     const m = JSON.parse(readFileSync(fichier, 'utf8'))
     const voisins = await voisinsDe(m.cleabs, m.contour, m.zone)
+    const routes = await routesAutour(m.zone)
     const { dalles, ...reste } = m
-    writeFileSync(fichier, JSON.stringify({ ...reste, voisins, dalles }, null, 1) + '\n')
-    console.log(nom, ':', voisins.length, 'voisins')
+    writeFileSync(fichier, JSON.stringify({ ...reste, voisins, routes, dalles }, null, 1) + '\n')
+    console.log(nom, ':', voisins.length, 'voisins,', routes.length, 'routes')
     continue
   }
   const source = JSON.parse(readFileSync(join('tests/fixtures/lidar', nom, 'maison.json'), 'utf8'))
@@ -105,6 +108,7 @@ for (const nom of process.argv.slice(2).filter((a) => !a.startsWith('--'))) {
         contour,
         zone,
         voisins: await voisinsDe(source.cleabs, contour, zone),
+        routes: await routesAutour(zone),
         dalles: dalles.map((d) => ({ vol: d.vol, fichier: d.url.split('/').pop() })),
       },
       null,
