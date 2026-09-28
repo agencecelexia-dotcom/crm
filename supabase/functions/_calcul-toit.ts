@@ -49,6 +49,25 @@ export function versLambert93(lon: number, lat: number): [number, number] {
   return [A_XS + R * Math.sin(g), A_YS - R * Math.cos(g)]
 }
 
+/** L'inverse : de Lambert-93 à longitude et latitude (itération sur la latitude isométrique). */
+export function depuisLambert93(x: number, y: number): [number, number] {
+  const dx = x - A_XS, dy = A_YS - y
+  const R = Math.hypot(dx, dy)
+  const lon = 3 + ((Math.atan2(dx, dy) / A_N) * 180) / Math.PI
+  const iso = -Math.log(R / A_C) / A_N
+  let p = 2 * Math.atan(Math.exp(iso)) - Math.PI / 2
+  for (let i = 0; i < 20; i++) {
+    const s = A_E * Math.sin(p)
+    const q = 2 * Math.atan(Math.pow((1 + s) / (1 - s), A_E / 2) * Math.exp(iso)) - Math.PI / 2
+    if (Math.abs(q - p) < 1e-12) {
+      p = q
+      break
+    }
+    p = q
+  }
+  return [lon, (p * 180) / Math.PI]
+}
+
 // ---------- Lecture du GeoTIFF ----------
 //
 // Le flux de l'IGN est un TIFF classique, petit-boutiste, mono-bande, float32,
