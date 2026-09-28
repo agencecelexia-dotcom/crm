@@ -3,8 +3,10 @@ import { MapContainer, Polygon, Polyline, CircleMarker, TileLayer, useMap, useMa
 import type { LatLngExpression } from 'leaflet'
 
 import { cn } from '@/lib/utils'
+import { couleurPan } from './affichage-releve'
 import type { Batiment } from './bati-ign'
 import type { Facade, Point } from './geometrie'
+import type { Releve } from './releve'
 
 /**
  * La carte de métré.
@@ -22,7 +24,7 @@ import type { Facade, Point } from './geometrie'
 const ATTRIB_IGN =
   '&copy; <a href="https://www.ign.fr">IGN</a> — Géoplateforme'
 
-export type FondCarte = 'ortho' | 'plan'
+export type FondCarte = 'ortho' | 'plan' | 'relief'
 export type ModeCarte = 'apercu' | 'surface' | 'longueur'
 
 const versLeaflet = (p: Point): LatLngExpression => [p[1], p[0]]
@@ -96,6 +98,8 @@ export function CarteMetre({
   parcelle,
   cotesChoisis,
   onBasculerCote,
+  releve,
+  pansEcartes,
 }: {
   centre: Point | null
   zoom?: number
@@ -113,6 +117,10 @@ export function CarteMetre({
   parcelle?: { contour: Point[]; cotes: { index: number; a: Point; b: Point }[] } | null
   cotesChoisis?: Set<number>
   onBasculerCote?: (index: number) => void
+  /** Le relevé LiDAR de la maison choisie : ses pans, son toit, ses murs recalés. */
+  releve?: Releve | null
+  /** Les pans que l'artisan a écartés : ils s'éteignent. */
+  pansEcartes?: Set<number>
 }) {
   const dessine = mode !== 'apercu'
 
@@ -126,7 +134,18 @@ export function CarteMetre({
       maxZoom={21}
       className={cn('size-full', dessine && 'cursor-crosshair')}
     >
-      {fond === 'ortho' ? (
+      {fond === 'relief' ? (
+        // LE RELIEF LiDAR : l'ombrage du modèle de surface de l'IGN. Il est
+        // « vrai » (vu à la verticale partout), là où la photo aérienne montre
+        // les toits penchés : c'est sur lui que le relevé se vérifie.
+        <TileLayer
+          key="relief"
+          attribution={ATTRIB_IGN}
+          url="https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM_0_18&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
+          maxNativeZoom={18}
+          maxZoom={21}
+        />
+      ) : fond === 'ortho' ? (
         <TileLayer
           key="ortho"
           attribution={ATTRIB_IGN}
@@ -170,21 +189,62 @@ export function CarteMetre({
       {!dessine &&
         batiments.map((b) => {
           const choisi = b.id === batimentChoisi
+          // Relevée, la maison choisie garde son contour du cadastre en
+          // fantôme : on voit de combien il a fallu le déplacer.
+          const fantome = choisi && !!releve
           return (
             <Polygon
               key={b.id}
               positions={b.contour.map(versLeaflet)}
               eventHandlers={{ click: () => onChoisirBatiment(b) }}
-              pathOptions={{
-                color: choisi ? '#7C3AED' : '#FFFFFF',
-                weight: choisi ? 3 : 2,
-                opacity: choisi ? 1 : 0.85,
-                fillColor: choisi ? '#7C3AED' : '#FFFFFF',
-                fillOpacity: choisi ? 0.3 : 0.12,
-              }}
+              pathOptions={
+                fantome
+                  ? { color: '#FACC15', weight: 1.5, opacity: 0.9, dashArray: '2 5', fillOpacity: 0 }
+                  : {
+                      color: choisi ? '#7C3AED' : '#FFFFFF',
+                      weight: choisi ? 3 : 2,
+                      opacity: choisi ? 1 : 0.85,
+                      fillColor: choisi ? '#7C3AED' : '#FFFFFF',
+                      fillOpacity: choisi ? 0.3 : 0.12,
+                    }
+              }
             />
           )
         })}
+
+      {/* LE RELEVÉ : chaque pan dans sa couleur (la même que dans la liste),
+          le bord réel du toit en pointillé, les murs recalés en violet. */}
+      {releve && !dessine && (
+        <>
+          {releve.pans.map((p) => {
+            const ecarte = pansEcartes?.has(p.id) ?? false
+            return (
+              <Polygon
+                key={`pan-${p.id}`}
+                positions={p.contour.map(versLeaflet)}
+                interactive={false}
+                pathOptions={{
+                  color: '#FFFFFF',
+                  weight: 1,
+                  opacity: ecarte ? 0.3 : 0.9,
+                  fillColor: couleurPan(p.id),
+                  fillOpacity: ecarte ? 0.05 : 0.42,
+                }}
+              />
+            )
+          })}
+          <Polygon
+            positions={releve.toit.map(versLeaflet)}
+            interactive={false}
+            pathOptions={{ color: '#FFFFFF', weight: 2, dashArray: '6 4', fill: false }}
+          />
+          <Polygon
+            positions={releve.murs.map(versLeaflet)}
+            interactive={false}
+            pathOptions={{ color: '#7C3AED', weight: 2.5, fill: false }}
+          />
+        </>
+      )}
 
       {/* La parcelle : son tour en pointillé, et chaque côté à toucher pour
           l'ajouter à la clôture ou l'en retirer. */}

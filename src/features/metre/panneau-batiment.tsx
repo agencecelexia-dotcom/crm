@@ -20,7 +20,20 @@ import { useFicheMaison } from './use-fiche-maison'
 import type { VueMetier } from './vue-par-metier'
 import { partagerTexte, texteMetre } from './resume-metre'
 import { CroquisCote } from './croquis-cote'
+import { CroquisFacade } from './croquis-facade'
 import { FicheMesures, type CarteMesure } from './fiche-mesures'
+import { Provenance } from './provenance'
+import { ToitReleve } from './toit-releve'
+import {
+  debordCourt,
+  debordLisible,
+  facadeDuReleve,
+  moisDuVol,
+  provenanceFacade,
+  provenanceToit,
+  resumePansReleve,
+} from './affichage-releve'
+import { facadeRetenue, orientationsDesFacades, releveUtilisable, toitRetenu, useReleve } from './use-releve'
 import {
   mesureFacade,
   partsNormalisees,
@@ -75,6 +88,10 @@ export interface MesureAEnregistrer {
   part_toiture?: number | null
   versant?: string | null
   hauteur_source?: 'bati' | 'saisie' | 'lidar' | null
+  /** Le relevé LiDAR dont le serveur refera la somme (pans retenus, ou murs d'une orientation). */
+  releve_id?: string | null
+  pans?: number[] | null
+  facade_orientation?: string | null
 }
 
 /**
@@ -89,6 +106,7 @@ export function PanneauBatiment({
   onEnregistrer,
   enCours,
   onMurChoisi,
+  onPansEcartes,
   token,
   voisins,
   vue = 'tout',
@@ -109,6 +127,8 @@ export function PanneauBatiment({
   onEnregistrer: (m: MesureAEnregistrer) => void
   enCours: boolean
   onMurChoisi: (f: Facade | null) => void
+  /** Les pans du relevé que l'artisan écarte : la carte les éteint. */
+  onPansEcartes?: (ecartes: Set<number>) => void
   token: string
 }) {
   // Le métier ouvre sur SON onglet : le façadier n'a pas à chercher ses murs.
@@ -206,6 +226,45 @@ export function PanneauBatiment({
     : 1
   const surfaceRetenue = toiture != null ? toiture * partRetenue : null
 
+  // LE RELEVÉ LiDAR, quand il existe : le toit pan par pan dans les points
+  // classés de l'IGN, le débord mesuré côté par côté, le contour recalé sur le
+  // toit. Il remplace la grille d'altitudes — sauf s'il n'a pas pu poser le
+  // contour sur un toit (`releveUtilisable`). Tant qu'il est en cours (une
+  // minute environ), l'écran garde les chiffres de la grille, et le dit.
+  const { data: repReleve } = useReleve(token, batiment.cleabs, batiment.centre ?? null)
+  const releve = releveUtilisable(repReleve?.releve) ? repReleve!.releve! : null
+  const releveId = releve ? (repReleve?.id ?? null) : null
+  const releveEnCours = repReleve?.statut === 'en_cours'
+  const maisonAbsente = repReleve?.statut === 'fait' && repReleve.releve?.motif === 'maison_absente'
+  const vol = moisDuVol(repReleve?.releve?.vol ?? null)
+  // Un couvreur ne refait pas toujours tout le toit : il écarte des pans.
+  const [ecartes, setEcartes] = useState<Set<number>>(() => new Set())
+  const pansRetenus = releve && ecartes.size ? releve.pans.filter((p) => !ecartes.has(p.id)).map((p) => p.id) : null
+  const toitMesure = releve ? toitRetenu(releve, pansRetenus) : null
+  const resumeRetenu = releve ? resumePansReleve(releve.pans.filter((p) => !ecartes.has(p.id))) : null
+  function basculerPan(id: number) {
+    if (!releve) return
+    const s = new Set(ecartes)
+    if (s.has(id)) s.delete(id)
+    else s.add(id)
+    // Au moins un pan : un toit vide ne s'enregistre pas.
+    if (s.size >= releve.pans.length) return
+    setEcartes(s)
+    onPansEcartes?.(s)
+  }
+  // La façade du relevé en cours de chiffrage : ses murs, par orientation.
+  const [orientationChoisie, setOrientationChoisie] = useState<string | null>(null)
+  const facadeMesuree = releve && orientationChoisie ? facadeRetenue(releve, orientationChoisie) : null
+  const surfaceFacadeReleve = facadeMesuree ? Math.max(0, facadeMesuree.surface - ouvertures) : null
+  function choisirOrientation(o: string | null) {
+    setOrientationChoisie(o)
+    onMurChoisi(o && releve ? facadeDuReleve(o, facadeRetenue(releve, o).murs) : null)
+  }
+  const totalFacadesReleve = releve
+    ? orientationsDesFacades(releve).reduce((s, o) => s + facadeRetenue(releve, o).surface, 0)
+    : null
+  const mitoyenReleve = releve ? releve.facades.reduce((s, f) => s + f.accole, 0) : 0
+
   // LES CARTES DU MÉTIER
   //
   // Les façades toutes ensemble : ce que chiffre un ravalement complet. Si un
@@ -221,39 +280,44 @@ export function PanneauBatiment({
   )
   const carteToit: CarteMesure = {
     cle: 'toit_surface',
-    enCours: toitureEnCours,
-    libelle: versantChoisi ? `Toit, versant ${versantChoisi}` : 'Toit',
+    enCours: toitureEnCours && !toitMesure,
+    libelle: toitMesure ? (pansRetenus ? 'Toit, pans retenus' : 'Toit') : versantChoisi ? `Toit, versant ${versantChoisi}` : 'Toit',
     unite: 'm2',
-    valeur: surfaceRetenue,
-    detail: pente == null ? 'pente à choisir' : (resumePans(toitureIgn) ?? `pente ${pente} %`),
+    valeur: toitMesure ? toitMesure.vrai : surfaceRetenue,
+    detail: toitMesure
+      ? `${resumeRetenu} · débord mesuré`
+      : pente == null
+        ? 'pente à choisir'
+        : (resumePans(toitureIgn) ?? `pente ${pente} %`),
     onToucher: () => setOnglet('toiture'),
   }
   const carteFacades: CarteMesure = {
     cle: 'facades_total',
-    enCours: toitureEnCours,
+    enCours: toitureEnCours && !releve,
     libelle: 'Façades, tous côtés',
     unite: 'm2',
-    valeur: totalFacades,
-    detail:
-      totalFacades == null
+    valeur: releve ? totalFacadesReleve : totalFacades,
+    detail: releve
+      ? `ouvertures non déduites${mitoyenReleve > 0.5 ? ` · ${formatM(mitoyenReleve)} de mitoyen exclus` : ''}`
+      : totalFacades == null
         ? 'hauteur non mesurée partout'
         : `ouvertures non déduites${murAccole > 0.5 ? ` · ${formatM(murAccole)} de mur accolé` : ''}`,
     onToucher: () => setOnglet('facades'),
   }
   const carteHauteur: CarteMesure = {
     cle: 'hauteur_murs',
-    enCours: toitureEnCours,
+    enCours: toitureEnCours && !releve,
     libelle: 'Hauteur à la gouttière',
     unite: 'm',
-    valeur: toitureIgn?.hauteur_gouttiere ?? null,
+    valeur: releve?.hauteurs.gouttiere ?? toitureIgn?.hauteur_gouttiere ?? null,
     onToucher: () => setOnglet('facades'),
   }
   const cartePente: CarteMesure = {
     cle: 'toit_pente',
-    enCours: toitureEnCours,
+    enCours: toitureEnCours && !toitMesure,
     libelle: 'Pente',
     unite: 'pct',
-    valeur: pente,
+    valeur: toitMesure ? toitMesure.pente : pente,
     onToucher: () => setOnglet('toiture'),
   }
   const cartes: CarteMesure[] =
@@ -269,8 +333,18 @@ export function PanneauBatiment({
     const texte = texteMetre({
       titre: titre ?? null,
       adresse: adresse ?? null,
-      toit:
-        surfaceRetenue != null && pente != null && origine
+      toit: toitMesure && releve
+        ? {
+            surface: toitMesure.vrai,
+            pente: toitMesure.pente,
+            pans: pansRetenus ? `${resumeRetenu} (sur ${releve.pans.length} pans)` : resumeRetenu,
+            debordCm: 0,
+            debord: debordLisible(releve),
+            source: 'releve' as const,
+            versant: null,
+            vol,
+          }
+        : surfaceRetenue != null && pente != null && origine
           ? {
               surface: surfaceRetenue,
               pente,
@@ -280,10 +354,15 @@ export function PanneauBatiment({
               versant: versantChoisi,
             }
           : null,
-      facades: batiment.facades.flatMap((f) => {
-        const m = mesureFacade(f, toitureIgn)
-        return m ? [{ orientation: f.orientation, surface: m.surface, hauteur: m.hauteurMoyenne }] : []
-      }),
+      facades: releve
+        ? orientationsDesFacades(releve).flatMap((o) => {
+            const f = facadeRetenue(releve, o)
+            return f.surface > 0 ? [{ orientation: o, surface: f.surface, hauteur: f.hauteur, rue: f.murs.some((m) => m.rue) }] : []
+          })
+        : batiment.facades.flatMap((f) => {
+            const m = mesureFacade(f, toitureIgn)
+            return m ? [{ orientation: f.orientation, surface: m.surface, hauteur: m.hauteurMoyenne }] : []
+          }),
       emprise: batiment.emprise,
       perimetre: batiment.perimetre,
       dimensions: batiment.encombrement
@@ -329,7 +408,10 @@ export function PanneauBatiment({
             type="button"
             onClick={() => {
               setOnglet(o)
-              if (o === 'toiture') choisirMur(null)
+              if (o === 'toiture') {
+                choisirMur(null)
+                setOrientationChoisie(null)
+              }
             }}
             className={cn(
               'flex-1 rounded-md py-1.5 text-sm transition-colors',
@@ -341,8 +423,97 @@ export function PanneauBatiment({
         ))}
       </div>
 
-      {onglet === 'toiture' ? (
+      {onglet === 'toiture' && releve && toitMesure ? (
         <>
+          <div className="grid grid-cols-2 gap-2">
+            <Chiffre titre="Emprise au sol" valeur={formatM2(batiment.emprise)} />
+            <Chiffre
+              titre={
+                pansRetenus
+                  ? `Toiture, ${toitMesure.nb} pans sur ${releve.pans.length}`
+                  : `Toiture, ${releve.pans.length} pan${releve.pans.length > 1 ? 's' : ''}`
+              }
+              valeur={formatM2(toitMesure.vrai)}
+              fort
+            />
+            {batiment.encombrement && (
+              <Chiffre
+                titre="Dimensions"
+                valeur={`${formatM(batiment.encombrement.longueur)} × ${formatM(batiment.encombrement.largeur)}`}
+              />
+            )}
+            {releve.hauteurs.gouttiere != null && (
+              <Chiffre
+                titre="Gouttière · faîtage (mesurés)"
+                valeur={`${formatHauteur(releve.hauteurs.gouttiere)} · ${formatHauteur(releve.hauteurs.faitage ?? 0)}`}
+              />
+            )}
+            <Chiffre titre="Débord (mesuré)" valeur={debordCourt(releve) ?? '—'} />
+            <Chiffre titre="Toit vu du dessus" valeur={formatM2(toitMesure.plan)} />
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            À commander, chutes comprises&nbsp;:{' '}
+            {[5, 10, 15].map((c, i) => (
+              <span key={c}>
+                {i > 0 && ' · '}
+                <span className="montant text-foreground">{formatM2(toitMesure.vrai * (1 + c / 100))}</span> (+{c}&nbsp;%)
+              </span>
+            ))}
+          </p>
+
+          <ToitReleve releve={releve} ecartes={ecartes} onBasculer={basculerPan} />
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Sur la carte&nbsp;: chaque pan dans sa couleur, le bord du toit en pointillé blanc, les
+            murs en violet — recalés sur le toit —, le tracé du cadastre en pointillé jaune. Le
+            bouton 3D montre le relief relevé.
+          </p>
+
+          {/* D'OÙ VIENT LE CHIFFRE — en une phrase, et le détail sous « ⓘ ». */}
+          <p className="text-xs text-muted-foreground">
+            Toit <strong className="text-foreground">mesuré dans les points LiDAR</strong> de l’IGN
+            {vol ? `, vol de ${vol}` : ''}&nbsp;: chaque pan à sa pente, le débord lu côté par côté
+            {Math.hypot(releve.recalage.dx, releve.recalage.dy) >= 0.2
+              ? `, le contour du cadastre recalé de ${Math.round(Math.hypot(releve.recalage.dx, releve.recalage.dy) * 100)} cm sur le toit.`
+              : '.'}
+          </p>
+          <Provenance lignes={provenanceToit(releve)} />
+
+          <Garder
+            enCours={enCours}
+            defaut={pansRetenus ? 'Toiture, pans retenus' : batiment.nature || 'Toiture'}
+            onGarder={(nom) =>
+              onEnregistrer({
+                nom,
+                type: 'surface',
+                // Le contour du toit, débord compris : c'est lui que la carte dessine.
+                geometrie: releve.toit,
+                pente_pct: toitMesure.pente,
+                pente_source: 'lidar',
+                hauteur_m: releve.hauteurs.gouttiere,
+                hauteur_source: releve.hauteurs.gouttiere != null ? 'lidar' : null,
+                debord_m: releve.debord.moyen,
+                releve_id: releveId,
+                pans: pansRetenus,
+              })
+            }
+          />
+        </>
+      ) : onglet === 'toiture' ? (
+        <>
+          {/* Le relevé arrive : les chiffres de la grille restent, le temps qu'il finisse. */}
+          {releveEnCours && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              Relevé précis en cours dans les points LiDAR de l’IGN, une minute environ…
+            </p>
+          )}
+          {maisonAbsente && (
+            <p className="text-xs text-[#B45309]">
+              Le relevé LiDAR{vol ? ` de ${vol}` : ''} ne trouve aucun toit sous ce contour&nbsp;: maison
+              démolie, pas encore bâtie, ou autre bâtiment&nbsp;? Vérifiez que c’est la bonne maison.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Chiffre titre="Emprise au sol" valeur={formatM2(batiment.emprise)} />
             <Chiffre
@@ -602,6 +773,85 @@ export function PanneauBatiment({
               })
             }
           />
+        </>
+      ) : onglet === 'facades' && releve ? (
+        <>
+          {/* Le croquis coté, sur le contour RECALÉ : chaque mur avec sa
+              longueur ; toucher un mur choisit sa façade. */}
+          <CroquisCote
+            contour={releve.murs}
+            surligne={orientationChoisie}
+            onChoisir={(o) => choisirOrientation(orientationChoisie === o ? null : o)}
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {orientationsDesFacades(releve).map((o) => {
+              const f = facadeRetenue(releve, o)
+              const rue = f.murs.some((m) => m.rue)
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => choisirOrientation(orientationChoisie === o ? null : o)}
+                  className={cn(
+                    'min-h-11 rounded-full border px-3 text-sm transition-colors',
+                    orientationChoisie === o
+                      ? 'border-primary bg-primary/10 font-medium text-primary'
+                      : 'border-border bg-card hover:bg-accent',
+                  )}
+                >
+                  {o}
+                  {rue && <span className="opacity-70"> (rue)</span>} · {f.surface > 0 ? formatM2(f.surface) : 'mitoyenne'}
+                </button>
+              )
+            })}
+          </div>
+
+          {facadeMesuree && orientationChoisie ? (
+            <>
+              <CroquisFacade murs={facadeMesuree.murs} orientation={orientationChoisie} />
+              <div className="grid grid-cols-2 gap-2">
+                <Chiffre
+                  titre={`Façade ${orientationChoisie}${facadeMesuree.murs.some((m) => m.rue) ? ', côté rue' : ''}`}
+                  valeur={formatM2(surfaceFacadeReleve ?? 0)}
+                  fort
+                />
+                <Chiffre titre="Longueur à traiter" valeur={formatM(facadeMesuree.longueur)} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Hauteur <strong className="text-foreground">mesurée</strong> tous les 50 cm le long du
+                mur, dans les points LiDAR de l’IGN&nbsp;: de{' '}
+                {formatHauteur(Math.min(...facadeMesuree.murs.map((m) => m.hauteurBasse)))} à{' '}
+                {formatHauteur(Math.max(...facadeMesuree.murs.map((m) => m.hauteurHaute)))}
+                {facadeMesuree.murs.some((m) => m.type === 'pignon') ? ', pignon compris.' : '.'}
+                {facadeMesuree.accole > 0.4 &&
+                  ` ${formatM(facadeMesuree.accole)} de mur touchent un autre bâtiment : hachurés, hors surface.`}
+              </p>
+              <CompteurOuvertures n={nbOuvertures} surface={ouvertures} onChanger={setNbOuvertures} />
+              <Provenance lignes={provenanceFacade(releve, facadeMesuree.murs)} />
+              <Garder
+                enCours={enCours}
+                defaut={`Façade ${orientationChoisie}`}
+                desactive={!facadeMesuree.surface}
+                onGarder={(nom) =>
+                  onEnregistrer({
+                    nom,
+                    type: 'facade',
+                    geometrie: facadeMesuree.murs.flatMap((m) => [m.a, m.b]),
+                    hauteur_m: facadeMesuree.hauteur,
+                    ouvertures_m2: ouvertures > 0 ? ouvertures : null,
+                    azimut: facadeMesuree.murs[0]?.azimut ?? null,
+                    hauteur_source: 'lidar',
+                    releve_id: releveId,
+                    facade_orientation: orientationChoisie,
+                  })
+                }
+              />
+            </>
+          ) : (
+            <p className="text-center text-sm text-muted-foreground">
+              Choisissez la façade à chiffrer. Chaque côté du bâtiment en est une.
+            </p>
+          )}
         </>
       ) : onglet === 'facades' ? (
         <>
@@ -894,6 +1144,30 @@ function FicheMaison({
         {fiche.dpe?.approche && ' Le DPE est celui du logement le plus proche, à vérifier.'}
       </p>
     </>
+  )
+}
+
+/** Les ouvertures d'une façade, comptées d'un doigt : chacune vaut une fenêtre standard. */
+function CompteurOuvertures({ n, surface, onChanger }: { n: number; surface: number; onChanger: (n: number) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-xs text-muted-foreground">Ouvertures à déduire ({formatM2(surface)})</span>
+      <div className="flex items-center gap-1">
+        <Button
+          size="icon"
+          variant="outline"
+          className="size-10 shrink-0"
+          aria-label="Une ouverture de moins"
+          onClick={() => onChanger(Math.max(0, n - 1))}
+        >
+          −
+        </Button>
+        <span className="montant w-8 text-center text-base font-medium">{n}</span>
+        <Button size="icon" variant="outline" className="size-10 shrink-0" aria-label="Une ouverture de plus" onClick={() => onChanger(n + 1)}>
+          +
+        </Button>
+      </div>
+    </div>
   )
 }
 

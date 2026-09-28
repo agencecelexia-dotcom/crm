@@ -10,6 +10,8 @@
 
 import type { ResultatToit } from './_calcul-toit.ts'
 import { aire, empriseAvecDebord, facades, longueur, surfaceReelle, type Point } from './_geometrie.ts'
+import type { Releve } from './_releve.ts'
+import { facadeRetenue, orientationsDesFacades, toitRetenu } from './_releve-retenu.ts'
 import { lectureParPans, mesureFacade, penteMesureeDe, type Toiture } from './_toiture.ts'
 
 /** Le débord que l'écran applique par défaut (panneau-batiment.tsx). */
@@ -20,6 +22,8 @@ export interface QuantiteMesuree {
   unite: 'm2' | 'ml' | 'm' | 'pct' | 'u'
   valeur: number
   source: 'lidar' | 'photogrammetrie' | 'parcelle'
+  /** L'incertitude, dans l'unité de la valeur, quand on la connaît. */
+  precision?: number | null
   detail?: Record<string, unknown>
 }
 
@@ -63,6 +67,57 @@ export function quantitesDeLaMaison(contour: Point[], r: ResultatToit): Quantite
   }
   if (r.hauteur_gouttiere != null) {
     sortie.push({ cle: 'hauteur_murs', unite: 'm', valeur: r.hauteur_gouttiere, source })
+  }
+  return sortie
+}
+
+/**
+ * Les mêmes quantités, lues dans le RELEVÉ LiDAR : le toit comme somme des
+ * pans (débord mesuré), les façades hors mitoyen, la hauteur à la gouttière.
+ * Ce sont les chiffres que l'écran affiche quand le relevé existe.
+ */
+export function quantitesDuReleve(r: Releve): QuantiteMesuree[] {
+  const toit = toitRetenu(r, null)
+  // ±5 cm sur tout le bord du toit : la seule incertitude qui compte (affichage-releve.ts).
+  const facteur = r.surfaces.toitPlan > 0 ? r.surfaces.toitVrai / r.surfaces.toitPlan : 1
+  const precision = Math.round(longueur(r.toit, true) * 0.05 * facteur * 10) / 10
+  const detail = {
+    methode: 'releve_lidar',
+    version: r.version,
+    vol: r.vol,
+    confiance: r.confiance,
+    recalage_m: Math.round(Math.hypot(r.recalage.dx, r.recalage.dy) * 100) / 100,
+  }
+  const sortie: QuantiteMesuree[] = [
+    {
+      cle: 'toit_surface',
+      unite: 'm2',
+      valeur: toit.vrai,
+      source: 'lidar',
+      precision,
+      detail: { ...detail, pans: r.pans.length, debord_min_m: r.debord.min, debord_max_m: r.debord.max, plan_m2: toit.plan },
+    },
+    { cle: 'toit_pente', unite: 'pct', valeur: toit.pente, source: 'lidar', detail },
+    { cle: 'toit_pans', unite: 'u', valeur: r.pans.length, source: 'lidar', detail },
+  ]
+  const orientations = orientationsDesFacades(r)
+  if (orientations.length) {
+    const total = orientations.reduce((s, o) => s + facadeRetenue(r, o).surface, 0)
+    sortie.push({
+      cle: 'facades_total',
+      unite: 'm2',
+      valeur: Math.round(total * 100) / 100,
+      source: 'lidar',
+      detail: {
+        ...detail,
+        ouvertures: 'non déduites',
+        mitoyen_m: Math.round(r.facades.reduce((s, f) => s + f.accole, 0) * 10) / 10,
+        cote_rue: r.facades.filter((f) => f.rue).map((f) => f.orientation),
+      },
+    })
+  }
+  if (r.hauteurs.gouttiere != null) {
+    sortie.push({ cle: 'hauteur_murs', unite: 'm', valeur: r.hauteurs.gouttiere, source: 'lidar', detail })
   }
   return sortie
 }

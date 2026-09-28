@@ -42,6 +42,7 @@ import { situerChantier } from './position'
 import { BandeauMaison } from './bandeau-maison'
 import { vueDuChantier } from './vue-par-metier'
 import { PanneauCloture } from './panneau-cloture'
+import { releveUtilisable, useReleve } from './use-releve'
 import { parcelleSous, troncons } from './parcelle'
 import {
   maisonDeLAdresse,
@@ -189,6 +190,12 @@ export function FeuilleMetre({
     [batiments, cible],
   )
   const choisi = choix === 'aucun' ? null : (choix ?? preselection)
+  // Le relevé LiDAR de la maison choisie, pour la carte : même requête que le
+  // panneau (le cache la partage), et les pans que l'artisan y écarte.
+  const { data: repReleve } = useReleve(token, choisi?.cleabs ?? null, choisi?.centre ?? null)
+  const releveCarte = releveUtilisable(repReleve?.releve) ? repReleve!.releve! : null
+  const [ecartes, setEcartes] = useState<{ cleabs: string; pans: Set<number> } | null>(null)
+
   // Les autres bâtiments chargés : ils disent quels murs de la maison sont accolés.
   const voisins = useMemo(
     () => batiments.filter((b) => b.id !== choisi?.id).map((b) => b.contour),
@@ -365,6 +372,7 @@ export function FeuilleMetre({
       enCours={enregistrer.isPending}
       onEnregistrer={garder}
       onMurChoisi={setMurChoisi}
+      onPansEcartes={(e) => choisi?.cleabs && setEcartes({ cleabs: choisi.cleabs, pans: e })}
       voisins={voisins}
       vue={vue}
       titre={titre}
@@ -406,6 +414,8 @@ export function FeuilleMetre({
             parcelle={terrain ? (parcelle ?? null) : null}
             cotesChoisis={cotesChoisis}
             onBasculerCote={basculerCote}
+            releve={releveCarte}
+            pansEcartes={ecartes?.cleabs === choisi?.cleabs ? ecartes?.pans : undefined}
           />
 
           {enRecherche && (
@@ -433,8 +443,8 @@ export function FeuilleMetre({
               size="icon"
               variant="secondary"
               className="size-9 shadow-card"
-              aria-label={fond === 'ortho' ? 'Passer au plan' : 'Passer à la photo'}
-              onClick={() => setFond((f) => (f === 'ortho' ? 'plan' : 'ortho'))}
+              aria-label={fond === 'plan' ? 'Passer à la photo' : 'Passer au plan'}
+              onClick={() => setFond((f) => (f === 'plan' ? 'ortho' : 'plan'))}
             >
               <Layers className="size-4" />
             </Button>
@@ -446,6 +456,17 @@ export function FeuilleMetre({
               onClick={() => setCadastre((c) => !c)}
             >
               <span className="text-[10px] font-bold">CAD</span>
+            </Button>
+            {/* Le relief LiDAR : les toits vus à la verticale, sans le penché
+                de la photo — c'est sur lui que le relevé se vérifie. */}
+            <Button
+              size="icon"
+              variant={fond === 'relief' ? 'default' : 'secondary'}
+              className="size-9 shadow-card"
+              aria-label="Relief des toits (LiDAR)"
+              onClick={() => setFond((f) => (f === 'relief' ? 'ortho' : 'relief'))}
+            >
+              <span className="text-[9px] font-bold">3D</span>
             </Button>
           </div>
 

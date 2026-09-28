@@ -27,6 +27,17 @@ describe('texteMetre', () => {
     expect(t).not.toContain('Toit')
     expect(t).toContain('Au sol : 80 m²')
   })
+  it('dit le relevé LiDAR, son débord mesuré, son vol et le côté rue', () => {
+    const t = texteMetre({
+      ...base,
+      toit: { ...base.toit!, source: 'releve', pans: '4 pans à 35 %', debord: '34 à 72 cm selon les côtés', vol: 'septembre 2021' },
+      facades: [{ orientation: 'nord-est', surface: 71.6, hauteur: 5.9, rue: true }],
+    })
+    expect(t).toContain(
+      'Toit : 102 m² — 4 pans à 35 %, débord 34 à 72 cm selon les côtés — mesuré dans les points LiDAR de l’IGN, pan par pan (vol de septembre 2021)',
+    )
+    expect(t).toContain('Façade nord-est (côté rue) : 72 m²')
+  })
   it('sans adresse (contrat non signé), ne l’écrit pas', () => {
     expect(texteMetre({ ...base, adresse: null })).not.toContain('Sathonay')
   })
