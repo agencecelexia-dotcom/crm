@@ -4,19 +4,19 @@
     {
       "nom": "accolee",
       "tout": {
-        "plan": 159.6,
+        "plan": 159.5,
         "vrai": 196.1,
-        "pente": 71.4
+        "pente": 71.5
       },
       "pan1": {
-        "plan": 81.9,
-        "vrai": 100.4,
-        "pente": 70.9
+        "plan": 81.7,
+        "vrai": 100.2,
+        "pente": 71
       },
       "facades": [
         {
           "orientation": "nord-est",
-          "surface": 62.4,
+          "surface": 62.3,
           "longueur": 10.1
         },
         {
@@ -39,19 +39,19 @@
     {
       "nom": "croupe",
       "tout": {
-        "plan": 195,
-        "vrai": 204.8,
-        "pente": 32.1
+        "plan": 195.1,
+        "vrai": 204.6,
+        "pente": 31.6
       },
       "pan1": {
-        "plan": 44.1,
-        "vrai": 46.3,
-        "pente": 32
+        "plan": 51.5,
+        "vrai": 54.1,
+        "pente": 32.2
       },
       "facades": [
         {
           "orientation": "est",
-          "surface": 43.1,
+          "surface": 42.4,
           "longueur": 15.28
         },
         {
@@ -125,13 +125,13 @@
       "nom": "deux-pans-simple",
       "tout": {
         "plan": 102.2,
-        "vrai": 108.3,
-        "pente": 35.1
+        "vrai": 108.2,
+        "pente": 34.8
       },
       "pan1": {
-        "plan": 36.6,
-        "vrai": 38.8,
-        "pente": 35.2
+        "plan": 37.5,
+        "vrai": 39.8,
+        "pente": 35.6
       },
       "facades": [
         {
@@ -146,7 +146,7 @@
         },
         {
           "orientation": "sud-est",
-          "surface": 39.3,
+          "surface": 39.4,
           "longueur": 6.51
         },
         {
@@ -159,13 +159,13 @@
     {
       "nom": "dissymetrique",
       "tout": {
-        "plan": 164.6,
-        "vrai": 190.7,
+        "plan": 164.5,
+        "vrai": 190.6,
         "pente": 58.5
       },
       "pan1": {
-        "plan": 67.3,
-        "vrai": 78.1,
+        "plan": 67.2,
+        "vrai": 78,
         "pente": 58.9
       },
       "facades": [
@@ -188,6 +188,41 @@
           "orientation": "sud",
           "surface": 14,
           "longueur": 4.63
+        }
+      ]
+    },
+    {
+      "nom": "terrasse",
+      "tout": {
+        "plan": 152.3,
+        "vrai": 175.1,
+        "pente": 56.7
+      },
+      "pan1": {
+        "plan": 48.8,
+        "vrai": 57.1,
+        "pente": 60.8
+      },
+      "facades": [
+        {
+          "orientation": "est",
+          "surface": 79.6,
+          "longueur": 10.62
+        },
+        {
+          "orientation": "nord",
+          "surface": 98.1,
+          "longueur": 13.91
+        },
+        {
+          "orientation": "ouest",
+          "surface": 68.7,
+          "longueur": 10.73
+        },
+        {
+          "orientation": "sud",
+          "surface": 49.5,
+          "longueur": 13.21
         }
       ]
     }

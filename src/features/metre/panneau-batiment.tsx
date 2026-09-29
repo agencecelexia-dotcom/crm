@@ -27,6 +27,7 @@ import { ToitReleve } from './toit-releve'
 import {
   debordCourt,
   debordLisible,
+  ecartesParDefaut,
   facadeDuReleve,
   moisDuVol,
   provenanceFacade,
@@ -238,7 +239,10 @@ export function PanneauBatiment({
   const maisonAbsente = repReleve?.statut === 'fait' && repReleve.releve?.motif === 'maison_absente'
   const vol = moisDuVol(repReleve?.releve?.vol ?? null)
   // Un couvreur ne refait pas toujours tout le toit : il écarte des pans.
-  const [ecartes, setEcartes] = useState<Set<number>>(() => new Set())
+  // D'office, les terrasses sont écartées ; le premier appui de l'artisan
+  // devient son choix.
+  const [choixPans, setChoixPans] = useState<Set<number> | null>(null)
+  const ecartes = choixPans ?? ecartesParDefaut(releve)
   const pansRetenus = releve && ecartes.size ? releve.pans.filter((p) => !ecartes.has(p.id)).map((p) => p.id) : null
   const toitMesure = releve ? toitRetenu(releve, pansRetenus) : null
   const resumeRetenu = releve ? resumePansReleve(releve.pans.filter((p) => !ecartes.has(p.id))) : null
@@ -249,7 +253,7 @@ export function PanneauBatiment({
     else s.add(id)
     // Au moins un pan : un toit vide ne s'enregistre pas.
     if (s.size >= releve.pans.length) return
-    setEcartes(s)
+    setChoixPans(s)
     onPansEcartes?.(s)
   }
   // La façade du relevé en cours de chiffrage : ses murs, par orientation.

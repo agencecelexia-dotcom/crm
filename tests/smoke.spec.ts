@@ -19,8 +19,9 @@ test('les routes protégées redirigent vers /login sans session', async ({ page
 })
 
 test('les pages publiques (token invalide) ne plantent pas', async ({ page }) => {
+  // Les anciens liens par chantier renvoient vers l'espace artisan unique.
   await page.goto('/mission/token-invalide-xxxx')
-  await expect(page.getByText('Lien introuvable')).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText('Ce lien a été remplacé')).toBeVisible({ timeout: 15000 })
 
   await page.goto('/signer/token-invalide-xxxx')
   await expect(page.getByText('Contrat introuvable')).toBeVisible({ timeout: 15000 })

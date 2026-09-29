@@ -19,7 +19,7 @@ import type { Nuage, Zone } from './_copc.ts'
 import { depuisLambert93, versLambert93 } from './_calcul-toit.ts'
 import { murs as mursDe, type Point } from './_geometrie.ts'
 import { Grille2D, solLocal } from './_nuage.ts'
-import { lirePans } from './_pans.ts'
+import { lirePans, type TypeLigne } from './_pans.ts'
 import {
   aireL93,
   decaler,
@@ -40,8 +40,10 @@ import {
  * À changer quand un calcul change : les relevés plus anciens seront refaits.
  * 2 : tronçons mitoyens et côté rue de chaque façade.
  * 3 : un côté illisible ne rabaisse la confiance que s'il pèse.
+ * 4 : les lignes du toit (faîtage, arêtiers, noues, égouts, rives) ; ce
+ *     qui n'est pas toit (terrasse) sort du compte.
  */
-export const VERSION_RELEVE = 3
+export const VERSION_RELEVE = 4
 
 /**
  * Du dessus du toit au dessous de la couverture, au droit du mur : tuiles,
@@ -65,6 +67,24 @@ export interface PanReleve {
   ecart: number
   partReconstituee: number
   contour: Point[]
+  /**
+   * Une partie plate nettement plus basse que les égouts du toit : une
+   * terrasse, un toit de garage. Elle n'est pas comptée par défaut.
+   */
+  terrasse: boolean
+}
+
+export type { TypeLigne } from './_pans.ts'
+
+/** Une ligne du toit : ce que le couvreur chiffre au mètre. */
+export interface LigneReleve {
+  type: TypeLigne
+  /** Longueur vraie, pente comprise (m). */
+  longueur: number
+  a: Point
+  b: Point
+  /** Les pans qu'elle borde : écarter tous ses pans l'écarte. */
+  pans: number[]
 }
 
 export interface BordReleve extends Bord {
@@ -121,6 +141,7 @@ export interface Releve {
   bords: BordReleve[]
   debord: { moyen: number | null; min: number | null; max: number | null; estime: boolean }
   pans: PanReleve[]
+  lignes: LigneReleve[]
   surfaces: { emprise: number; toitPlan: number; toitVrai: number; sansPoints: number }
   facades: FacadeReleve[]
   hauteurs: { faitage: number | null; gouttiere: number | null }
@@ -172,7 +193,12 @@ export function releverBatiment(e: EntreeReleve): Releve {
   const toit = decaler(Pr, bords.map((b) => b.debord ?? debordDefaut))
 
   // 3. Les pans.
-  const lecture = lirePans(nu, h, toit)
+  const lecture = lirePans(
+    nu,
+    h,
+    toit,
+    bords.map((b) => b.etat === 'accole'),
+  )
   let pointsToit = 0
   for (const p of lecture.pans) pointsToit += p.points
   const densite = lecture.airePlan ? pointsToit / lecture.airePlan : 0
@@ -180,6 +206,22 @@ export function releverBatiment(e: EntreeReleve): Releve {
   // 4. Les façades.
   const routes = (e.routes ?? []).map((l) => l.map(([lon, lat]) => versLambert93(lon, lat)))
   const facades = facadesDe(Pr, Vr, lecture.pans, toit[0], sol, routes)
+
+  // LES TERRASSES. Une partie plate plus basse d'un mètre que l'égout le plus
+  // bas des pans en pente n'est pas la toiture qu'on couvre : c'est une
+  // terrasse, un toit de garage. Elle reste visible, mais hors du compte.
+  const hauteurEn = (p: { a: number; b: number; c: number }, [x, y]: Pt) =>
+    p.a * (x - toit[0][0]) + p.b * (y - toit[0][1]) + p.c - sol(x, y)
+  const penches = lecture.pans.filter((p) => p.orientation !== 'plat')
+  const egoutBas = penches.length
+    ? Math.min(...penches.map((p) => Math.min(...p.contour.map((q) => hauteurEn(p, q)))))
+    : null
+  const estTerrasse = (p: (typeof lecture.pans)[number]) => {
+    if (p.orientation !== 'plat' || egoutBas === null) return false
+    const cx = p.contour.reduce((s, q) => s + q[0], 0) / p.contour.length
+    const cy = p.contour.reduce((s, q) => s + q[1], 0) / p.contour.length
+    return hauteurEn(p, [cx, cy]) < egoutBas - 1
+  }
 
   const raisons: string[] = []
   const absente = recalage.motif === 'maison_absente' || !lecture.pans.length
@@ -207,7 +249,10 @@ export function releverBatiment(e: EntreeReleve): Releve {
     points: { total: nu.nb, toit: pointsToit, densite: r1(densite) },
     recalage,
     murs: Pr.map(enDegres),
-    toit: toit.map(enDegres),
+    // Le bord du toit : le contour décalé du débord, sauf quand une part du
+    // contour du cadastre n'est pas du toit (terrasse, cour) — alors le tour
+    // des pans relevés.
+    toit: (lecture.aireHorsToit > 2 && lecture.contourToit.length >= 3 ? lecture.contourToit : toit).map(enDegres),
     bords: bords.map((b) => ({ ...b, a: enDegres(Pr[b.arete]), b: enDegres(Pr[(b.arete + 1) % Pr.length]) })),
     debord: {
       moyen: lus.length ? r2(lus.reduce((s, v) => s + v, 0) / lus.length) : null,
@@ -215,6 +260,13 @@ export function releverBatiment(e: EntreeReleve): Releve {
       max: lus.length ? lus[lus.length - 1] : null,
       estime,
     },
+    lignes: lecture.lignes.map((l) => ({
+      type: l.type,
+      longueur: Math.round(l.longueur * 100) / 100,
+      a: enDegres(l.a),
+      b: enDegres(l.b),
+      pans: l.pans,
+    })),
     pans: lecture.pans.map((p) => ({
       id: p.id,
       pente: p.pente,
@@ -225,6 +277,7 @@ export function releverBatiment(e: EntreeReleve): Releve {
       points: p.points,
       ecart: p.ecart,
       partReconstituee: p.partReconstituee,
+      terrasse: estTerrasse(p),
       contour: p.contour.map(enDegres),
     })),
     surfaces: {
