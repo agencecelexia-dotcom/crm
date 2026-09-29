@@ -24,6 +24,7 @@ import { CroquisFacade } from './croquis-facade'
 import { FicheMesures, type CarteMesure } from './fiche-mesures'
 import { Provenance } from './provenance'
 import { ToitReleve } from './toit-releve'
+import { PhotosFacade } from './photo-facade'
 import {
   debordCourt,
   debordLisible,
@@ -166,6 +167,9 @@ export function PanneauBatiment({
   const [mur, setMur] = useState<Facade | null>(null)
   const [hauteurSaisie, setHauteurSaisie] = useState('')
   const [nbOuvertures, setNbOuvertures] = useState(0)
+  // Les ouvertures lues sur la photo de la façade, déduites d'un appui de
+  // l'artisan ; elles remplacent le comptage à la main.
+  const [ouverturesPhoto, setOuverturesPhoto] = useState<number | null>(null)
 
   // LA HAUTEUR D'UN MUR, PAR ORDRE DE CONFIANCE
   //
@@ -176,7 +180,7 @@ export function PanneauBatiment({
   //    s'écarte de 3,6 à 4,8 m sur un tiers d'entre elles — l'écran le dit.
   const tapee = hauteurSaisie.trim() ? parseFloat(hauteurSaisie.replace(',', '.')) : null
   const hauteurTapee = tapee != null && Number.isFinite(tapee) && tapee > 0 ? tapee : null
-  const ouvertures = nbOuvertures * OUVERTURE_TYPE
+  const ouvertures = ouverturesPhoto ?? nbOuvertures * OUVERTURE_TYPE
   const mesureMur = mur ? mesureFacade(mur, toitureIgn) : null
   // Un pignon monte plus haut que la gouttière : avec une hauteur unique, le
   // triangle sous la charpente s'ajoute à « longueur × hauteur ». Le profil
@@ -262,6 +266,7 @@ export function PanneauBatiment({
   const surfaceFacadeReleve = facadeMesuree ? Math.max(0, facadeMesuree.surface - ouvertures) : null
   function choisirOrientation(o: string | null) {
     setOrientationChoisie(o)
+    setOuverturesPhoto(null)
     onMurChoisi(o && releve ? facadeDuReleve(o, facadeRetenue(releve, o).murs) : null)
   }
   const totalFacadesReleve = releve
@@ -830,7 +835,30 @@ export function PanneauBatiment({
                 {facadeMesuree.accole > 0.4 &&
                   ` ${formatM(facadeMesuree.accole)} de mur touchent un autre bâtiment : hachurés, hors surface.`}
               </p>
-              <CompteurOuvertures n={nbOuvertures} surface={ouvertures} onChanger={setNbOuvertures} />
+              {batiment.cleabs && (
+                <PhotosFacade
+                  token={token}
+                  cleabs={batiment.cleabs}
+                  orientation={orientationChoisie}
+                  hauteurReleve={
+                    [...facadeMesuree.murs].sort((a, b) => b.surfaceLibre - a.surfaceLibre)[0]?.hauteurBasse ?? null
+                  }
+                  onDeduire={setOuverturesPhoto}
+                />
+              )}
+              {ouverturesPhoto != null ? (
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="text-muted-foreground">
+                    Ouvertures déduites d’après la photo&nbsp;:{' '}
+                    <strong className="text-foreground">{formatM2(ouverturesPhoto)}</strong>
+                  </span>
+                  <button type="button" className="underline" onClick={() => setOuverturesPhoto(null)}>
+                    compter à la main
+                  </button>
+                </div>
+              ) : (
+                <CompteurOuvertures n={nbOuvertures} surface={ouvertures} onChanger={setNbOuvertures} />
+              )}
               <Provenance lignes={provenanceFacade(releve, facadeMesuree.murs)} />
               <Garder
                 enCours={enCours}
