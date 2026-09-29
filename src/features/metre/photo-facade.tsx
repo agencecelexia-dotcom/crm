@@ -46,7 +46,8 @@ export function PhotosFacade({
   cleabs: string
   orientation: string
   hauteurReleve: number | null
-  onDeduire: (m2: number) => void
+  /** Déduire les ouvertures du métré en cours ; absent (vue de l'agence), pas de bouton. */
+  onDeduire?: (m2: number) => void
 }) {
   const { data: photos, isLoading } = usePhotosFacade(token, cleabs, true)
   const lireP = useLirePhoto(token, cleabs)
@@ -210,7 +211,7 @@ export function PhotosFacade({
               Hauteur vue sur la photo : {formatM(r.hauteurPhoto)} (relevé LiDAR : {formatM(hauteurReleve)}).
             </p>
           )}
-          {r.surface != null && r.surface > 0 && r.motif !== 'autre_batiment' && (
+          {onDeduire && r.surface != null && r.surface > 0 && r.motif !== 'autre_batiment' && (
             <Button size="sm" variant="outline" className="min-h-9" onClick={() => onDeduire(r.surface!)}>
               Déduire {formatM2(r.surface)} d’ouvertures
             </Button>

@@ -40,6 +40,7 @@ import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { CarteMetresProjet } from '@/features/metre/carte-metres-projet'
 import { DossierMetrage } from '@/features/metre/dossier-metrage'
+import { Maison3DProjet } from '@/features/metre/maison-3d-page'
 import { ProjetPhotos } from '../components/projet-photos'
 import { SuiviCard } from '../components/suivi-card'
 import { NotesInternesCard } from '../components/notes-internes-card'
@@ -291,6 +292,14 @@ export function ProjetDetailPage() {
 
       {/* Photos du chantier (vues par l'artisan après signature) */}
       <ProjetPhotos projet={projet} />
+
+        {/* La maison du client en 3D, avec tous ses métrés : dès l'ouverture
+            de la fiche, sans attendre l'artisan. */}
+        <Maison3DProjet
+          projetId={projet.id}
+          titre={projet.client_nom ?? null}
+          adresse={[projet.client_adresse, projet.client_ville].filter(Boolean).join(', ') || null}
+        />
 
         {/* Le dossier de métrés : ce que dit le client, ce que mesure l'outil,
             ce que l'artisan lira. Il précède le devis, comme au chantier. */}

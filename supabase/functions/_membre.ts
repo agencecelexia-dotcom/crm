@@ -45,3 +45,9 @@ export async function membreActif(jeton: string | null | undefined): Promise<Mem
 /** Le jeton de session porté par l'en-tête Authorization. */
 export const jetonDe = (req: Request) =>
   req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '') ?? null
+
+/**
+ * Ce que l'écran de l'agence envoie à la place d'un jeton d'artisan : la
+ * fonction vérifie alors la SESSION (`membreActif`), jamais ce mot.
+ */
+export const JETON_AGENCE = 'agence'
