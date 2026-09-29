@@ -44,6 +44,8 @@ export const QUANTITES: Record<string, Quantite> = Object.fromEntries(
     q('egouts', 'Longueur de gouttières', 'ml', 'Combien de mètres de gouttières ?', 'toit'),
     q('faitage', 'Longueur de faîtage', 'ml', 'Quelle longueur fait le faîtage, le haut du toit ?', 'toit'),
     q('rives', 'Longueur de rives', 'ml', 'Et les rives, sur les côtés du toit ?', 'toit'),
+    q('aretiers', 'Longueur d’arêtiers', 'ml', 'Le toit a-t-il des croupes, des pans en pointe sur les côtés ?', 'toit'),
+    q('noues', 'Longueur de noues', 'ml', 'Le toit a-t-il des angles rentrants, où deux pans se rejoignent en creux ?', 'toit'),
     q('fenetres_toit', 'Fenêtres de toit', 'u', 'Combien de fenêtres de toit (Velux) ?', 'photo'),
     q('cheminees', 'Cheminées', 'u', 'Combien de cheminées sur le toit ?', 'photo'),
     // Murs

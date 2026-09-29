@@ -50,12 +50,38 @@ export interface PanToit {
   contour: Pt[]
 }
 
+/**
+ * Les lignes d'un toit, ce que le couvreur chiffre au mètre :
+ * - `faitage` : arête saillante horizontale (et le haut d'un toit à un pan) ;
+ * - `aretier` : arête saillante en pente (la croupe) ;
+ * - `noue` : arête rentrante (la gouttière entre deux pans) ;
+ * - `egout` : bord bas du toit, où pend la gouttière ;
+ * - `rive` : bord en pente, sur un pignon.
+ */
+export type TypeLigne = 'faitage' | 'aretier' | 'noue' | 'egout' | 'rive'
+
+export interface LigneToit {
+  type: TypeLigne
+  /** Longueur vraie, pente comprise (m). */
+  longueur: number
+  /** Extrémités en plan (Lambert-93). */
+  a: Pt
+  b: Pt
+  /** Les pans qu'elle borde (leurs numéros). */
+  pans: number[]
+}
+
 export interface LecturePans {
   pans: PanToit[]
+  lignes: LigneToit[]
   /** Points de toit qui ne tiennent à aucun pan : cheminées, antennes, bords. */
   pointsDivers: number
   /** Surface du contour du toit sans aucun point de toit (m²). */
   aireSansPoints: number
+  /** Surface du contour qui n'est pas du toit : terrasse, cour, toit plus bas (m²). */
+  aireHorsToit: number
+  /** Le contour de ce qui est vraiment toit (l'union des pans), en Lambert-93. */
+  contourToit: Pt[]
   /** Surfaces totales (m²). */
   airePlan: number
   aireVraie: number
@@ -129,7 +155,7 @@ const PAS = 0.25
 /**
  * Les pans du toit dont `toit` est le contour (débord compris, en Lambert-93).
  */
-export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[]): LecturePans {
+export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boolean[] = []): LecturePans {
   const [x0, y0] = toit[0]
   // Les points de toit dans le contour, à 15 cm près (le bord lui-même).
   const ids: number[] = []
@@ -220,16 +246,18 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[]): LecturePans {
   })
 
   // 5. Le contour du toit en cases, chacune à un pan.
-  const decoupe = decouper(toit, x0, y0, regions.map((r) => r.plan), etiquette, X, Y, nu, h)
+  const decoupe = decouper(toit, x0, y0, regions.map((r) => r.plan), etiquette, X, Y, Z, nu, h, mitoyens)
   const aireTotale = aireL93(toit)
   const pans: PanToit[] = []
+  // La région de chaque pan : les lignes y sont rattachées avant la numérotation.
+  const regionDe = new Map<PanToit, number>()
   regions.forEach((r, i) => {
     const cases = decoupe.parPan[i]
     const airePlan = decoupe.total ? (aireTotale * cases) / decoupe.total : 0
     if (airePlan < AIRE_PAN_MIN || r.ids.length < POINTS_MIN) return
     const { a, b, c, ecart } = r.plan
     const pente = Math.hypot(a, b)
-    pans.push({
+    const pan: PanToit = {
       id: 0,
       a,
       b,
@@ -243,14 +271,19 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[]): LecturePans {
       aireVraie: airePlan * Math.sqrt(1 + a * a + b * b),
       partReconstituee: cases ? decoupe.reconstituees[i] / cases : 0,
       contour: decoupe.contours[i].map(([x, y]) => [x + x0, y + y0] as Pt),
-    })
+    }
+    regionDe.set(pan, i)
+    pans.push(pan)
   })
   pans.sort((p, q) => q.aireVraie - p.aireVraie)
   pans.forEach((p, i) => (p.id = i + 1))
   // Les cases des pans écartés (trop petits) restent comptées : on répartit
   // leur surface au prorata, pour que la somme des pans égale le contour.
+  // Ce qui n'est pas toit (terrasse, cour) sort du compte ; le reste du
+  // contour est réparti entre les pans gardés.
+  const aireToit = decoupe.total ? (aireTotale * (decoupe.total - decoupe.horsToit)) / decoupe.total : 0
   const sommePlan = pans.reduce((s, p) => s + p.airePlan, 0)
-  const k = sommePlan ? aireTotale / sommePlan : 1
+  const k = sommePlan ? aireToit / sommePlan : 1
   for (const p of pans) {
     p.airePlan = Math.round(p.airePlan * k * 10) / 10
     p.aireVraie = Math.round(p.aireVraie * k * 10) / 10
@@ -258,11 +291,26 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[]): LecturePans {
   }
   let libres = 0
   for (let q = 0; q < m; q++) if (etiquette[q] < 0) libres++
+  // Les lignes, rattachées aux pans gardés ; une ligne qui ne borde plus
+  // aucun pan (trop petit, écarté) disparaît.
+  const idDe = new Map(pans.map((p) => [regionDe.get(p)!, p.id]))
+  const lignes: LigneToit[] = decoupe.lignes
+    .map((l) => ({
+      type: l.type,
+      longueur: Math.round(l.longueur * 100) / 100,
+      a: [l.a[0] + x0, l.a[1] + y0] as Pt,
+      b: [l.b[0] + x0, l.b[1] + y0] as Pt,
+      pans: l.regions.map((r) => idDe.get(r)).filter((v): v is number => v !== undefined),
+    }))
+    .filter((l) => l.pans.length > 0)
   return {
     pans,
+    lignes,
     pointsDivers: libres,
     aireSansPoints: Math.round(decoupe.sansPoints * PAS * PAS * 10) / 10,
-    airePlan: Math.round(aireTotale * 10) / 10,
+    aireHorsToit: Math.round((aireTotale - aireToit) * 10) / 10,
+    contourToit: decoupe.contourToit.map(([x, y]) => [x + x0, y + y0] as Pt),
+    airePlan: Math.round(pans.reduce((s, p) => s + p.airePlan, 0) * 10) / 10,
     aireVraie: Math.round(pans.reduce((s, p) => s + p.aireVraie, 0) * 10) / 10,
   }
 }
@@ -339,9 +387,20 @@ function decouper(
   etiquette: Int32Array,
   X: Float64Array,
   Y: Float64Array,
+  Z: Float64Array,
   nu: Nuage,
   h: Float32Array,
-): { total: number; parPan: number[]; reconstituees: number[]; sansPoints: number; contours: Pt[][] } {
+  mitoyens: boolean[],
+): {
+  total: number
+  parPan: number[]
+  reconstituees: number[]
+  sansPoints: number
+  horsToit: number
+  contours: Pt[][]
+  contourToit: Pt[]
+  lignes: LigneBrute[]
+} {
   const nbPans = plans.length
   const loc = toit.map(([x, y]) => [x - x0, y - y0] as Pt)
   const minX = Math.min(...loc.map((p) => p[0])), minY = Math.min(...loc.map((p) => p[1]))
@@ -364,6 +423,19 @@ function decouper(
     v.set(etiquette[k], (v.get(etiquette[k]) ?? 0) + 1)
     votes.set(c, v)
   }
+  // La hauteur moyenne des points de chaque case : elle dit, près d'une
+  // limite, de quel plan la case est vraiment.
+  const zCase = new Float64Array(nx * ny).fill(NaN)
+  {
+    const somme = new Float64Array(nx * ny), nb = new Uint16Array(nx * ny)
+    for (let k = 0; k < Z.length; k++) {
+      const cx = Math.floor((X[k] - minX) / PAS), cy = Math.floor((Y[k] - minY) / PAS)
+      if (cx < 0 || cy < 0 || cx >= nx || cy >= ny) continue
+      somme[cy * nx + cx] += Z[k]
+      nb[cy * nx + cx]++
+    }
+    for (let c = 0; c < zCase.length; c++) if (nb[c]) zCase[c] = somme[c] / nb[c]
+  }
   const pan = new Int32Array(nx * ny).fill(-1)
   const vues = new Uint8Array(nx * ny)
   for (const [c, v] of votes) {
@@ -379,6 +451,41 @@ function decouper(
     const cx = Math.floor((nu.x[i] - x0 - minX) / PAS), cy = Math.floor((nu.y[i] - y0 - minY) / PAS)
     if (cx >= 0 && cy >= 0 && cx < nx && cy < ny) feuillage[cy * nx + cx] = 1
   }
+  // CE QUI N'EST PAS LE TOIT. Le contour du cadastre comprend parfois une
+  // terrasse, un perron, une cour couverte : aucun point de toit n'y tombe,
+  // mais on y voit une surface nettement plus basse. Une case où le point le
+  // plus bas (hors végétation) passe à plus de 80 cm sous le plan d'un pan
+  // n'appartient pas à ce pan : sans cela, la propagation prolongeait le pan
+  // voisin sur la terrasse (Nogent-sur-Marne, 20 m² de trop).
+  const zBas = new Float64Array(nx * ny).fill(Infinity)
+  for (let i = 0; i < nu.nb; i++) {
+    const cl = nu.classe[i]
+    if (cl >= 3 && cl <= 5) continue
+    const cx = Math.floor((nu.x[i] - x0 - minX) / PAS), cy = Math.floor((nu.y[i] - y0 - minY) / PAS)
+    if (cx < 0 || cy < 0 || cx >= nx || cy >= ny) continue
+    const c = cy * nx + cx
+    if (nu.z[i] < zBas[c]) zBas[c] = nu.z[i]
+  }
+  const sousLePlan = (d: number, r: number) => {
+    if (!Number.isFinite(zBas[d])) return false
+    const dx = d % nx, dy = (d - dx) / nx
+    const x = minX + (dx + 0.5) * PAS, y = minY + (dy + 0.5) * PAS
+    return zBas[d] < plans[r].a * x + plans[r].b * y + plans[r].c - 0.8
+  }
+  // Au bord d'un toit, le laser touche aussi le mur sous le débord : ces
+  // points bas ne disent rien tant qu'un point de toit est dans la case
+  // voisine. Seule une case entourée de cases sans toit peut être écartée.
+  const presDuToit = new Uint8Array(nx * ny)
+  for (let c = 0; c < vues.length; c++) {
+    if (!vues[c]) continue
+    const cx = c % nx, cy = (c - cx) / nx
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = cx + dx, y = cy + dy
+        if (x >= 0 && y >= 0 && x < nx && y < ny) presDuToit[y * nx + x] = 1
+      }
+    }
+  }
   // Propagation aux cases sans vote, dans le contour.
   let front: number[] = []
   for (let c = 0; c < pan.length; c++) if (pan[c] >= 0) front.push(c)
@@ -391,13 +498,19 @@ function decouper(
         if (x < 0 || y < 0 || x >= nx || y >= ny) continue
         const d = y * nx + x
         if (pan[d] >= 0 || !dedans[d]) continue
+        if (!presDuToit[d] && sousLePlan(d, pan[c])) continue
         pan[d] = pan[c]
         suivant.push(d)
       }
     }
     front = suivant
   }
-  redresser(pan, dedans, nx, ny, plans, (cx, cy) => [minX + (cx + 0.5) * PAS, minY + (cy + 0.5) * PAS])
+  const centre = (cx: number, cy: number): Pt => [minX + (cx + 0.5) * PAS, minY + (cy + 0.5) * PAS]
+  const sens = redresser(pan, dedans, nx, ny, plans, centre, zCase)
+  const lignes = [
+    ...aretesEntrePans(pan, dedans, nx, ny, plans, sens, centre, loc),
+    ...bordsDuToit(loc, mitoyens, pan, dedans, nx, ny, minX, minY, plans),
+  ]
 
   // Une case est « vue » s'il y a un point de toit à moins de 50 cm : à 15
   // points par m², une case de 25 cm sur trois est vide sans rien cacher.
@@ -413,7 +526,7 @@ function decouper(
     }
   }
   const parPan = new Array(nbPans).fill(0), reconstituees = new Array(nbPans).fill(0)
-  let total = 0, sansPoints = 0
+  let total = 0, sansPoints = 0, horsToit = 0
   for (let c = 0; c < pan.length; c++) {
     if (!dedans[c]) continue
     total++
@@ -424,6 +537,7 @@ function decouper(
       if (pan[c] >= 0 && feuillage[c]) reconstituees[pan[c]]++
     }
     if (pan[c] >= 0) parPan[pan[c]]++
+    else horsToit++
   }
   const contours: Pt[][] = []
   for (let r = 0; r < nbPans; r++) {
@@ -431,7 +545,11 @@ function decouper(
       contourDeCases(pan, dedans, nx, ny, r).map(([cx, cy]) => [minX + cx * PAS, minY + cy * PAS] as Pt),
     )
   }
-  return { total, parPan, reconstituees, sansPoints, contours }
+  // Le contour de ce qui est vraiment toit : l'union des pans.
+  const toutPan = new Int32Array(pan.length).fill(-1)
+  for (let c = 0; c < pan.length; c++) if (dedans[c] && pan[c] >= 0) toutPan[c] = 0
+  const contourToit = contourDeCases(toutPan, dedans, nx, ny, 0).map(([cx, cy]) => [minX + cx * PAS, minY + cy * PAS] as Pt)
+  return { total, parPan, reconstituees, sansPoints, horsToit, contours, contourToit, lignes }
 }
 
 /**
@@ -449,7 +567,8 @@ function redresser(
   ny: number,
   plans: Plan[],
   centre: (cx: number, cy: number) => Pt,
-) {
+  zCase: Float64Array,
+): Map<string, number> {
   const z = (r: number, p: Pt) => plans[r].a * p[0] + plans[r].b * p[1] + plans[r].c
   // Les paires de pans voisins, et l'écart de hauteur le long de leur limite.
   const limites = new Map<string, number[]>()
@@ -465,7 +584,9 @@ function redresser(
         const p = centre(cx, cy)
         const [i, j] = A < B ? [A, B] : [B, A]
         const cle = `${i}-${j}`
-        limites.set(cle, [...(limites.get(cle) ?? []), Math.abs(z(i, p) - z(j, p))])
+        const l = limites.get(cle)
+        if (l) l.push(Math.abs(z(i, p) - z(j, p)))
+        else limites.set(cle, [Math.abs(z(i, p) - z(j, p))])
       }
     }
   }
@@ -484,7 +605,7 @@ function redresser(
     }
     sens.set(cle, s >= 0 ? 1 : -1)
   }
-  if (!sens.size) return
+  if (!sens.size) return sens
   for (let passe = 0; passe < 16; passe++) {
     let change = 0
     const copie = pan.slice()
@@ -503,7 +624,13 @@ function redresser(
             const sn = sens.get(A < B ? `${A}-${B}` : `${B}-${A}`)
             if (!sn) continue
             const d = z(B, p) - z(A, p)
-            if ((sn > 0 && d < -0.005) || (sn < 0 && d > 0.005)) A = B
+            // Les points de la case ont le dernier mot : loin de la vraie
+            // limite (au-delà du point où trois pans se rencontrent), ils
+            // collent à leur plan, et la règle du plus bas ou du plus haut
+            // ne s'applique plus.
+            const zc = zCase[c]
+            const accord = Number.isNaN(zc) || Math.abs(zc - z(B, p)) <= Math.abs(zc - z(A, p)) + 0.04
+            if (accord && ((sn > 0 && d < -0.005) || (sn < 0 && d > 0.005))) A = B
           }
         }
         if (A !== pan[c]) {
@@ -514,6 +641,232 @@ function redresser(
     }
     if (!change) break
   }
+  return sens
+}
+
+/** Une ligne du toit, en coordonnées locales, rattachée aux régions (pas encore aux pans numérotés). */
+interface LigneBrute {
+  type: TypeLigne
+  longueur: number
+  a: Pt
+  b: Pt
+  regions: number[]
+}
+
+/** Sous ce rapport entre la pente le long d'une ligne et celle du pan, la ligne est de niveau. */
+const DE_NIVEAU = 0.35
+
+/**
+ * Faîtages, arêtiers et noues : là où deux pans qui se rejoignent se coupent.
+ * La ligne est l'intersection de leurs plans ; sa longueur, l'étendue de leur
+ * limite commune le long de cette ligne (coupée en morceaux si elle
+ * s'interrompt plus d'un mètre), redressée de sa pente.
+ */
+function aretesEntrePans(
+  pan: Int32Array,
+  dedans: Uint8Array,
+  nx: number,
+  ny: number,
+  plans: Plan[],
+  sens: Map<string, number>,
+  centre: (cx: number, cy: number) => Pt,
+  contour: Pt[],
+): LigneBrute[] {
+  const milieux = new Map<string, Pt[]>()
+  for (let cy = 0; cy < ny; cy++) {
+    for (let cx = 0; cx < nx; cx++) {
+      const c = cy * nx + cx
+      const A = pan[c]
+      if (A < 0 || !dedans[c]) continue
+      for (const [d, ox, oy] of [[c + 1, 1, 0], [c + nx, 0, 1]] as const) {
+        if ((ox === 1 && cx + 1 >= nx) || d >= pan.length || !dedans[d]) continue
+        const B = pan[d]
+        if (B < 0 || B === A) continue
+        const cle = A < B ? `${A}-${B}` : `${B}-${A}`
+        if (!sens.has(cle)) continue
+        const p = centre(cx, cy)
+        const m: Pt = [p[0] + (ox * PAS) / 2, p[1] + (oy * PAS) / 2]
+        const l = milieux.get(cle)
+        if (l) l.push(m)
+        else milieux.set(cle, [m])
+      }
+    }
+  }
+  const sortie: LigneBrute[] = []
+  for (const [cle, pts] of milieux) {
+    const [i, j] = cle.split('-').map(Number)
+    const P = plans[i], Q = plans[j]
+    const da = P.a - Q.a, db = P.b - Q.b, dc = P.c - Q.c
+    const n2 = da * da + db * db
+    if (n2 < 1e-6) continue
+    const nn = Math.sqrt(n2)
+    const u: Pt = [-db / nn, da / nn]
+    const o: Pt = [(-dc * da) / n2, (-dc * db) / n2]
+    const ts = pts
+      .filter((m) => Math.abs((m[0] - o[0]) * da + (m[1] - o[1]) * db) / nn < 0.6)
+      .map((m) => (m[0] - o[0]) * u[0] + (m[1] - o[1]) * u[1])
+      .sort((x, y) => x - y)
+    if (ts.length < 3) continue
+    const pente = P.a * u[0] + P.b * u[1]
+    const penteMax = Math.max(Math.hypot(P.a, P.b), Math.hypot(Q.a, Q.b), 1e-6)
+    // Les points où un troisième pan, voisin des deux, coupe cette ligne.
+    const jonctions: number[] = []
+    for (let r = 0; r < plans.length; r++) {
+      if (r === i || r === j) continue
+      if (!sens.has(r < i ? `${r}-${i}` : `${i}-${r}`) || !sens.has(r < j ? `${r}-${j}` : `${j}-${r}`)) continue
+      const R = plans[r]
+      // P = Q et P = R : deux équations en (x, y).
+      const a1 = da, b1 = db, c1 = -dc
+      const a2 = P.a - R.a, b2 = P.b - R.b, c2 = -(P.c - R.c)
+      const det = a1 * b2 - a2 * b1
+      if (Math.abs(det) < 1e-9) continue
+      const x = (c1 * b2 - c2 * b1) / det, y = (a1 * c2 - a2 * c1) / det
+      jonctions.push((x - o[0]) * u[0] + (y - o[1]) * u[1])
+    }
+    const type: TypeLigne =
+      (sens.get(cle) ?? 0) < 0 ? 'noue' : Math.abs(pente) / penteMax < DE_NIVEAU * 0.5 ? 'faitage' : 'aretier'
+    // Morceaux : une interruption de plus d'un mètre (une lucarne, une cheminée) coupe la ligne.
+    let debut = 0
+    for (let k = 1; k <= ts.length; k++) {
+      if (k < ts.length && ts[k] - ts[k - 1] <= 1) continue
+      // Les bouts : au point où trois pans se rencontrent s'il est tout près,
+      // sinon au bord du toit s'il est à moins de 70 cm, sinon une
+      // demi-case au-delà du dernier point de limite.
+      const bout = (t: number, sensT: number) => {
+        const proches = jonctions.filter((tj) => Math.abs(tj - t) < 0.7)
+        if (proches.length) return proches.reduce((a, b) => (Math.abs(a - t) < Math.abs(b - t) ? a : b))
+        const p: Pt = [o[0] + u[0] * t, o[1] + u[1] * t]
+        const d = croisementContour(p, [u[0] * sensT, u[1] * sensT], contour)
+        return d !== null && d < 0.7 ? t + sensT * d : t + (sensT * PAS) / 2
+      }
+      let t0 = bout(ts[debut], -1)
+      let t1 = bout(ts[k - 1], 1)
+      // Au-delà du point où un troisième pan la coupe, une ligne ne continue
+      // pas : un bout qui le dépasse de moins d'un mètre et demi y est ramené.
+      for (const tj of jonctions) {
+        if (tj > t0 && tj < t1 && tj - t0 < 1.5) t0 = tj
+        if (tj > t0 && tj < t1 && t1 - tj < 1.5) t1 = tj
+      }
+      if (t1 - t0 >= 0.75 && k - debut >= 3) {
+        sortie.push({
+          type,
+          longueur: (t1 - t0) * Math.sqrt(1 + pente * pente),
+          a: [o[0] + u[0] * t0, o[1] + u[1] * t0],
+          b: [o[0] + u[0] * t1, o[1] + u[1] * t1],
+          regions: [i, j],
+        })
+      }
+      debut = k
+    }
+  }
+  return sortie
+}
+
+/** Distance, dans la direction `d`, du point `p` au premier côté du contour croisé ; null s'il n'en croise aucun. */
+function croisementContour(p: Pt, d: Pt, contour: Pt[]): number | null {
+  let min: number | null = null
+  for (let i = 0; i < contour.length; i++) {
+    const a = contour[i], b = contour[(i + 1) % contour.length]
+    const ex = b[0] - a[0], ey = b[1] - a[1]
+    const den = d[0] * ey - d[1] * ex
+    if (Math.abs(den) < 1e-12) continue
+    const wx = a[0] - p[0], wy = a[1] - p[1]
+    const t = (wx * ey - wy * ex) / den
+    const v = (wx * d[1] - wy * d[0]) / den
+    if (t >= 0 && v >= 0 && v <= 1 && (min === null || t < min)) min = t
+  }
+  return min
+}
+
+/**
+ * Égouts et rives : les bords du toit, pan par pan. Le long de chaque côté du
+ * contour, on lit le pan juste à l'intérieur ; un bord de niveau où le pan
+ * descend vers l'extérieur est un égout, un bord de niveau où il monte est le
+ * haut d'un toit à un pan (faîtage), un bord en pente est une rive. Les murs
+ * mitoyens n'ont ni égout ni rive ; un toit plat non plus.
+ */
+function bordsDuToit(
+  loc: Pt[],
+  mitoyens: boolean[],
+  pan: Int32Array,
+  dedans: Uint8Array,
+  nx: number,
+  ny: number,
+  minX: number,
+  minY: number,
+  plans: Plan[],
+): LigneBrute[] {
+  const aire = loc.reduce((s, p, i) => {
+    const q = loc[(i + 1) % loc.length]
+    return s + p[0] * q[1] - q[0] * p[1]
+  }, 0)
+  const signe = aire > 0 ? 1 : -1
+  const panEn = (p: Pt): number => {
+    const cx = Math.floor((p[0] - minX) / PAS), cy = Math.floor((p[1] - minY) / PAS)
+    for (let r = 0; r <= 2; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const x = cx + dx, y = cy + dy
+          if (x < 0 || y < 0 || x >= nx || y >= ny) continue
+          const c = y * nx + x
+          if (dedans[c] && pan[c] >= 0) return pan[c]
+        }
+      }
+    }
+    return -1
+  }
+  const sortie: LigneBrute[] = []
+  for (let i = 0; i < loc.length; i++) {
+    if (mitoyens[i]) continue
+    const a = loc[i], b = loc[(i + 1) % loc.length]
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (L < 0.3) continue
+    const u: Pt = [(b[0] - a[0]) / L, (b[1] - a[1]) / L]
+    const n: Pt = [signe * u[1], -signe * u[0]]
+    const k = Math.max(1, Math.round(L / PAS))
+    const lus: number[] = []
+    for (let j = 0; j < k; j++) {
+      const t = ((j + 0.5) / k) * L
+      lus.push(panEn([a[0] + u[0] * t - n[0] * 0.2, a[1] + u[1] * t - n[1] * 0.2]))
+    }
+    // Près d'un angle, la lecture tombe dans le pan d'à côté (un arêtier finit
+    // dans le coin) : un bout de moins de 80 cm en bout de côté rejoint le
+    // morceau voisin.
+    const bout = Math.max(1, Math.round(0.8 / (L / k)))
+    for (let passe = 0; passe < 2; passe++) {
+      let j0 = 0
+      while (j0 < k && lus[j0] === lus[0]) j0++
+      if (j0 < k && j0 < bout) for (let j = 0; j < j0; j++) lus[j] = lus[j0]
+      let j1 = k - 1
+      while (j1 >= 0 && lus[j1] === lus[k - 1]) j1--
+      if (j1 >= 0 && k - 1 - j1 < bout) for (let j = j1 + 1; j < k; j++) lus[j] = lus[j1]
+    }
+    let debut = 0
+    for (let j = 1; j <= k; j++) {
+      if (j < k && lus[j] === lus[debut]) continue
+      const r = lus[debut]
+      const long = ((j - debut) / k) * L
+      if (r >= 0 && long >= 0.4) {
+        const P = plans[r]
+        const penteMax = Math.hypot(P.a, P.b)
+        if (penteMax >= 0.05) {
+          const le = P.a * u[0] + P.b * u[1]
+          const dehors = P.a * n[0] + P.b * n[1]
+          const type: TypeLigne = Math.abs(le) / penteMax >= DE_NIVEAU ? 'rive' : dehors < 0 ? 'egout' : 'faitage'
+          const t0 = (debut / k) * L, t1 = (j / k) * L
+          sortie.push({
+            type,
+            longueur: long * Math.sqrt(1 + le * le),
+            a: [a[0] + u[0] * t0, a[1] + u[1] * t0],
+            b: [a[0] + u[0] * t1, a[1] + u[1] * t1],
+            regions: [r],
+          })
+        }
+      }
+      debut = j
+    }
+  }
+  return sortie
 }
 
 /**

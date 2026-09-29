@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { depuisLambert93, versLambert93 } from '../../supabase/functions/_calcul-toit'
 import { decoderNuage, encoderNuage } from '../../supabase/functions/_nuage'
 import { releverBatiment, type Releve } from '../../supabase/functions/_releve'
-import { facadeRetenue, orientationsDesFacades, toitRetenu } from '../../supabase/functions/_releve-retenu'
+import { facadeRetenue, lignesRetenues, orientationsDesFacades, pansParDefaut, toitRetenu } from '../../supabase/functions/_releve-retenu'
 import { quantitesDuReleve } from '../../supabase/functions/_mesures-chantier'
 import { contourDe, deuxPans, nuageDe, quatrePans, type Scene } from './aide-nuage'
 
@@ -70,6 +70,14 @@ describe('toit synthétique à deux pans, cadastre décalé', () => {
     expect(r.confiance).toBe('haute')
   })
 
+  it('mesure le faîtage, les égouts et les rives à 2 % près', () => {
+    const { totaux } = lignesRetenues(r, null)
+    pres(totaux.faitage.longueur, 13, 0.02)
+    pres(totaux.egout.longueur, 26, 0.02)
+    pres(totaux.rive.longueur, 4 * 4.5 * Math.sqrt(1 + 0.7 ** 2), 0.02)
+    expect(totaux.aretier.nombre + totaux.noue.nombre).toBe(0)
+  })
+
   it('dessine deux gouttereaux et deux pignons', () => {
     const longs = r.facades.filter((f) => Math.abs(f.longueur - 12) < 0.2)
     const courts = r.facades.filter((f) => Math.abs(f.longueur - 8) < 0.2)
@@ -104,6 +112,17 @@ describe('toit synthétique à quatre pans', () => {
     pres(r.surfaces.toitVrai, 9.6 * 14.6 * Math.sqrt(1 + 0.35 ** 2), 0.015)
   })
 
+  it('mesure le faîtage, les quatre arêtiers et les égouts', () => {
+    const { totaux } = lignesRetenues(r, null)
+    pres(totaux.faitage.longueur, 14.6 - 9.6, 0.05)
+    expect(totaux.aretier.nombre).toBe(4)
+    // Un arêtier : la demi-largeur en diagonale, redressée de sa pente.
+    const plan = 4.8 * Math.SQRT2
+    pres(totaux.aretier.longueur, 4 * plan * Math.sqrt(1 + ((0.35 * 4.8) / plan) ** 2), 0.03)
+    pres(totaux.egout.longueur, 2 * (9.6 + 14.6), 0.02)
+    expect(totaux.rive.longueur).toBe(0)
+  })
+
   it('ne trouve que des gouttereaux', () => {
     expect(r.facades).toHaveLength(4)
     for (const f of r.facades) {
@@ -117,6 +136,43 @@ describe('toit synthétique à quatre pans', () => {
     expect(Math.abs(somme - r.surfaces.toitVrai)).toBeLessThanOrEqual(0.2)
     const plan = r.pans.reduce((s, p) => s + p.airePlan, 0)
     expect(Math.abs(plan - r.surfaces.toitPlan)).toBeLessThanOrEqual(0.2)
+  })
+})
+
+describe('maison en L : deux faîtages et deux noues', () => {
+  const scene: Scene = {
+    origine: [700000, 6700000],
+    rotation: 15,
+    volumes: [
+      deuxPans({ l: 8, y0: -6, y1: 6, p: 0.7, d: 0.5, h: 5 }),
+      // L'aile, faîtage selon x, aussi haute à l'égout, donc plus basse au faîtage.
+      { toit: (x, y) => (x >= 0 && x <= 12.5 && Math.abs(y) <= 3.5 ? 5 + 0.7 * (3 - Math.abs(y)) : null) },
+    ],
+  }
+  const { nuage, zone } = nuageDe({ ...scene, demiCote: 22 })
+  const th = (scene.rotation * Math.PI) / 180
+  const murs = [[-4, -6], [4, -6], [4, -3], [12, -3], [12, 3], [4, 3], [4, 6], [-4, 6]].map(([u, v]) =>
+    depuisLambert93(
+      scene.origine[0] + u * Math.cos(th) - v * Math.sin(th),
+      scene.origine[1] + u * Math.sin(th) + v * Math.cos(th),
+    ),
+  )
+  const r = releverBatiment({ nuage, zone, contour: murs, voisins: [], vol: null })
+  const { totaux } = lignesRetenues(r, null)
+
+  it('lit quatre pans', () => {
+    expect(r.pans).toHaveLength(4)
+  })
+  it('mesure les faîtages (13 + 11,5 m) et les deux noues', () => {
+    pres(totaux.faitage.longueur, 24.5, 0.03)
+    expect(totaux.noue.nombre).toBe(2)
+    // Une noue : de la jonction des faîtages au coin rentrant, redressée de sa pente.
+    const plan = Math.SQRT2 * 3.5
+    pres(totaux.noue.longueur, 2 * plan * Math.sqrt(1 + ((0.7 * 3.5) / plan) ** 2), 0.04)
+  })
+  it('mesure les égouts et les rives', () => {
+    pres(totaux.egout.longueur, 13 + 6 + 16, 0.03)
+    pres(totaux.rive.longueur, (4 * 4.5 + 2 * 3.5) * Math.sqrt(1 + 0.7 ** 2), 0.03)
   })
 })
 
@@ -147,6 +203,13 @@ describe('maison mitoyenne : le toit continue chez le voisin', () => {
     expect(mitoyens).toHaveLength(1)
     expect(mitoyens[0].debord).toBe(0)
     pres(r.surfaces.toitPlan, 9 * 12.5, 0.015)
+  })
+
+  it('ne met ni égout ni rive le long du mur mitoyen', () => {
+    const { totaux } = lignesRetenues(r, null)
+    pres(totaux.egout.longueur, 2 * 12.5, 0.03)
+    // Les rives du seul pignon libre.
+    pres(totaux.rive.longueur, 2 * 4.5 * Math.sqrt(1 + 0.7 ** 2), 0.03)
   })
 
   it('ne compte pas le mur mitoyen dans la façade à peindre', () => {
@@ -219,6 +282,16 @@ const connu: Record<string, (r: Releve) => void> = {
     // Bromines (Haute-Savoie) : un mètre de débord.
     expect(r.debord.moyen!).toBeGreaterThan(0.9)
   },
+  terrasse: (r) => {
+    // Nogent-sur-Marne : la terrasse surélevée est dans le contour du cadastre.
+    // Elle est lue à part, marquée, et hors du compte par défaut.
+    const terrasses = r.pans.filter((p) => p.terrasse)
+    expect(terrasses).toHaveLength(1)
+    expect(terrasses[0].orientation).toBe('plat')
+    const defaut = toitRetenu(r, pansParDefaut(r))
+    expect(defaut.vrai).toBeLessThan(r.surfaces.toitVrai - 10)
+    for (const p of r.pans.filter((q) => !q.terrasse)) entre(p.pente, 56, 63)
+  },
   accolee: (r) => {
     // Keskastel : le pignon sud-ouest est mitoyen.
     expect(r.pans).toHaveLength(2)
@@ -290,14 +363,22 @@ describe('pré-mesure = écran : le dossier reçoit les chiffres que l’écran 
   it.each(jeux)('$nom', (j) => {
     const r = JSON.parse(readFileSync(join(DOSSIER, j.nom, 'releve.json'), 'utf8')) as Releve
     const q = Object.fromEntries(quantitesDuReleve(r).map((x) => [x.cle, x.valeur]))
+    // L'écran compte d'office tous les pans, sauf les terrasses.
+    const defaut = pansParDefaut(r)
     // Ce que lit l'artisan (panneau-batiment.tsx) : la somme des pans, les
     // façades hors mitoyen, la gouttière mesurée.
-    expect(q.toit_surface).toBe(toitRetenu(r, null).vrai)
-    expect(q.toit_pente).toBe(toitRetenu(r, null).pente)
-    expect(q.toit_pans).toBe(r.pans.length)
+    expect(q.toit_surface).toBe(toitRetenu(r, defaut).vrai)
+    expect(q.toit_pente).toBe(toitRetenu(r, defaut).pente)
+    expect(q.toit_pans).toBe(toitRetenu(r, defaut).nb)
     const facades = orientationsDesFacades(r).reduce((s, o) => s + facadeRetenue(r, o).surface, 0)
     expect(q.facades_total).toBe(Math.round(facades * 100) / 100)
     expect(q.hauteur_murs ?? null).toBe(r.hauteurs.gouttiere)
+    const { totaux } = lignesRetenues(r, defaut)
+    expect(q.faitage).toBe(Math.round(totaux.faitage.longueur * 10) / 10)
+    expect(q.egouts).toBe(Math.round(totaux.egout.longueur * 10) / 10)
+    expect(q.rives).toBe(Math.round(totaux.rive.longueur * 10) / 10)
+    expect(q.aretiers).toBe(Math.round(totaux.aretier.longueur * 10) / 10)
+    expect(q.noues).toBe(Math.round(totaux.noue.longueur * 10) / 10)
   })
 })
 

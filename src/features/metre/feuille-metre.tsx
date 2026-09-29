@@ -43,6 +43,7 @@ import { BandeauMaison } from './bandeau-maison'
 import { vueDuChantier } from './vue-par-metier'
 import { PanneauCloture } from './panneau-cloture'
 import { releveUtilisable, useReleve } from './use-releve'
+import { ecartesParDefaut } from './affichage-releve'
 import { parcelleSous, troncons } from './parcelle'
 import {
   maisonDeLAdresse,
@@ -415,7 +416,7 @@ export function FeuilleMetre({
             cotesChoisis={cotesChoisis}
             onBasculerCote={basculerCote}
             releve={releveCarte}
-            pansEcartes={ecartes?.cleabs === choisi?.cleabs ? ecartes?.pans : undefined}
+            pansEcartes={ecartes?.cleabs === choisi?.cleabs ? ecartes?.pans : ecartesParDefaut(releveCarte)}
           />
 
           {enRecherche && (

@@ -1,5 +1,20 @@
 import { formatM2, longueur, type Facade } from './geometrie'
-import type { FacadeReleve, Releve } from './releve'
+import { pansParDefaut, type FacadeReleve, type Releve, type TypeLigne } from './releve'
+
+/** Les pans écartés d'office : les terrasses, quand le toit a aussi des pans en pente. */
+export function ecartesParDefaut(r: Releve | null): Set<number> {
+  if (!r || !pansParDefaut(r)) return new Set()
+  return new Set(r.pans.filter((p) => p.terrasse).map((p) => p.id))
+}
+
+/** Les lignes du toit : leur nom et leur couleur, sur la carte et dans la liste. */
+export const LIGNES: Record<TypeLigne, { libelle: string; pluriel: string; couleur: string }> = {
+  faitage: { libelle: 'Faîtage', pluriel: 'Faîtages', couleur: '#DC2626' },
+  aretier: { libelle: 'Arêtier', pluriel: 'Arêtiers', couleur: '#EA580C' },
+  noue: { libelle: 'Noue', pluriel: 'Noues', couleur: '#2563EB' },
+  egout: { libelle: 'Égout (gouttière)', pluriel: 'Égouts (gouttières)', couleur: '#16A34A' },
+  rive: { libelle: 'Rive', pluriel: 'Rives', couleur: '#9333EA' },
+}
 
 /** Une couleur par pan : la même sur la carte et dans la liste. */
 const COULEURS_PANS = ['#E11D48', '#2563EB', '#16A34A', '#D97706', '#7C3AED', '#0891B2', '#DB2777', '#65A30D', '#EA580C', '#4F46E5']

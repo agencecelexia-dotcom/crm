@@ -10,6 +10,8 @@ export const CLES_METRAGE: Record<string, 'm2' | 'ml' | 'm' | 'pct' | 'u' | 'oui
   egouts: 'ml',
   faitage: 'ml',
   rives: 'ml',
+  aretiers: 'ml',
+  noues: 'ml',
   fenetres_toit: 'u',
   cheminees: 'u',
   facades_total: 'm2',
@@ -27,7 +29,7 @@ export const CLES_METRAGE: Record<string, 'm2' | 'ml' | 'm' | 'pct' | 'u' | 'oui
   plages_surface: 'm2',
 }
 
-const TOIT = ['toit_surface', 'toit_pente', 'toit_pans', 'egouts', 'faitage', 'rives', 'fenetres_toit', 'cheminees']
+const TOIT = ['toit_surface', 'toit_pente', 'toit_pans', 'egouts', 'faitage', 'rives', 'aretiers', 'noues', 'fenetres_toit', 'cheminees']
 const FACADES = ['facades_total', 'hauteur_murs', 'ouvertures']
 
 /**

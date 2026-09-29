@@ -3,7 +3,7 @@ import { MapContainer, Polygon, Polyline, CircleMarker, TileLayer, useMap, useMa
 import type { LatLngExpression } from 'leaflet'
 
 import { cn } from '@/lib/utils'
-import { couleurPan } from './affichage-releve'
+import { couleurPan, LIGNES } from './affichage-releve'
 import type { Batiment } from './bati-ign'
 import type { Facade, Point } from './geometrie'
 import type { Releve } from './releve'
@@ -146,6 +146,7 @@ export function CarteMetre({
           maxZoom={21}
         />
       ) : fond === 'ortho' ? (
+        <>
         <TileLayer
           key="ortho"
           attribution={ATTRIB_IGN}
@@ -155,6 +156,19 @@ export function CarteMetre({
           maxNativeZoom={19}
           maxZoom={21}
         />
+        {/* LA PHOTO TRÈS FINE, là où l'IGN l'a : 5 à 10 cm par pixel (Paris,
+            petite couronne, Marseille…), nette jusqu'au zoom 21. Ailleurs ses
+            tuiles manquent, et la photo à 20 cm reste dessous. */}
+        <TileLayer
+          key="ortho-thr"
+          attribution={ATTRIB_IGN}
+          url="https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=THR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM_6_21&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
+          minZoom={17}
+          maxNativeZoom={21}
+          maxZoom={21}
+          zIndex={2}
+        />
+        </>
       ) : (
         <TileLayer
           key="plan"
@@ -243,6 +257,17 @@ export function CarteMetre({
             interactive={false}
             pathOptions={{ color: '#7C3AED', weight: 2.5, fill: false }}
           />
+          {/* Les lignes du toit, dans la couleur de leur type (la même que la liste). */}
+          {(releve.lignes ?? [])
+            .filter((l) => l.pans.some((p) => !(pansEcartes?.has(p) ?? false)))
+            .map((l, i) => (
+              <Polyline
+                key={`ligne-${i}`}
+                positions={[versLeaflet(l.a), versLeaflet(l.b)]}
+                interactive={false}
+                pathOptions={{ color: LIGNES[l.type].couleur, weight: 3, opacity: 0.95 }}
+              />
+            ))}
         </>
       )}
 

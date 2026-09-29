@@ -11,7 +11,7 @@
 import type { ResultatToit } from './_calcul-toit.ts'
 import { aire, empriseAvecDebord, facades, longueur, surfaceReelle, type Point } from './_geometrie.ts'
 import type { Releve } from './_releve.ts'
-import { facadeRetenue, orientationsDesFacades, toitRetenu } from './_releve-retenu.ts'
+import { facadeRetenue, lignesRetenues, orientationsDesFacades, pansParDefaut, toitRetenu } from './_releve-retenu.ts'
 import { lectureParPans, mesureFacade, penteMesureeDe, type Toiture } from './_toiture.ts'
 
 /** Le débord que l'écran applique par défaut (panneau-batiment.tsx). */
@@ -77,7 +77,9 @@ export function quantitesDeLaMaison(contour: Point[], r: ResultatToit): Quantite
  * Ce sont les chiffres que l'écran affiche quand le relevé existe.
  */
 export function quantitesDuReleve(r: Releve): QuantiteMesuree[] {
-  const toit = toitRetenu(r, null)
+  // Les pans que l'écran compte d'office : sans les terrasses.
+  const retenus = pansParDefaut(r)
+  const toit = toitRetenu(r, retenus)
   // ±5 cm sur tout le bord du toit : la seule incertitude qui compte (affichage-releve.ts).
   const facteur = r.surfaces.toitPlan > 0 ? r.surfaces.toitVrai / r.surfaces.toitPlan : 1
   const precision = Math.round(longueur(r.toit, true) * 0.05 * facteur * 10) / 10
@@ -95,11 +97,28 @@ export function quantitesDuReleve(r: Releve): QuantiteMesuree[] {
       valeur: toit.vrai,
       source: 'lidar',
       precision,
-      detail: { ...detail, pans: r.pans.length, debord_min_m: r.debord.min, debord_max_m: r.debord.max, plan_m2: toit.plan },
+      detail: { ...detail, pans: toit.nb, debord_min_m: r.debord.min, debord_max_m: r.debord.max, plan_m2: toit.plan },
     },
     { cle: 'toit_pente', unite: 'pct', valeur: toit.pente, source: 'lidar', detail },
-    { cle: 'toit_pans', unite: 'u', valeur: r.pans.length, source: 'lidar', detail },
+    { cle: 'toit_pans', unite: 'u', valeur: toit.nb, source: 'lidar', detail },
   ]
+  // Les linéaires du couvreur : faîtage, arêtiers, noues, égouts, rives.
+  const { totaux } = lignesRetenues(r, retenus)
+  for (const [cle, type] of [
+    ['faitage', 'faitage'],
+    ['aretiers', 'aretier'],
+    ['noues', 'noue'],
+    ['egouts', 'egout'],
+    ['rives', 'rive'],
+  ] as const) {
+    sortie.push({
+      cle,
+      unite: 'ml',
+      valeur: Math.round(totaux[type].longueur * 10) / 10,
+      source: 'lidar',
+      detail: { ...detail, nombre: totaux[type].nombre },
+    })
+  }
   const orientations = orientationsDesFacades(r)
   if (orientations.length) {
     const total = orientations.reduce((s, o) => s + facadeRetenue(r, o).surface, 0)
