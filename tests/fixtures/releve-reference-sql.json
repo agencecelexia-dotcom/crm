@@ -16,7 +16,7 @@
       "facades": [
         {
           "orientation": "nord-est",
-          "surface": 62.3,
+          "surface": 62.2,
           "longueur": 10.1
         },
         {
@@ -51,7 +51,7 @@
       "facades": [
         {
           "orientation": "est",
-          "surface": 42.4,
+          "surface": 42.3,
           "longueur": 15.28
         },
         {
@@ -71,7 +71,7 @@
         },
         {
           "orientation": "ouest",
-          "surface": 33.1,
+          "surface": 33.2,
           "longueur": 11.64
         },
         {
@@ -171,22 +171,22 @@
       "facades": [
         {
           "orientation": "est",
-          "surface": 59.7,
+          "surface": 59.6,
           "longueur": 12.48
         },
         {
           "orientation": "nord",
-          "surface": 29.4,
+          "surface": 29,
           "longueur": 11.72
         },
         {
           "orientation": "ouest",
-          "surface": 49.2,
+          "surface": 48.5,
           "longueur": 13.46
         },
         {
           "orientation": "sud",
-          "surface": 14,
+          "surface": 14.1,
           "longueur": 4.63
         }
       ]
@@ -206,23 +206,23 @@
       "facades": [
         {
           "orientation": "est",
-          "surface": 79.6,
+          "surface": 79.5,
           "longueur": 10.62
         },
         {
           "orientation": "nord",
-          "surface": 98.1,
+          "surface": 98.2,
           "longueur": 13.91
         },
         {
           "orientation": "ouest",
-          "surface": 68.7,
+          "surface": 70.3,
           "longueur": 10.73
         },
         {
           "orientation": "sud",
-          "surface": 49.5,
-          "longueur": 13.21
+          "surface": 74.6,
+          "longueur": 17.96
         }
       ]
     }

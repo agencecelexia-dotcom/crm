@@ -69,6 +69,13 @@ export interface LigneToit {
   b: Pt
   /** Les pans qu'elle borde (leurs numéros). */
   pans: number[]
+  /**
+   * Un bord À L'INTÉRIEUR du contour : le pan domine une surface plus basse
+   * (terrasse, toit plus bas, cour) ; `bas` est l'altitude de cette surface.
+   * Sous un tel égout se tient un mur en retrait.
+   */
+  interieur?: boolean
+  bas?: number
 }
 
 export interface LecturePans {
@@ -301,6 +308,7 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boole
       a: [l.a[0] + x0, l.a[1] + y0] as Pt,
       b: [l.b[0] + x0, l.b[1] + y0] as Pt,
       pans: l.regions.map((r) => idDe.get(r)).filter((v): v is number => v !== undefined),
+      ...(l.interieur ? { interieur: true, bas: Math.round((l.bas ?? 0) * 100) / 100 } : {}),
     }))
     .filter((l) => l.pans.length > 0)
   return {
@@ -510,6 +518,7 @@ function decouper(
   const lignes = [
     ...aretesEntrePans(pan, dedans, nx, ny, plans, sens, centre, loc),
     ...bordsDuToit(loc, mitoyens, pan, dedans, nx, ny, minX, minY, plans),
+    ...bordsInterieurs(pan, dedans, nx, ny, minX, minY, plans, zBas),
   ]
 
   // Une case est « vue » s'il y a un point de toit à moins de 50 cm : à 15
@@ -651,6 +660,8 @@ interface LigneBrute {
   a: Pt
   b: Pt
   regions: number[]
+  interieur?: boolean
+  bas?: number
 }
 
 /** Sous ce rapport entre la pente le long d'une ligne et celle du pan, la ligne est de niveau. */
@@ -757,6 +768,90 @@ function aretesEntrePans(
         })
       }
       debut = k
+    }
+  }
+  return sortie
+}
+
+/**
+ * Les bords d'un pan À L'INTÉRIEUR du contour : là où il domine d'au moins un
+ * mètre une surface plus basse — une terrasse, un toit plus bas, une cour
+ * couverte par le tracé du cadastre. Le contour du cadastre ne les voit pas ;
+ * ce sont pourtant des égouts (gouttière au-dessus de la terrasse), et sous
+ * eux se tient le vrai mur de la maison, en retrait.
+ */
+function bordsInterieurs(
+  pan: Int32Array,
+  dedans: Uint8Array,
+  nx: number,
+  ny: number,
+  minX: number,
+  minY: number,
+  plans: Plan[],
+  zBas: Float64Array,
+): LigneBrute[] {
+  const sortie: LigneBrute[] = []
+  const z = (r: number, p: Pt) => plans[r].a * p[0] + plans[r].b * p[1] + plans[r].c
+  // L'altitude de ce qu'on voit juste de l'autre côté du bord ; null si c'est du toit à la même hauteur.
+  const dessous = (r: number, p: Pt): number | null => {
+    const cx = Math.floor((p[0] - minX) / PAS), cy = Math.floor((p[1] - minY) / PAS)
+    if (cx < 0 || cy < 0 || cx >= nx || cy >= ny) return null
+    const c = cy * nx + cx
+    if (!dedans[c]) return null
+    const autre = pan[c]
+    const bas = autre >= 0 && autre !== r ? z(autre, p) : autre < 0 && Number.isFinite(zBas[c]) ? zBas[c] : null
+    return bas !== null && z(r, p) - bas > 1 ? bas : null
+  }
+  for (let r = 0; r < plans.length; r++) {
+    const P = plans[r]
+    const penteMax = Math.hypot(P.a, P.b)
+    if (penteMax < 0.05) continue
+    const C = contourDeCases(pan, dedans, nx, ny, r).map(([cx, cy]) => [minX + cx * PAS, minY + cy * PAS] as Pt)
+    // Chaque côté du contour du pan qui domine une surface plus basse. Le
+    // contour suit les cases : un bord droit y arrive en petits morceaux,
+    // recollés ensuite.
+    const morceaux: { a: Pt; b: Pt; type: TypeLigne; bas: number }[] = []
+    for (let i = 0; i < C.length; i++) {
+      const a = C[i], b = C[(i + 1) % C.length]
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1])
+      if (L < 0.3) continue
+      const u: Pt = [(b[0] - a[0]) / L, (b[1] - a[1]) / L]
+      // Le pan est à gauche du côté : l'extérieur, à droite.
+      const n: Pt = [u[1], -u[0]]
+      const bas = [0.25, 0.5, 0.75]
+        .map((t) => dessous(r, [a[0] + (b[0] - a[0]) * t + n[0] * 0.4, a[1] + (b[1] - a[1]) * t + n[1] * 0.4]))
+        .filter((v): v is number => v !== null)
+      if (bas.length < 2) continue
+      const le = P.a * u[0] + P.b * u[1]
+      const dehors = P.a * n[0] + P.b * n[1]
+      const type: TypeLigne | null = Math.abs(le) / penteMax >= DE_NIVEAU ? 'rive' : dehors < 0 ? 'egout' : null
+      if (type) morceaux.push({ a, b, type, bas: bas.reduce((s, v) => s + v, 0) / bas.length })
+    }
+    // Recoller les morceaux qui se suivent, du même type, à moins de 25° l'un de l'autre.
+    const lignes: { a: Pt; b: Pt; type: TypeLigne; bas: number[] }[] = []
+    for (const m of morceaux) {
+      const d = lignes[lignes.length - 1]
+      const cap = (x: Pt, y: Pt) => Math.atan2(y[1] - x[1], y[0] - x[0])
+      const ecartAngle = d ? Math.abs(((cap(m.a, m.b) - cap(d.a, d.b) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) : Infinity
+      if (d && d.type === m.type && Math.hypot(m.a[0] - d.b[0], m.a[1] - d.b[1]) < 0.6 && ecartAngle < (25 * Math.PI) / 180) {
+        d.b = m.b
+        d.bas.push(m.bas)
+      } else lignes.push({ a: m.a, b: m.b, type: m.type, bas: [m.bas] })
+    }
+    for (const l of lignes) {
+      const L = Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1])
+      if (L < 1) continue
+      const u: Pt = [(l.b[0] - l.a[0]) / L, (l.b[1] - l.a[1]) / L]
+      const le = P.a * u[0] + P.b * u[1]
+      sortie.push({
+        type: l.type,
+        longueur: L * Math.sqrt(1 + le * le),
+        a: l.a,
+        b: l.b,
+        regions: [r],
+        interieur: true,
+        bas: l.bas.reduce((s, v) => s + v, 0) / l.bas.length,
+      })
     }
   }
   return sortie

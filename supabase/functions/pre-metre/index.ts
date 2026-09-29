@@ -20,15 +20,21 @@
 // - Toucher à une décision humaine : une valeur confirmée au dossier reste.
 // - Brusquer l'IGN, qui étrangle par adresse : six chantiers au plus par
 //   passage, quatre secondes entre deux.
+// - Payer sans l'interrupteur : la lecture du matériau du toit (Claude, sur
+//   la photo aérienne) a le sien, « auto_materiaux », relu à chaque passage.
+//   La recherche des photos de rue, gratuite, suit la pré-mesure.
 
 import { identifierMaison, maisonConfirmee, type Dossier } from '../_batiment.ts'
 import { mesurerToit, type MurMesure, type Pan, type ResultatToit } from '../_calcul-toit.ts'
 import { centre, type Point } from '../_geometrie.ts'
-import { quantitesDeLaMaison, quantitesDuReleve, type QuantiteMesuree } from '../_mesures-chantier.ts'
+import { quantitesDeLaMaisonReleve } from '../_dossier-serveur.ts'
+import { lireToit } from '../_materiaux-serveur.ts'
+import { quantitesDeLaMaison, type QuantiteMesuree } from '../_mesures-chantier.ts'
 import { clesDuChantier } from '../_metrage.ts'
 import { parcelleSous } from '../_parcelle.ts'
 import type { Releve } from '../_releve.ts'
 import { releveUtilisable } from '../_releve-retenu.ts'
+import { aDesPhotosDeRue, chercherPhotosRue } from '../_photos-serveur.ts'
 import { releveGarde, releverEtGarder, reserverReleve } from '../_releve-serveur.ts'
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
@@ -42,6 +48,16 @@ const ESPACEMENT_MS = 4000
  */
 const RELEVES_PAR_PASSAGE = 2
 let relevesRestants = RELEVES_PAR_PASSAGE
+/**
+ * Ce qui s'ajoute au relevé — les photos de rue, le matériau du toit — tant
+ * qu'il reste du temps au passage : la fonction ne vit que quelques minutes,
+ * et les relevés passent d'abord.
+ */
+const BUDGET_MS = 240_000
+const MATERIAUX_PAR_PASSAGE = 3
+let debutPassage = 0
+let materiauxRestants = MATERIAUX_PAR_PASSAGE
+let materiauxActifs = false
 
 const URL_BASE = () => Deno.env.get('SUPABASE_URL')!
 const CLE_SERVICE = () => Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -145,6 +161,24 @@ async function releveDe(cleabs: string, point: Point | null): Promise<Releve | n
 /** Ce que l'outil sait mesurer sans personne : au toit et aux murs (LiDAR), au terrain (cadastre). */
 const PAR_LE_LIDAR = ['toit_surface', 'toit_pente', 'toit_pans', 'facades_total', 'hauteur_murs']
 
+/**
+ * Ce que l'artisan trouvera prêt en ouvrant la fiche : les photos de rue de
+ * ses façades (s'il fait des façades), le matériau du toit (s'il fait le toit,
+ * et si l'interrupteur le permet). Une panne n'arrête pas la pré-mesure.
+ */
+async function preparer(cleabs: string, cles: Set<string>) {
+  const reste = () => Date.now() - debutPassage < BUDGET_MS
+  if (cles.has('facades_total') && reste() && !(await aDesPhotosDeRue(cleabs).catch(() => true))) {
+    await chercherPhotosRue(cleabs).catch((e) => console.error('pre-metre: photos', cleabs, e))
+  }
+  if (cles.has('toit_surface') && materiauxActifs && materiauxRestants > 0 && reste()) {
+    const lu = await lireToit(cleabs, null).catch((e) => ({ ok: false, error: String(e) }))
+    // Une maison déjà lue ne compte pas : la lecture gardée revient sans frais.
+    if (lu.ok && 'lue' in lu && lu.lue) materiauxRestants--
+    else if (!lu.ok) console.error('pre-metre: matériau', cleabs, lu.error)
+  }
+}
+
 /** Un chantier : sa maison, ses mesures, et le dossier de métrés rempli. */
 async function premesurer(p: ProjetAMesurer): Promise<string> {
   // Seulement les quantités du MÉTIER : les façades d'un immeuble entier ne
@@ -193,7 +227,8 @@ async function premesurer(p: ProjetAMesurer): Promise<string> {
     // la grille d'altitudes à défaut (hors couverture, relevé incertain).
     const releve = await releveDe(maison.cleabs, centre(maison.contour))
     if (releveUtilisable(releve)) {
-      quantites.push(...quantitesDuReleve(releve).filter((q) => cles.has(q.cle)))
+      await preparer(maison.cleabs, cles)
+      quantites.push(...(await quantitesDeLaMaisonReleve(maison.cleabs, releve)).filter((q) => cles.has(q.cle)))
     } else {
       const toit = await toitDe(maison.cleabs, maison.contour)
       quantites.push(...quantitesDeLaMaison(maison.contour, toit).filter((q) => cles.has(q.cle)))
@@ -240,6 +275,10 @@ async function premesurer(p: ProjetAMesurer): Promise<string> {
 
 async function traiter(projets: ProjetAMesurer[]) {
   relevesRestants = RELEVES_PAR_PASSAGE
+  materiauxRestants = MATERIAUX_PAR_PASSAGE
+  debutPassage = Date.now()
+  // L'interrupteur des lectures payantes, relu à chaque passage.
+  materiauxActifs = (await rpc('automatisation_active', { p_cle: 'auto_materiaux' }).catch(() => false)) === true
   for (const p of projets) {
     const bilan = await premesurer(p).catch((e) => `échec : ${e instanceof Error ? e.message : e}`)
     console.log('pre-metre', p.id, bilan)

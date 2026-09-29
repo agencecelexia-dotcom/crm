@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { MapContainer, Polygon, Polyline, CircleMarker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import type { LatLngExpression } from 'leaflet'
 
@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { couleurPan, LIGNES } from './affichage-releve'
 import type { Batiment } from './bati-ign'
 import type { Facade, Point } from './geometrie'
+import { contoursDesPans } from './modele3d'
 import type { Releve } from './releve'
 
 /**
@@ -123,6 +124,8 @@ export function CarteMetre({
   pansEcartes?: Set<number>
 }) {
   const dessine = mode !== 'apercu'
+  // Les pans sans les marches de leurs cases de 25 cm : calés sur les lignes du toit.
+  const nets = useMemo(() => (releve ? contoursDesPans(releve) : new Map<number, Point[]>()), [releve])
 
   return (
     <MapContainer
@@ -237,7 +240,7 @@ export function CarteMetre({
             return (
               <Polygon
                 key={`pan-${p.id}`}
-                positions={p.contour.map(versLeaflet)}
+                positions={(nets.get(p.id) ?? p.contour).map(versLeaflet)}
                 interactive={false}
                 pathOptions={{
                   color: '#FFFFFF',

@@ -231,3 +231,48 @@ export function tirerOuvertures(
     motif: partielle ? 'facade_partielle' : null,
   }
 }
+
+/** Ce qu'une lecture garde, avec la photo : la réponse de la vision, ce qu'on en a tiré, le mur relevé. */
+export interface LectureGardee {
+  vision: LectureVision
+  resultat: Ouvertures
+  mur: { longueur: number; hauteurGouttiere: number; surfaceLibre: number }
+}
+
+/** Une photo de façade, telle que la table `facade_photo` la garde. */
+export interface PhotoLue {
+  id: string
+  orientation: string
+  source: 'panoramax' | 'mapillary' | 'artisan'
+  largeur: number | null
+  hauteur: number | null
+  incidence: number | null
+  lecture: LectureGardee | null
+  /** Les rangs des ouvertures que l'artisan a retirées : une fausse détection, un reflet. */
+  ecartees?: number[] | null
+}
+
+/**
+ * La photo d'une façade qui compte : celle de l'artisan (il l'a prise pour
+ * ça), sinon une photo de rue déjà lue, sinon la première.
+ */
+export function photoDeLaFacade<T extends PhotoLue>(photos: T[], orientation: string): T | null {
+  const ici = photos.filter((p) => p.orientation === orientation)
+  return ici.find((p) => p.source === 'artisan') ?? ici.find((p) => p.lecture) ?? ici[0] ?? null
+}
+
+/** Ce que la lecture donne, sans les ouvertures que l'artisan a retirées. */
+export function resultatRetenu(p: PhotoLue): Ouvertures | null {
+  const l = p.lecture
+  if (!l) return null
+  const ecartees = new Set(p.ecartees ?? [])
+  if (!ecartees.size) return l.resultat
+  return tirerOuvertures(
+    { ...l.vision, ouvertures: l.vision.ouvertures.filter((_, i) => !ecartees.has(i)) },
+    l.mur,
+    p.largeur && p.hauteur ? p.largeur / p.hauteur : 4 / 3,
+    p.source === 'artisan' ? null : p.incidence,
+    p.source === 'artisan' ? 'artisan' : 'rue',
+    p.largeur ?? 2048,
+  )
+}

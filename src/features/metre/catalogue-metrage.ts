@@ -52,6 +52,8 @@ export const QUANTITES: Record<string, Quantite> = Object.fromEntries(
     q('facades_total', 'Surface des façades', 'm2', 'Combien de façades à refaire, et quelle surface ?', 'facades'),
     q('hauteur_murs', 'Hauteur des murs', 'm', 'Combien d’étages ? Quelle hauteur jusqu’à la gouttière ?', 'hauteurs'),
     q('ouvertures', 'Fenêtres et portes', 'u', 'Combien de fenêtres et de portes sur ces façades ?', null),
+    q('ouvertures_surface', 'Surface des ouvertures', 'm2', 'Les fenêtres sont-elles grandes ? Y a-t-il une baie, une porte de garage ?', 'photo'),
+    q('facade_nette', 'Façades, ouvertures déduites', 'm2', 'Quelle surface de mur reste-t-il à traiter, sans les fenêtres ?', 'facades'),
     // Terrain
     q('cloture_longueur', 'Longueur de clôture', 'ml', 'Quelle longueur de clôture, et sur quels côtés ?', 'parcelle'),
     q('cloture_hauteur', 'Hauteur de clôture', 'm', 'Quelle hauteur souhaitez-vous ?', null),

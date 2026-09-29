@@ -139,6 +139,14 @@ export const AUTOMATISATIONS: Automatisation[] = [
       'Mesure à l’avance le toit, les façades et le terrain des chantiers attribués, et les confronte à ce qu’a dit le client : l’artisan trouve ses métrés prêts. Seules les maisons reliées à leur adresse sont mesurées.',
     declencheur: 'Toutes les 10 minutes, six chantiers au plus',
   },
+  {
+    cle: 'auto_materiaux',
+    famille: 'planifie',
+    titre: 'Matériau du toit',
+    description:
+      'Pendant la pré-mesure, fait lire le matériau du toit (tuile, ardoise, zinc…) sur la photo aérienne de l’IGN. Une lecture par maison, quelques centimes chacune. Coupé, l’artisan peut toujours la lancer depuis sa fiche.',
+    declencheur: 'Avec la pré-mesure, une fois par maison',
+  },
 
   // ---- Notifications internes ----------------------------------------
   {
