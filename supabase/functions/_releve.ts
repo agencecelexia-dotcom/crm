@@ -17,7 +17,7 @@
 
 import type { Nuage, Zone } from './_copc.ts'
 import { depuisLambert93, versLambert93 } from './_calcul-toit.ts'
-import { murs as mursDe, type Point } from './_geometrie.ts'
+import { cardinal, murs as mursDe, type Point } from './_geometrie.ts'
 import { Grille2D, solLocal } from './_nuage.ts'
 import { lirePans, type TypeLigne } from './_pans.ts'
 import {
@@ -42,8 +42,10 @@ import {
  * 3 : un côté illisible ne rabaisse la confiance que s'il pèse.
  * 4 : les lignes du toit (faîtage, arêtiers, noues, égouts, rives) ; ce
  *     qui n'est pas toit (terrasse) sort du compte.
+ * 5 : de quoi dessiner la maison en 3D (plan de chaque pan, sol le long des
+ *     murs) ; les murs en retrait derrière une terrasse.
  */
-export const VERSION_RELEVE = 4
+export const VERSION_RELEVE = 5
 
 /**
  * Du dessus du toit au dessous de la couverture, au droit du mur : tuiles,
@@ -72,6 +74,11 @@ export interface PanReleve {
    * terrasse, un toit de garage. Elle n'est pas comptée par défaut.
    */
   terrasse: boolean
+  /**
+   * Le plan du pan : z = a·x + b·y + c, en mètres, x et y depuis l'`origine`
+   * du relevé (Lambert-93), z depuis son `zSol`.
+   */
+  plan: [number, number, number]
 }
 
 export type { TypeLigne } from './_pans.ts'
@@ -85,6 +92,8 @@ export interface LigneReleve {
   b: Point
   /** Les pans qu'elle borde : écarter tous ses pans l'écarte. */
   pans: number[]
+  /** Un bord à l'intérieur du contour, au-dessus d'une terrasse ou d'un toit plus bas. */
+  interieur?: boolean
 }
 
 export interface BordReleve extends Bord {
@@ -119,6 +128,13 @@ export interface FacadeReleve {
   hauteurHaute: number
   /** La silhouette du mur : distance le long du mur, hauteur (tous les 50 cm). */
   profil: [number, number][]
+  /** L'altitude du sol au pied de chaque point du profil, depuis le `zSol` du relevé. */
+  sol: number[]
+  /**
+   * Un mur EN RETRAIT : sous l'égout d'un pan qui domine une terrasse ou un
+   * toit plus bas, là où le contour du cadastre ne passe pas.
+   */
+  retrait?: boolean
   /** Surface du mur, ouvertures non déduites ; et hors partie accolée. */
   surface: number
   surfaceLibre: number
@@ -126,6 +142,9 @@ export interface FacadeReleve {
 
 export interface Releve {
   version: number
+  /** Le repère du modèle 3D : un point en Lambert-93, et l'altitude du sol (IGN69) au centre de la maison. */
+  origine: [number, number]
+  zSol: number
   /**
    * L'IGN a-t-il sa photo très fine (5 à 10 cm) sur cette maison ? Posé par
    * la lecture à l'IGN (une tuile essayée) ; absent sur les relevés anciens.
@@ -210,7 +229,11 @@ export function releverBatiment(e: EntreeReleve): Releve {
 
   // 4. Les façades.
   const routes = (e.routes ?? []).map((l) => l.map(([lon, lat]) => versLambert93(lon, lat)))
-  const facades = facadesDe(Pr, Vr, lecture.pans, toit[0], sol, routes)
+  const solCentre = sol(
+    Pr.reduce((s, p) => s + p[0], 0) / Pr.length,
+    Pr.reduce((s, p) => s + p[1], 0) / Pr.length,
+  )
+  const facades = facadesDe(Pr, Vr, lecture.pans, toit[0], sol, routes, solCentre)
 
   // LES TERRASSES. Une partie plate plus basse d'un mètre que l'égout le plus
   // bas des pans en pente n'est pas la toiture qu'on couvre : c'est une
@@ -236,17 +259,66 @@ export function releverBatiment(e: EntreeReleve): Releve {
   if (densite < 8) raisons.push('peu_de_points')
   const confiance = absente || !recalage.fiable || densite < 4 ? 'basse' : raisons.length ? 'moyenne' : 'haute'
 
-  const gouttieres = facades.filter((f) => f.type === 'gouttereau').map((f) => f.hauteurBasse).sort((a, b) => a - b)
-  const solCentre = sol(
-    Pr.reduce((s, p) => s + p[0], 0) / Pr.length,
-    Pr.reduce((s, p) => s + p[1], 0) / Pr.length,
-  )
+  // LES MURS EN RETRAIT. Sous l'égout d'un pan qui domine une terrasse (ou un
+  // toit plus bas) se tient le vrai mur de la maison, que le contour du
+  // cadastre ne suit pas : on le place à un débord en arrière de l'égout.
+  for (const l of lecture.lignes) {
+    if (!l.interieur || l.type !== 'egout' || l.bas === undefined) continue
+    const p = lecture.pans.find((q) => q.id === l.pans[0])
+    if (!p) continue
+    const g = Math.hypot(p.a, p.b)
+    if (g < 0.05) continue
+    // En arrière de l'égout : vers le haut du pan.
+    const recul: Pt = [(p.a / g) * debordDefaut, (p.b / g) * debordDefaut]
+    const A: Pt = [l.a[0] + recul[0], l.a[1] + recul[1]], B: Pt = [l.b[0] + recul[0], l.b[1] + recul[1]]
+    const L = Math.hypot(B[0] - A[0], B[1] - A[1])
+    if (L < 1) continue
+    const k = Math.max(1, Math.round(L / 0.5))
+    const profil: [number, number][] = []
+    const solMur: number[] = []
+    for (let j = 0; j <= k; j++) {
+      const t = j / k
+      const q: Pt = [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t]
+      const haut = p.a * (q[0] - toit[0][0]) + p.b * (q[1] - toit[0][1]) + p.c - EPAISSEUR_COUVERTURE - l.bas
+      profil.push([r2(L * t), r2(Math.max(0, haut))])
+      solMur.push(r2(l.bas - solCentre))
+    }
+    const hs = profil.map((x) => x[1])
+    const surface = hs.slice(1).reduce((s, v, j) => s + ((v + hs[j]) / 2) * (L / k), 0)
+    if (surface < 1) continue
+    const azimut = ((((Math.atan2(-p.a, -p.b) * 180) / Math.PI) % 360) + 360) % 360
+    facades.push({
+      index: facades.length,
+      orientation: cardinal(azimut),
+      azimut: Math.round(azimut),
+      longueur: r2(L),
+      a: enDegres(A),
+      b: enDegres(B),
+      aretes: [],
+      accole: 0,
+      mitoyen: [],
+      distanceRue: null,
+      rue: false,
+      type: 'gouttereau',
+      hauteurBasse: r2(Math.min(...hs)),
+      hauteurHaute: r2(Math.max(...hs)),
+      profil,
+      sol: solMur,
+      surface: r1(surface),
+      surfaceLibre: r1(surface),
+      retrait: true,
+    })
+  }
+
+  const gouttieres = facades.filter((f) => f.type === 'gouttereau' && !f.retrait).map((f) => f.hauteurBasse).sort((a, b) => a - b)
   const faitage = lecture.pans.length
     ? Math.max(...lecture.pans.flatMap((p) => p.contour.map(([x, y]) => p.a * (x - toit[0][0]) + p.b * (y - toit[0][1]) + p.c)))
     : null
 
   return {
     version: VERSION_RELEVE,
+    origine: [r2(toit[0][0]), r2(toit[0][1])],
+    zSol: r2(solCentre),
     vol: e.vol,
     motif: absente ? 'maison_absente' : null,
     confiance,
@@ -271,6 +343,7 @@ export function releverBatiment(e: EntreeReleve): Releve {
       a: enDegres(l.a),
       b: enDegres(l.b),
       pans: l.pans,
+      ...(l.interieur ? { interieur: true } : {}),
     })),
     pans: lecture.pans.map((p) => ({
       id: p.id,
@@ -283,6 +356,13 @@ export function releverBatiment(e: EntreeReleve): Releve {
       ecart: p.ecart,
       partReconstituee: p.partReconstituee,
       terrasse: estTerrasse(p),
+      // L'origine du relevé est le premier sommet du contour du toit, arrondi
+      // au centimètre : le plan est ramené à ce point arrondi.
+      plan: [
+        Math.round(p.a * 1e5) / 1e5,
+        Math.round(p.b * 1e5) / 1e5,
+        Math.round((p.c + p.a * (r2(toit[0][0]) - toit[0][0]) + p.b * (r2(toit[0][1]) - toit[0][1]) - r2(solCentre)) * 1000) / 1000,
+      ] as [number, number, number],
       contour: p.contour.map(enDegres),
     })),
     surfaces: {
@@ -311,6 +391,7 @@ function facadesDe(
   origine: Pt,
   sol: (x: number, y: number) => number,
   routes: Pt[][],
+  zSol: number,
 ): FacadeReleve[] {
   if (!pans.length) return []
   const enLonLat = Pr.map(enDegres)
@@ -329,6 +410,7 @@ function facadesDe(
   }
   const facades = mursDe(enLonLat).map((mur): FacadeReleve => {
     const profil: [number, number][] = []
+    const solMur: number[] = []
     const mitoyen: [number, number][] = []
     let distanceRue: number | null = null
     let s0 = 0, accole = 0, surface = 0, surfaceLibre = 0
@@ -341,14 +423,22 @@ function facadesDe(
         if (j === 0 && profil.length) continue
         const t = j / k
         const p: Pt = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
-        const haut = toitEn(p) - EPAISSEUR_COUVERTURE - sol(p[0] + n[0], p[1] + n[1])
+        const pied = sol(p[0] + n[0], p[1] + n[1])
+        const haut = toitEn(p) - EPAISSEUR_COUVERTURE - pied
         profil.push([r2(s0 + L * t), r2(Math.max(0, haut))])
+        solMur.push(r2(pied - zSol))
       }
-      // Surface et partie accolée, par tranches de 50 cm.
+      // Surface et partie accolée, par tranches de 50 cm : chaque tranche est
+      // le trapèze entre deux points du profil, celui que la vue 3D dessine —
+      // le dessin et le métré ne peuvent pas diverger.
+      const hauteurEn = (t: number) => {
+        const q: Pt = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+        return Math.max(0, toitEn(q) - EPAISSEUR_COUVERTURE - sol(q[0] + n[0], q[1] + n[1]))
+      }
       for (let j = 0; j < k; j++) {
         const t = (j + 0.5) / k
         const p: Pt = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
-        const haut = Math.max(0, toitEn(p) - EPAISSEUR_COUVERTURE - sol(p[0] + n[0], p[1] + n[1]))
+        const haut = (hauteurEn(j / k) + hauteurEn((j + 1) / k)) / 2
         const tranche = L / k
         const touche = Vr.some((Q) => Q.some((q, m) => distanceSegment(p, q, Q[(m + 1) % Q.length]) <= 0.6))
         surface += haut * tranche
@@ -384,6 +474,7 @@ function facadesDe(
       hauteurBasse: r2(bas),
       hauteurHaute: r2(haut),
       profil,
+      sol: solMur,
       surface: r1(surface),
       surfaceLibre: r1(surfaceLibre),
     }
