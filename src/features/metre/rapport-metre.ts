@@ -50,6 +50,9 @@ export interface FacadeRapport {
   nette: number | null
   materiau: string | null
   retrait: boolean
+  /** Le nombre de murs que compte cette façade, et ce qui en est en retrait au-dessus d'une terrasse. */
+  murs: number
+  enRetrait: { surface: number; longueur: number }
 }
 
 /** Une ligne du tableau : ce que le CSV exporte, dans l'ordre. */
@@ -71,14 +74,17 @@ export interface RapportMetre {
     pans: { id: number; nom: string; pente: number; surface: number; retenu: boolean; terrasse: boolean }[]
     surface: number
     plan: number
+    /** La pente équivalente (celle de la base) ; `penteDesPans` est celle des pans en pente, que lit le couvreur. */
     pente: number
+    penteDesPans: number
+    platPlan: number
     nombre: number
     debord: string | null
   }
   lineaires: { type: TypeLigne; libelle: string; longueur: number; nombre: number }[]
   facades: FacadeRapport[]
   totalFacades: { brute: number; ouvertures: number; nette: number | null }
-  hauteurs: { gouttiere: number | null; faitage: number | null }
+  hauteurs: { gouttiere: number | null; gouttiereMin: number | null; gouttiereMax: number | null; faitage: number | null }
   materiaux: { toit: { libelle: string; provenance: string } | null; murs: { libelle: string; provenance: string } | null }
   lignes: LigneRapport[]
   sources: string[]
@@ -95,7 +101,8 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
   const toit = toitRetenu(r, retenus)
   const pans = r.pans.map((p) => ({
     id: p.id,
-    nom: p.terrasse ? 'Terrasse' : p.orientation === 'plat' ? 'Partie plate' : `Pan ${p.orientation}`,
+    // Le numéro est celui de la pastille de couleur (carte, 3D) : deux pans de même exposition se distinguent.
+    nom: `${p.terrasse ? 'Terrasse' : p.orientation === 'plat' ? 'Partie plate' : `Pan ${p.orientation}`} n°${p.id}`,
     pente: Math.round(p.pente),
     surface: p.aireVraie,
     retenu: !retenus || retenus.includes(p.id),
@@ -130,6 +137,8 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
       nette: ouvertures ? r2(Math.max(0, f.surface - ouvertures.surface)) : null,
       materiau: photo?.lecture?.vision.materiau?.trim() || null,
       retrait: f.murs.every((m) => m.retrait),
+      murs: f.murs.length,
+      enRetrait: f.retrait,
     }
   })
   const aTraiter = facades.filter((f) => f.brute > 0)
@@ -172,7 +181,7 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
     element: 'Total compté',
     quantite: toit.vrai,
     unite: 'm²',
-    detail: `${toit.nb} pans, pente moyenne ${String(toit.pente).replace('.', ',')} %`,
+    detail: `${toit.nb} pans, pente des pans ${String(toit.penteDesPans).replace('.', ',')} %${toit.platPlan > 0 ? `, dont ${nombreCsv(toit.platPlan)} m² plats (vus du dessus)` : ''}`,
     source: LIDAR,
   })
   lignes.push({ rubrique: 'Toiture', element: 'Vue du dessus', quantite: toit.plan, unite: 'm²', detail: '', source: LIDAR })
@@ -189,7 +198,10 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
       element: `${nom}, brute`,
       quantite: f.brute,
       unite: 'm²',
-      detail: f.brute > 0 ? `${formatM(f.longueur)} de long, ${hauteur} de haut` : 'mitoyenne',
+      detail:
+        f.brute > 0
+          ? `${formatM(f.longueur)} de long, ${hauteur} de haut${f.murs > 1 ? `, ${f.murs} murs` : ''}${f.enRetrait.surface > 0 ? `, dont ${formatM(f.enRetrait.longueur)} et ${formatM2(f.enRetrait.surface)} en retrait au-dessus d’une terrasse` : ''}`
+          : 'mitoyenne',
       source: LIDAR,
     })
     if (f.ouvertures) {
@@ -216,10 +228,18 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
     lignes.push({ rubrique: 'Façades', element: 'Total net', quantite: totalFacades.nette, unite: 'm²', detail: 'ouvertures déduites', source: 'LiDAR − photos' })
   }
   if (r.hauteurs.gouttiere != null) {
-    lignes.push({ rubrique: 'Hauteurs', element: 'À la gouttière', quantite: r.hauteurs.gouttiere, unite: 'm', detail: '', source: LIDAR })
+    const { gouttiereMin: gmin, gouttiereMax: gmax } = r.hauteurs
+    lignes.push({
+      rubrique: 'Hauteurs',
+      element: 'À la gouttière',
+      quantite: r.hauteurs.gouttiere,
+      unite: 'm',
+      detail: `du sol au pied du mur au dessous de la couverture${gmin != null && gmax != null && gmax - gmin >= 0.3 ? `, de ${formatM(gmin)} à ${formatM(gmax)} selon le terrain` : ''}`,
+      source: LIDAR,
+    })
   }
   if (r.hauteurs.faitage != null) {
-    lignes.push({ rubrique: 'Hauteurs', element: 'Au faîtage', quantite: r.hauteurs.faitage, unite: 'm', detail: '', source: LIDAR })
+    lignes.push({ rubrique: 'Hauteurs', element: 'Au faîtage', quantite: r.hauteurs.faitage, unite: 'm', detail: 'au-dessus du sol au centre de la maison', source: LIDAR })
   }
   if (materiauToit) lignes.push({ rubrique: 'Matériaux', element: 'Couverture', quantite: null, unite: '', detail: materiauToit.libelle, source: materiauToit.provenance })
   if (lu?.fenetres_toit != null) lignes.push({ rubrique: 'Matériaux', element: 'Fenêtres de toit', quantite: lu.fenetres_toit, unite: 'u', detail: '', source: 'photo aérienne IGN 5 cm, lue par IA' })
@@ -246,11 +266,25 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
     titre: e.titre,
     adresse: e.adresse,
     date: e.date,
-    toiture: { pans, surface: toit.vrai, plan: toit.plan, pente: toit.pente, nombre: toit.nb, debord: debordLisible(r) },
+    toiture: {
+      pans,
+      surface: toit.vrai,
+      plan: toit.plan,
+      pente: toit.pente,
+      penteDesPans: toit.penteDesPans,
+      platPlan: toit.platPlan,
+      nombre: toit.nb,
+      debord: debordLisible(r),
+    },
     lineaires,
     facades,
     totalFacades,
-    hauteurs: { gouttiere: r.hauteurs.gouttiere, faitage: r.hauteurs.faitage },
+    hauteurs: {
+      gouttiere: r.hauteurs.gouttiere,
+      gouttiereMin: r.hauteurs.gouttiereMin ?? null,
+      gouttiereMax: r.hauteurs.gouttiereMax ?? null,
+      faitage: r.hauteurs.faitage,
+    },
     materiaux: { toit: materiauToit, murs: materiauMurs },
     lignes,
     sources,

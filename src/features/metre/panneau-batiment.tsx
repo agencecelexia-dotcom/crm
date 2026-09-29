@@ -350,7 +350,7 @@ export function PanneauBatiment({
     enCours: toitureEnCours && !toitMesure,
     libelle: 'Pente',
     unite: 'pct',
-    valeur: toitMesure ? toitMesure.pente : pente,
+    valeur: toitMesure ? toitMesure.penteDesPans : pente,
     onToucher: () => setOnglet('toiture'),
   }
   const cartes: CarteMesure[] =
@@ -483,6 +483,7 @@ export function PanneauBatiment({
             )}
             <Chiffre titre="Débord (mesuré)" valeur={debordCourt(releve) ?? '—'} />
             <Chiffre titre="Toit vu du dessus" valeur={formatM2(toitMesure.plan)} />
+            {toitMesure.platPlan > 0 && <Chiffre titre="Dont partie plate" valeur={formatM2(toitMesure.platPlan)} />}
           </div>
 
           <p className="text-xs text-muted-foreground">
@@ -509,7 +510,9 @@ export function PanneauBatiment({
             {vol ? `, vol de ${vol}` : ''}&nbsp;: chaque pan à sa pente, le débord lu côté par côté
             {Math.hypot(releve.recalage.dx, releve.recalage.dy) >= 0.2
               ? `, le contour du cadastre recalé de ${Math.round(Math.hypot(releve.recalage.dx, releve.recalage.dy) * 100)} cm sur le toit.`
-              : '.'}
+              : '.'}{' '}
+            Gouttière&nbsp;: du sol au pied du mur au dessous de la couverture. Faîtage&nbsp;: au-dessus
+            du sol au centre de la maison.
           </p>
           <Provenance lignes={provenanceToit(releve)} />
 
@@ -666,7 +669,9 @@ export function PanneauBatiment({
             )}
             {/* La suggestion de la BD TOPO, à reprendre d'un geste : elle devient
                 alors le choix de l'artisan, et c'est écrit comme tel. */}
-            {pente == null && suggestion != null && (
+            {/* Pendant la mesure, l'estimation de la BD TOPO n'est pas encore corrigée par le
+                LiDAR (32 % annoncés, 59,9 % mesurés à Nogent) : on ne la propose pas. */}
+            {pente == null && suggestion != null && !toitureEnCours && !releveEnCours && (
               <button
                 type="button"
                 onClick={() => setPenteSaisie(suggestion)}
@@ -786,7 +791,9 @@ export function PanneauBatiment({
 
           <Garder
             enCours={enCours}
-            desactive={pente == null}
+            // Pas d'enregistrement pendant que le LiDAR mesure : la pente choisie
+            // maintenant serait celle d'une estimation, pas de la maison.
+            desactive={pente == null || toitureEnCours || releveEnCours}
             defaut={versantChoisi ? `Toiture versant ${versantChoisi}` : batiment.nature || 'Toiture'}
             onGarder={(nom) =>
               onEnregistrer({

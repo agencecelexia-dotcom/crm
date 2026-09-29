@@ -44,8 +44,12 @@ import {
  *     qui n'est pas toit (terrasse) sort du compte.
  * 5 : de quoi dessiner la maison en 3D (plan de chaque pan, sol le long des
  *     murs) ; les murs en retrait derrière une terrasse.
+ * 6 : la hauteur à la gouttière est lue là où un pan descend vers le mur, à
+ *     la longueur (plus la médiane des murs) et existe sur tout toit ; les
+ *     décrochés du contour ont leur profil (`decroches`), pour un anneau de
+ *     murs fermé en 3D.
  */
-export const VERSION_RELEVE = 5
+export const VERSION_RELEVE = 6
 
 /**
  * Du dessus du toit au dessous de la couverture, au droit du mur : tuiles,
@@ -69,6 +73,8 @@ export interface PanReleve {
   ecart: number
   partReconstituee: number
   contour: Point[]
+  /** Le contour à dessiner (étiquettes lissées) ; `contour` est celui des calculs. */
+  dessin?: Point[]
   /**
    * Une partie plate nettement plus basse que les égouts du toit : une
    * terrasse, un toit de garage. Elle n'est pas comptée par défaut.
@@ -168,7 +174,28 @@ export interface Releve {
   lignes: LigneReleve[]
   surfaces: { emprise: number; toitPlan: number; toitVrai: number; sansPoints: number }
   facades: FacadeReleve[]
-  hauteurs: { faitage: number | null; gouttiere: number | null }
+  /**
+   * Les côtés du contour trop courts pour être une façade (moins d'un mètre,
+   * ou pris dans un mur voisin d'une autre direction) : ils ne comptent pas
+   * au métré, mais le modèle 3D les dessine, pour que les murs se referment.
+   */
+  decroches?: MurDecroche[]
+  /**
+   * Faîtage : au-dessus du sol au centre de la maison. Gouttière : au-dessus
+   * du sol au pied du mur, jusqu'au dessous de la couverture, lue là où un pan
+   * descend vers le mur (`gouttiereMin`/`gouttiereMax` : l'éventail, quand le
+   * terrain est en pente).
+   */
+  hauteurs: { faitage: number | null; gouttiere: number | null; gouttiereMin?: number | null; gouttiereMax?: number | null }
+}
+
+export interface MurDecroche {
+  a: Point
+  b: Point
+  longueur: number
+  /** Comme pour une façade : distance le long du mur, hauteur ; et sol au pied de chaque point. */
+  profil: [number, number][]
+  sol: number[]
 }
 
 export interface EntreeReleve {
@@ -233,7 +260,7 @@ export function releverBatiment(e: EntreeReleve): Releve {
     Pr.reduce((s, p) => s + p[0], 0) / Pr.length,
     Pr.reduce((s, p) => s + p[1], 0) / Pr.length,
   )
-  const facades = facadesDe(Pr, Vr, lecture.pans, toit[0], sol, routes, solCentre)
+  const { facades, egouts, decroches } = facadesDe(Pr, Vr, lecture.pans, toit[0], sol, routes, solCentre)
 
   // LES TERRASSES. Une partie plate plus basse d'un mètre que l'égout le plus
   // bas des pans en pente n'est pas la toiture qu'on couvre : c'est une
@@ -310,7 +337,7 @@ export function releverBatiment(e: EntreeReleve): Releve {
     })
   }
 
-  const gouttieres = facades.filter((f) => f.type === 'gouttereau' && !f.retrait).map((f) => f.hauteurBasse).sort((a, b) => a - b)
+  const gouttiere = hauteurGouttiere(egouts, facades)
   const faitage = lecture.pans.length
     ? Math.max(...lecture.pans.flatMap((p) => p.contour.map(([x, y]) => p.a * (x - toit[0][0]) + p.b * (y - toit[0][1]) + p.c)))
     : null
@@ -364,6 +391,7 @@ export function releverBatiment(e: EntreeReleve): Releve {
         Math.round((p.c + p.a * (r2(toit[0][0]) - toit[0][0]) + p.b * (r2(toit[0][1]) - toit[0][1]) - r2(solCentre)) * 1000) / 1000,
       ] as [number, number, number],
       contour: p.contour.map(enDegres),
+      dessin: p.dessin.map(enDegres),
     })),
     surfaces: {
       emprise: r1(aireL93(Pr)),
@@ -372,11 +400,43 @@ export function releverBatiment(e: EntreeReleve): Releve {
       sansPoints: lecture.aireSansPoints,
     },
     facades,
+    decroches,
     hauteurs: {
       faitage: faitage === null ? null : r2(faitage - solCentre),
-      gouttiere: gouttieres.length ? gouttieres[Math.floor(gouttieres.length / 2)] : null,
+      gouttiere: gouttiere?.mediane ?? null,
+      gouttiereMin: gouttiere?.min ?? null,
+      gouttiereMax: gouttiere?.max ?? null,
     },
   }
+}
+
+/**
+ * La hauteur à la gouttière : la médiane, PONDÉRÉE PAR LA LONGUEUR, des hauteurs
+ * mesurées là où un pan descend vers un mur libre. Les quartiles bas et haut
+ * disent l'éventail (le terrain en pente le fait varier d'un mur à l'autre).
+ * Une annexe basse ou un petit décroché ne pèsent que leur longueur ; sans
+ * aucun égout lu (un toit tout plat), la médiane des murs à la longueur.
+ */
+export function hauteurGouttiere(
+  egouts: { h: number; l: number }[],
+  facades: { retrait?: boolean; surfaceLibre: number; hauteurBasse: number; longueur: number }[],
+): { mediane: number; min: number; max: number } | null {
+  let lus = egouts
+  if (!lus.length) {
+    lus = facades.filter((f) => !f.retrait && f.surfaceLibre > 0 && f.longueur > 0).map((f) => ({ h: f.hauteurBasse, l: f.longueur }))
+  }
+  if (!lus.length) return null
+  const tries = [...lus].sort((a, b) => a.h - b.h)
+  const total = tries.reduce((s, x) => s + x.l, 0)
+  const quantile = (q: number) => {
+    let cumul = 0
+    for (const x of tries) {
+      cumul += x.l
+      if (cumul >= total * q) return x.h
+    }
+    return tries[tries.length - 1].h
+  }
+  return { mediane: r2(quantile(0.5)), min: r2(quantile(0.1)), max: r2(quantile(0.9)) }
 }
 
 /**
@@ -392,11 +452,11 @@ function facadesDe(
   sol: (x: number, y: number) => number,
   routes: Pt[][],
   zSol: number,
-): FacadeReleve[] {
-  if (!pans.length) return []
+): { facades: FacadeReleve[]; egouts: { h: number; l: number }[]; decroches: MurDecroche[] } {
+  if (!pans.length) return { facades: [], egouts: [], decroches: [] }
   const enLonLat = Pr.map(enDegres)
   // Le pan au-dessus d'un point : celui dont le contour le contient, sinon le plus proche.
-  const toitEn = (p: Pt): number => {
+  const panEn = (p: Pt): number => {
     let meilleur = -1, dMin = Infinity
     for (let k = 0; k < pans.length; k++) {
       const C = pans[k].contour
@@ -405,9 +465,20 @@ function facadesDe(
       else for (let i = 0; i < C.length; i++) d = Math.min(d, distanceSegment(p, C[i], C[(i + 1) % C.length]))
       if (d < dMin) [dMin, meilleur] = [d, k]
     }
-    const q = pans[meilleur]
+    return meilleur
+  }
+  const toitEn = (p: Pt): number => {
+    const q = pans[panEn(p)]
     return q.a * (p[0] - origine[0]) + q.b * (p[1] - origine[1]) + q.c
   }
+  // Sous un égout : le pan au-dessus du mur DESCEND vers lui (au moins 60 % de
+  // sa pente, et 5 % au moins). Un pignon, où le pan longe le mur, n'en est pas un.
+  const sousUnEgout = (p: Pt, n: Pt): boolean => {
+    const q = pans[panEn(p)]
+    const pente = Math.hypot(q.a, q.b)
+    return pente >= 0.05 && -(q.a * n[0] + q.b * n[1]) / pente >= 0.6
+  }
+  const egouts: { h: number; l: number }[] = []
   const facades = mursDe(enLonLat).map((mur): FacadeReleve => {
     const profil: [number, number][] = []
     const solMur: number[] = []
@@ -442,6 +513,7 @@ function facadesDe(
         const tranche = L / k
         const touche = Vr.some((Q) => Q.some((q, m) => distanceSegment(p, q, Q[(m + 1) % Q.length]) <= 0.6))
         surface += haut * tranche
+        if (!touche && sousUnEgout(p, n)) egouts.push({ h: haut, l: tranche })
         if (touche) {
           accole += tranche
           const de = r2(s0 + j * tranche), a = r2(s0 + (j + 1) * tranche)
@@ -486,7 +558,30 @@ function facadesDe(
     const d0 = Math.min(...vues)
     for (const f of facades) f.rue = f.distanceRue !== null && f.distanceRue <= Math.min(d0 + 3, 30)
   }
-  return facades
+
+  // Les côtés du contour que nulle façade ne porte : leur profil, pour que le
+  // modèle 3D ferme l'anneau des murs.
+  const portes = new Set(facades.flatMap((f) => f.aretes))
+  const decroches: MurDecroche[] = []
+  for (let i = 0; i < Pr.length; i++) {
+    if (portes.has(i)) continue
+    const a = Pr[i], b = Pr[(i + 1) % Pr.length]
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (L < 0.05) continue
+    const n = normaleExterieure(Pr, i)
+    const k = Math.max(1, Math.round(L / 0.5))
+    const profil: [number, number][] = []
+    const solMur: number[] = []
+    for (let j = 0; j <= k; j++) {
+      const t = j / k
+      const p: Pt = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+      const pied = sol(p[0] + n[0], p[1] + n[1])
+      profil.push([r2(L * t), r2(Math.max(0, toitEn(p) - EPAISSEUR_COUVERTURE - pied))])
+      solMur.push(r2(pied - zSol))
+    }
+    decroches.push({ a: enLonLat[i], b: enLonLat[(i + 1) % Pr.length], longueur: r2(L), profil, sol: solMur })
+  }
+  return { facades, egouts, decroches }
 }
 
 /** Jusqu'où l'on cherche la rue devant un mur. */

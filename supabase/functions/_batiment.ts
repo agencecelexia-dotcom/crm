@@ -21,6 +21,7 @@ import {
   requeteAdresse,
   voieSaisie,
 } from './_adresse.ts'
+import { contient, parcelleSous } from './_parcelle.ts'
 
 /** Un appel HTTP avec délai de garde et réessais : l'IGN et le RNB étranglent parfois. */
 export async function lireJson(url: string, essais = 2): Promise<unknown> {
@@ -261,7 +262,77 @@ export interface Reponse {
   commune_differente: boolean
   /** Le numéro saisi, quand la BAN en a retrouvé un autre dans la même rue. */
   numero_saisi: string | null
+  /** À quelle distance du point d'adresse est la maison (m ; 0 : le point est dessus). */
+  distance_m: number | null
+  /** Ce qui prouve le lien : le point est sur la maison, tout près, ou sur sa parcelle cadastrale. */
+  preuve: 'dans' | 'proche' | 'parcelle' | null
+  /** Ce qui empêche de conclure, dit en clair, quand la confiance est « à confirmer ». */
+  doute: string | null
   message: string | null
+}
+
+/** À moins de cette distance du point d'adresse, la maison du RNB n'a plus besoin d'autre preuve. */
+export const DISTANCE_SURE_M = 5
+
+/** La maison est-elle sur la parcelle du point d'adresse ? Seule dessus, avec d'autres, ou ailleurs. */
+export type SurLaParcelle = 'seule' | 'partagee' | 'autre' | 'inconnue'
+
+export interface Lien {
+  confiance: 'officielle' | 'a_confirmer'
+  distance_m: number
+  preuve: Reponse['preuve']
+  doute: string | null
+}
+
+/**
+ * Le lien entre le point d'une adresse et sa maison : prouvé, ou à confirmer.
+ *
+ * L'audit du 29/09/2026 a relevé « Maison reliée à l'adresse » sur des maisons
+ * à 9, 13, 14 et 16 m du point, sans rien qui le prouve. Le lien du RNB ne suffit
+ * plus : il faut que le point soit SUR la maison, à moins de 5 m d'elle, ou
+ * sur sa parcelle cadastrale, dont elle est alors le seul bâtiment habitable.
+ * Sinon l'écran demande « C'est bien la maison ? » et dit la distance.
+ */
+export function jugerLien(o: { methode: 'rnb' | 'contenant' | 'proximite'; distance: number; parcelle: SurLaParcelle }): Lien {
+  const d = Math.round(o.distance * 10) / 10
+  const prouve = (preuve: NonNullable<Reponse['preuve']>): Lien => ({ confiance: 'officielle', distance_m: d, preuve, doute: null })
+  if (o.distance === 0 && o.methode !== 'proximite') return prouve('dans')
+  if (o.methode === 'rnb' && o.distance <= DISTANCE_SURE_M) return prouve('proche')
+  if (o.methode === 'rnb' && o.parcelle === 'seule') return prouve('parcelle')
+  const doute =
+    o.parcelle === 'partagee'
+      ? `Plusieurs bâtiments se partagent la parcelle du numéro (maison à ${d} m).`
+      : o.parcelle === 'autre'
+        ? `La maison est à ${d} m du numéro, sur une autre parcelle.`
+        : `La maison est à ${d} m du numéro.`
+  return { confiance: 'a_confirmer', distance_m: d, preuve: null, doute }
+}
+
+/** Le lien d'une maison trouvée avec le point de son adresse ; la parcelle n'est lue que si la distance ne suffit pas. */
+export async function lienDeLAdresse(
+  point: [number, number],
+  trouve: { methode: 'rnb' | 'contenant' | 'proximite'; principal: BatimentBd },
+): Promise<Lien> {
+  const distance = distancePolygone(point, trouve.principal.contour)
+  let parcelle: SurLaParcelle = 'inconnue'
+  const assezProche = distance === 0 || (trouve.methode === 'rnb' && distance <= DISTANCE_SURE_M)
+  if (!assezProche) {
+    try {
+      const centre = centreDe(trouve.principal)
+      const [p, voisins] = await Promise.all([parcelleSous(point), autour(centre, 40)])
+      if (p) {
+        const dedans = (b: BatimentBd) => contient(p.contour, centreDe(b))
+        parcelle = !dedans(trouve.principal)
+          ? 'autre'
+          : voisins.some((b) => b.cleabs !== trouve.principal.cleabs && habitable(b) && dedans(b))
+            ? 'partagee'
+            : 'seule'
+      }
+    } catch {
+      parcelle = 'inconnue'
+    }
+  }
+  return jugerLien({ methode: trouve.methode, distance, parcelle })
 }
 
 /**
@@ -361,6 +432,9 @@ export function reponseDeBase(d: Dossier): Omit<Reponse, 'confiance' | 'methode'
     commune_retrouvee: null,
     commune_differente: false,
     numero_saisi: null,
+    distance_m: null,
+    preuve: null,
+    doute: null,
   }
 }
 
@@ -386,9 +460,13 @@ export async function maisonDeLAdresseChoisie(
   const trouve = await batimentDeLAdresse(choisie)
   const infos = { ...reponseDeBase(d), point: choisie.point, adresse_retrouvee: choisie.label }
   if (!trouve) return { ...infos, confiance: 'aucune', methode: null, principal: null, message: AUCUN_BATIMENT }
+  const lien = await lienDeLAdresse(choisie.point, trouve)
   return {
     ...infos,
-    confiance: trouve.methode === 'rnb' ? 'officielle' : 'a_confirmer',
+    confiance: lien.confiance,
+    distance_m: lien.distance_m,
+    preuve: lien.preuve,
+    doute: lien.doute,
     methode: trouve.methode,
     principal: { cleabs: trouve.principal.cleabs, contour: trouve.principal.contour, aire: Math.round(trouve.principal.aire) },
     autres: trouve.autres.map((b) => b.cleabs),
@@ -496,7 +574,8 @@ export async function identifierMaison(d: Dossier): Promise<{ reponse: Reponse; 
     }
   }
   const { methode, principal, autres, liens } = trouve
-  const officielle = methode === 'rnb' && score >= SEUIL_SCORE && !communeDifferente && !autreNumero
+  const lien = await lienDeLAdresse(numero.point, trouve)
+  const officielle = lien.confiance === 'officielle' && score >= SEUIL_SCORE && !communeDifferente && !autreNumero
 
   // Un point près de la maison, pour la relire en une seconde : celui du RNB
   // quand il existe (il est DANS le bâtiment), sinon le centre du contour.
@@ -505,6 +584,9 @@ export async function identifierMaison(d: Dossier): Promise<{ reponse: Reponse; 
     reponse: {
       ...infos,
       confiance: officielle ? 'officielle' : 'a_confirmer',
+      distance_m: lien.distance_m,
+      preuve: lien.preuve,
+      doute: lien.doute,
       methode,
       principal: { cleabs: principal.cleabs, contour: principal.contour, aire: Math.round(principal.aire) },
       autres: autres.map((b) => b.cleabs),

@@ -48,6 +48,12 @@ export interface PanToit {
   partReconstituee: number
   /** Contour simplifié du pan, en Lambert-93. */
   contour: Pt[]
+  /**
+   * Le même, tracé sur des étiquettes de cases lissées : c'est lui qu'on
+   * dessine (carte, 3D). `contour` reste celui des calculs (hauteur d'un mur
+   * au droit d'un pan) : le lisser changerait des chiffres du métré.
+   */
+  dessin: Pt[]
 }
 
 /**
@@ -278,6 +284,7 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boole
       aireVraie: airePlan * Math.sqrt(1 + a * a + b * b),
       partReconstituee: cases ? decoupe.reconstituees[i] / cases : 0,
       contour: decoupe.contours[i].map(([x, y]) => [x + x0, y + y0] as Pt),
+      dessin: decoupe.dessins[i].map(([x, y]) => [x + x0, y + y0] as Pt),
     }
     regionDe.set(pan, i)
     pans.push(pan)
@@ -406,6 +413,7 @@ function decouper(
   sansPoints: number
   horsToit: number
   contours: Pt[][]
+  dessins: Pt[][]
   contourToit: Pt[]
   lignes: LigneBrute[]
 } {
@@ -548,17 +556,20 @@ function decouper(
     if (pan[c] >= 0) parPan[pan[c]]++
     else horsToit++
   }
-  const contours: Pt[][] = []
+  // Le DESSIN des pans part d'une copie lissée des étiquettes : les surfaces,
+  // elles, se comptent sur les étiquettes brutes (`parPan`) — le lissage ne
+  // change aucun chiffre du métré.
+  const lisse = lisser(pan, dedans, nx, ny)
+  const contours: Pt[][] = [], dessins: Pt[][] = []
   for (let r = 0; r < nbPans; r++) {
-    contours.push(
-      contourDeCases(pan, dedans, nx, ny, r).map(([cx, cy]) => [minX + cx * PAS, minY + cy * PAS] as Pt),
-    )
+    contours.push(contourDeCases(pan, dedans, nx, ny, r).map(([cx, cy]) => [minX + cx * PAS, minY + cy * PAS] as Pt))
+    dessins.push(contourDeCases(lisse, dedans, nx, ny, r).map(([cx, cy]) => [minX + cx * PAS, minY + cy * PAS] as Pt))
   }
   // Le contour de ce qui est vraiment toit : l'union des pans.
   const toutPan = new Int32Array(pan.length).fill(-1)
   for (let c = 0; c < pan.length; c++) if (dedans[c] && pan[c] >= 0) toutPan[c] = 0
   const contourToit = contourDeCases(toutPan, dedans, nx, ny, 0).map(([cx, cy]) => [minX + cx * PAS, minY + cy * PAS] as Pt)
-  return { total, parPan, reconstituees, sansPoints, horsToit, contours, contourToit, lignes }
+  return { total, parPan, reconstituees, sansPoints, horsToit, contours, dessins, contourToit, lignes }
 }
 
 /**
@@ -965,6 +976,81 @@ function bordsDuToit(
 }
 
 /**
+ * Les étiquettes de cases, sans leur bruit : chaque case prend le pan de la
+ * majorité de ses huit voisines (deux passes : un bord droit y reste droit, une
+ * dent d'une case disparaît), puis les îlots de moins d'un mètre carré passent
+ * au pan qui les entoure. Sert au DESSIN des pans, jamais à leur surface.
+ */
+function lisser(pan: Int32Array, dedans: Uint8Array, nx: number, ny: number): Int32Array {
+  let cur = pan.slice()
+  for (let passe = 0; passe < 2; passe++) {
+    const suivant = cur.slice()
+    for (let cy = 0; cy < ny; cy++) {
+      for (let cx = 0; cx < nx; cx++) {
+        const c = cy * nx + cx
+        if (!dedans[c]) continue
+        const votes = new Map<number, number>()
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const x = cx + dx, y = cy + dy
+            if (x < 0 || y < 0 || x >= nx || y >= ny || !dedans[y * nx + x]) continue
+            const v = cur[y * nx + x]
+            votes.set(v, (votes.get(v) ?? 0) + 1)
+          }
+        }
+        const propre = votes.get(cur[c]) ?? 0
+        let meilleur = cur[c], n = propre
+        for (const [v, k] of votes) if (k > n) [meilleur, n] = [v, k]
+        if (meilleur !== cur[c] && n >= 5) suivant[c] = meilleur
+      }
+    }
+    cur = suivant
+  }
+  // Les îlots : une composante de moins de 16 cases (1 m²) qui n'est pas la
+  // plus grande de son pan rejoint le pan voisin le plus en contact.
+  const vue = new Uint8Array(cur.length)
+  const composantes: { label: number; cases: number[] }[] = []
+  for (let c0 = 0; c0 < cur.length; c0++) {
+    if (vue[c0] || !dedans[c0]) continue
+    const label = cur[c0]
+    const cases = [c0]
+    vue[c0] = 1
+    for (let q = 0; q < cases.length; q++) {
+      const c = cases[q]
+      const cx = c % nx, cy = (c - cx) / nx
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = cx + dx, y = cy + dy
+        if (x < 0 || y < 0 || x >= nx || y >= ny) continue
+        const d = y * nx + x
+        if (vue[d] || !dedans[d] || cur[d] !== label) continue
+        vue[d] = 1
+        cases.push(d)
+      }
+    }
+    composantes.push({ label, cases })
+  }
+  const grande = new Map<number, number>()
+  for (const k of composantes) grande.set(k.label, Math.max(grande.get(k.label) ?? 0, k.cases.length))
+  for (const k of composantes) {
+    if (k.cases.length >= 16 || k.cases.length === grande.get(k.label)) continue
+    const contacts = new Map<number, number>()
+    for (const c of k.cases) {
+      const cx = c % nx, cy = (c - cx) / nx
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = cx + dx, y = cy + dy
+        if (x < 0 || y < 0 || x >= nx || y >= ny || !dedans[y * nx + x]) continue
+        const v = cur[y * nx + x]
+        if (v !== k.label) contacts.set(v, (contacts.get(v) ?? 0) + 1)
+      }
+    }
+    let cible = k.label, n = 0
+    for (const [v, m] of contacts) if (m > n) [cible, n] = [v, m]
+    for (const c of k.cases) cur[c] = cible
+  }
+  return cur
+}
+
+/**
  * Le contour extérieur des cases d'un pan (en coordonnées de case), simplifié.
  * On chaîne les côtés de case qui séparent le pan du reste, puis on garde la
  * plus longue boucle.
@@ -1002,9 +1088,19 @@ function contourDeCases(pan: Int32Array, dedans: Uint8Array, nx: number, ny: num
       if (!f) break
       fin = f
     }
-    if (boucle.length > meilleure.length) meilleure = boucle
+    // L'extérieur, c'est la boucle qui enferme le plus : pas celle qui a le plus de sommets (un trou peut en avoir plus).
+    if (Math.abs(aireBoucle(boucle)) > Math.abs(aireBoucle(meilleure))) meilleure = boucle
   }
   return douglasPeucker(meilleure, 1.2)
+}
+
+function aireBoucle(P: Pt[]): number {
+  let s = 0
+  for (let i = 0; i < P.length; i++) {
+    const [x1, y1] = P[i], [x2, y2] = P[(i + 1) % P.length]
+    s += x1 * y2 - x2 * y1
+  }
+  return s / 2
 }
 
 /** Simplifie une boucle fermée : tolérance en cases. */

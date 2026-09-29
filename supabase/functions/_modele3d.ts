@@ -11,9 +11,9 @@
 // des cases de 25 cm, le métré est calculé au plus juste.
 
 import { depuisLambert93, versLambert93 } from './_calcul-toit.ts'
-import type { Point } from './_geometrie.ts'
+import { cardinal, type Point } from './_geometrie.ts'
 import type { Boite, LectureVision } from './_ouvertures.ts'
-import type { FacadeReleve, Releve } from './_releve.ts'
+import { EPAISSEUR_COUVERTURE, type FacadeReleve, type Releve } from './_releve.ts'
 
 export type Vec3 = [number, number, number]
 
@@ -36,6 +36,12 @@ export interface Face3D {
   retrait?: boolean
   /** Mur entièrement mitoyen : il ne se traite pas. */
   mitoyen?: boolean
+  /**
+   * Un mur que le modèle ajoute pour fermer le volume (un décroché du contour,
+   * le mur sous un bord de toit, le soutènement d'une terrasse) : il ne compte
+   * pas au métré, qui ne le lit pas dans les façades.
+   */
+  complement?: boolean
   type_ouverture?: string
   /** Ouverture : la photo où elle a été lue, son rang dans la lecture, et si l'artisan l'a retirée. */
   photo?: string
@@ -84,31 +90,146 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
     })
   }
 
-  // LES MURS : du sol au dessous du toit, en suivant le profil relevé.
+  // LES MURS : du sol au dessous du toit, en suivant le profil relevé. Le pied
+  // est lissé (le sol se lit par cases d'un mètre) ; le haut, lui, reste au toit.
   const murs = r.murs.map(loc)
+  const empreintes: [XY, XY][] = []
+  const pieds: Vec3[] = []
+  const poser = (
+    ref: string,
+    chemin: XY[],
+    profil: [number, number][],
+    sol: number[] | undefined,
+    orientation: string,
+    porte: Partial<Face3D>,
+  ) => {
+    const lisse = lisserSol(profil.map((_, i) => sol?.[i] ?? 0))
+    const bas: Vec3[] = [], haut: Vec3[] = [], deplieBas: XY[] = [], deplieHaut: XY[] = []
+    profil.forEach(([s, h], i) => {
+      const [x, y] = pointA(chemin, s)
+      const z1 = (sol?.[i] ?? 0) + h
+      const z0 = Math.min(lisse[i], z1)
+      bas.push([r3(x), r3(y), r3(z0)])
+      haut.push([r3(x), r3(y), r3(z1)])
+      deplieBas.push([r3(s), r3(z0)])
+      deplieHaut.push([r3(s), r3(z1)])
+      // Le sol ne se lit qu'au pied des murs du contour, pas sous une terrasse.
+      if (!porte.complement || porte.retrait === undefined) pieds.push([x, y, z0])
+    })
+    for (let i = 0; i + 1 < bas.length; i++) empreintes.push([[bas[i][0], bas[i][1]], [bas[i + 1][0], bas[i + 1][1]]])
+    faces.push({
+      type: 'mur',
+      ref,
+      sommets: [...bas, ...haut.reverse()],
+      plan2d: [...deplieBas, ...deplieHaut.reverse()],
+      surface: 0,
+      orientation,
+      ...porte,
+    })
+  }
   for (const f of r.facades) {
     const chemin = cheminDuMur(f, murs, loc)
     if (!chemin) continue
-    const bas: Vec3[] = [], haut: Vec3[] = [], deplieBas: [number, number][] = [], deplieHaut: [number, number][] = []
-    f.profil.forEach(([s, h], i) => {
-      const [x, y] = pointA(chemin, s)
-      const z0 = f.sol?.[i] ?? 0
-      bas.push([r3(x), r3(y), r3(z0)])
-      haut.push([r3(x), r3(y), r3(z0 + h)])
-      deplieBas.push([r3(s), r3(z0)])
-      deplieHaut.push([r3(s), r3(z0 + h)])
-    })
-    faces.push({
-      type: 'mur',
-      ref: String(f.index),
-      sommets: [...bas, ...haut.reverse()],
-      plan2d: [...deplieBas, ...deplieHaut.reverse()],
+    poser(String(f.index), chemin, f.profil, f.sol, f.orientation, {
       surface: f.surfaceLibre,
-      orientation: f.orientation,
       hauteur: [f.hauteurBasse, f.hauteurHaute],
       retrait: f.retrait,
       mitoyen: f.surfaceLibre <= 0 && f.accole > 0,
     })
+  }
+  // Les décrochés du contour : sans eux, l'anneau des murs a des vides.
+  const trigo = aire2d(murs) > 0
+  ;(r.decroches ?? []).forEach((d, i) => {
+    const a = loc(d.a), b = loc(d.b)
+    const dx = b[0] - a[0], dy = b[1] - a[1]
+    const [nx, ny] = trigo ? [dy, -dx] : [-dy, dx]
+    const hs = d.profil.map((q) => q[1])
+    poser(`d${i}`, [a, b], d.profil, d.sol, cardinal(((Math.atan2(nx, ny) * 180) / Math.PI + 360) % 360), {
+      surface: aireMur(d.profil),
+      hauteur: [Math.min(...hs), Math.max(...hs)],
+      complement: true,
+    })
+  })
+  // Les bords de toit que nul mur ne porte : un mur sous chacun (murs en retrait
+  // au-dessus d'une terrasse, soutènement de la terrasse elle-même).
+  const recul = r.debord.moyen ?? 0.4
+  const solProche = ([x, y]: XY) => {
+    let d = Infinity, z = 0
+    for (const q of pieds) {
+      const dd = (q[0] - x) ** 2 + (q[1] - y) ** 2
+      if (dd < d) [d, z] = [dd, q[2]]
+    }
+    return z
+  }
+  const autourDe = (Q: XY[], q: XY) => {
+    let d = Infinity
+    for (let i = 0; i < Q.length; i++) d = Math.min(d, distanceASegment(q, Q[i], Q[(i + 1) % Q.length]))
+    return d
+  }
+  for (const p of r.pans) {
+    const P = nets.get(p.id)!
+    const [a, b, c] = p.plan
+    const g = Math.hypot(a, b)
+    const plan = ([x, y]: XY) => a * x + b * y + c
+    const autres = r.pans.filter((q) => q.id !== p.id).map((q) => ({ q, P: nets.get(q.id)! }))
+    const sens = aire2d(P) > 0 ? 1 : -1
+    for (let i = 0; i < P.length; i++) {
+      const u = P[i], v = P[(i + 1) % P.length]
+      const L = Math.hypot(v[0] - u[0], v[1] - u[1])
+      if (L < 0.5) continue
+      const k = Math.ceil(L / 0.25)
+      const en = (t: number): XY => [u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t]
+      // Un échantillon est « libre » : ni bord partagé avec un autre pan, ni mur à un débord près.
+      const n: XY = [(sens * (v[1] - u[1])) / L, (-sens * (v[0] - u[0])) / L]
+      // Le mur d'un bord de toit se tient un débord en arrière de lui (le toit déborde du mur).
+      const sousLeBord = (q: XY): XY => [q[0] - n[0] * recul, q[1] - n[1] * recul]
+      const libre = Array.from({ length: k }, (_, j) => {
+        const q = en((j + 0.5) / k)
+        return !autres.some(({ P: Q }) => autourDe(Q, q) < 0.4) && !murSous(q, n, empreintes, r.debord.max ?? 0.4)
+      })
+      const egout = g >= 0.05 && (a * n[0] + b * n[1]) / g <= -0.6
+      for (let j0 = 0, run = 0; j0 < k; ) {
+        if (!libre[j0]) {
+          j0++
+          continue
+        }
+        let j1 = j0
+        while (j1 < k && libre[j1]) j1++
+        const long = ((j1 - j0) / k) * L
+        if (long >= 0.5) {
+          const m = Math.max(1, Math.round(long / 0.5))
+          const chemin: XY[] = []
+          const profil: [number, number][] = [], sol: number[] = []
+          let dessous = false, utile = false
+          for (let s = 0; s <= m; s++) {
+            const q = en((j0 + ((j1 - j0) * s) / m) / k)
+            const mur = sousLeBord(q)
+            chemin.push(mur)
+            const haut = plan(mur) - (egout ? EPAISSEUR_COUVERTURE : 0)
+            // Ce qu'on voit au pied : un autre pan (terrasse, toit plus bas), sinon le sol.
+            const dehors: XY = [q[0] + n[0] * 0.5, q[1] + n[1] * 0.5]
+            const autre = autres.find(({ P: Q }) => dansPolygone2d(dehors, Q))
+            const bas = autre ? autre.q.plan[0] * dehors[0] + autre.q.plan[1] * dehors[1] + autre.q.plan[2] : solProche(mur)
+            if (autre) dessous = true
+            if (haut - bas >= 0.15) utile = true
+            profil.push([r3(Math.hypot(mur[0] - chemin[0][0], mur[1] - chemin[0][1])), r3(Math.max(0, haut - bas))])
+            sol.push(bas)
+          }
+          if (utile) {
+            const az = ((Math.atan2(n[0], n[1]) * 180) / Math.PI + 360) % 360
+            const hs = profil.map((q) => q[1])
+            poser(`b${p.id}-${i}-${run}`, chemin, profil, sol, cardinal(az), {
+              surface: aireMur(profil),
+              hauteur: [Math.min(...hs), Math.max(...hs)],
+              complement: true,
+              retrait: egout && dessous,
+            })
+            run++
+          }
+        }
+        j0 = j1
+      }
+    }
   }
 
   // LES OUVERTURES : les boîtes lues sur la photo, posées sur le mur principal
@@ -175,9 +296,42 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
 
 type XY = [number, number]
 
+/**
+ * Le pied d'un mur sans ses marches : médiane glissante sur cinq points, puis
+ * pas plus de 30 cm d'un point au suivant. Le sol se lit par cases d'un mètre ;
+ * tel quel, le bas des murs se dessine en dents de scie.
+ */
+function lisserSol(sol: number[]): number[] {
+  const n = sol.length
+  const lisse = sol.map((_, i) => {
+    const w = sol.slice(Math.max(0, i - 2), Math.min(n, i + 3)).sort((x, y) => x - y)
+    return w[Math.floor(w.length / 2)]
+  })
+  const MAX = 0.3
+  for (let i = 1; i < n; i++) lisse[i] = Math.min(lisse[i - 1] + MAX, Math.max(lisse[i - 1] - MAX, lisse[i]))
+  for (let i = n - 2; i >= 0; i--) lisse[i] = Math.min(lisse[i + 1] + MAX, Math.max(lisse[i + 1] - MAX, lisse[i]))
+  return lisse
+}
+
+/** La surface d'un mur d'après son profil (distance, hauteur), en trapèzes. */
+function aireMur(profil: [number, number][]): number {
+  let aire = 0
+  for (let i = 0; i + 1 < profil.length; i++) aire += ((profil[i + 1][0] - profil[i][0]) * (profil[i][1] + profil[i + 1][1])) / 2
+  return r3(aire)
+}
+
+function dansPolygone2d(p: XY, P: XY[]): boolean {
+  let d = false
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [xi, yi] = P[i], [xj, yj] = P[j]
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) d = !d
+  }
+  return d
+}
+
 function pansNets(r: Releve, loc: (p: Point) => XY): Map<number, XY[]> {
   const lignes = (r.lignes ?? []).map((l) => ({ pans: l.pans, a: loc(l.a), b: loc(l.b) }))
-  return new Map(r.pans.map((p) => [p.id, contourNet(p.contour.map(loc), lignes.filter((l) => l.pans.includes(p.id)))]))
+  return new Map(r.pans.map((p) => [p.id, contourPropre((p.dessin ?? p.contour).map(loc), lignes.filter((l) => l.pans.includes(p.id)))]))
 }
 
 /** Les contours des pans sans leurs marches, en longitude-latitude : ceux que la carte dessine. */
@@ -191,6 +345,56 @@ export function contoursDesPans(r: Releve): Map<number, Point[]> {
   }
   const nets = pansNets(r, loc)
   return new Map([...nets].map(([id, xy]) => [id, xy.map(([x, y]) => depuisLambert93(x + ox, y + oy))]))
+}
+
+/**
+ * Le contour d'un pan tel qu'on le dessine : d'abord ramené à un tracé de
+ * toit (`alleger` : les dents et les escaliers de cases tombent, l'aire ne
+ * bouge que de quelques pour cent), puis calé sur les lignes (`contourNet`).
+ * Si le calage abîme le tracé, on garde le tracé allégé.
+ */
+export function contourPropre(contour: XY[], lignes: { a: XY; b: XY }[]): XY[] {
+  const leger = alleger(contour)
+  const net = contourNet(leger, lignes)
+  const avant = Math.abs(aire2d(leger))
+  const bon = net.length >= 3 && net.length <= SOMMETS_PAN_MAX && !seCroise(net) && Math.abs(Math.abs(aire2d(net)) - avant) <= 0.06 * avant + 0.5
+  return bon ? net : leger
+}
+
+/**
+ * Enlève les sommets qui ne portent presque rien (Visvalingam-Whyatt) : celui
+ * dont le triangle avec ses deux voisins est le plus petit, tant qu'il en reste
+ * plus qu'un tracé de toit n'en demande (`SOMMETS_PAN_MAX`) ou que ce triangle
+ * est de moins de 0,25 m². On s'arrête quand l'aire perdue dépasse 5 % (+ 1 m²),
+ * et jamais au prix d'un croisement.
+ */
+export function alleger(contour: XY[]): XY[] {
+  let P = contour.slice()
+  if (P.length <= 3) return P
+  const aire0 = Math.abs(aire2d(P))
+  const budget = 0.05 * aire0 + 1
+  let perdu = 0
+  const triangle = (u: XY, v: XY, w: XY) => Math.abs((v[0] - u[0]) * (w[1] - u[1]) - (w[0] - u[0]) * (v[1] - u[1])) / 2
+  for (;;) {
+    const n = P.length
+    if (n <= 3) break
+    const t = P.map((v, i) => triangle(P[(i - 1 + n) % n], v, P[(i + 1) % n]))
+    const ordre = t.map((_, i) => i).sort((a, b) => t[a] - t[b])
+    if (n <= SOMMETS_PAN_MAX && t[ordre[0]] > 0.25) break
+    let retire = -1
+    for (const i of ordre) {
+      if (perdu + t[i] > budget) break
+      const Q = P.filter((_, k) => k !== i)
+      if (!seCroise(Q)) {
+        retire = i
+        break
+      }
+    }
+    if (retire < 0) break
+    perdu += t[retire]
+    P = P.filter((_, k) => k !== retire)
+  }
+  return P
 }
 
 /** À moins de cette distance d'une ligne du toit, un sommet de pan s'y pose. */
@@ -304,6 +508,111 @@ function pointA(chemin: [number, number][], s: number): [number, number] {
     reste -= L
   }
   return chemin[chemin.length - 1]
+}
+
+/**
+ * Un mur porte-t-il ce point du bord d'un pan ? Il faut qu'il longe le bord
+ * (à 30° près), qu'il soit dessous — au plus un débord et demi en arrière, pas
+ * en avant : un mur de l'autre côté du bord ne porte pas le toit — et que le
+ * point tombe en face de lui.
+ */
+function murSous(q: XY, n: XY, empreintes: [XY, XY][], debordMax: number): boolean {
+  for (const [e, f] of empreintes) {
+    const dx = f[0] - e[0], dy = f[1] - e[1]
+    const L = Math.hypot(dx, dy)
+    if (L < 1e-6) continue
+    // Parallèle au bord : la normale du bord est à angle droit du mur.
+    if (Math.abs((dx * n[0] + dy * n[1]) / L) > 0.5) continue
+    const t = ((q[0] - e[0]) * dx + (q[1] - e[1]) * dy) / (L * L)
+    if (t < -0.02 || t > 1.02) continue
+    const w: XY = [e[0] + dx * Math.min(1, Math.max(0, t)), e[1] + dy * Math.min(1, Math.max(0, t))]
+    const dehors = (q[0] - w[0]) * n[0] + (q[1] - w[1]) * n[1]
+    if (dehors >= -0.3 && dehors <= debordMax + 0.3) return true
+  }
+  return false
+}
+
+/** Un pan de plus de sommets que ça n'est plus un dessin de toit, mais un escalier de cases. */
+const SOMMETS_PAN_MAX = 12
+
+/**
+ * Les défauts d'un modèle 3D, en clair — vide quand il est propre. C'est le
+ * garde-fou des tests (toutes les maisons figées) et du rendu de contrôle :
+ * ce que l'audit a vu à l'œil (pans déchirés, murs qui laissent un vide, pied
+ * de mur en dents de scie, terrasse qui flotte) devient une vérification.
+ */
+export function verifierModele(m: Modele3D, r: Releve): string[] {
+  const defauts: string[] = []
+  const pans = m.faces.filter((f) => f.type === 'pan')
+  const murs = m.faces.filter((f) => f.type === 'mur')
+
+  for (const f of pans) {
+    const nom = `pan ${f.ref}`
+    if (seCroise(f.plan2d)) defauts.push(`${nom} : contour qui se croise`)
+    if (f.plan2d.length > SOMMETS_PAN_MAX) defauts.push(`${nom} : ${f.plan2d.length} sommets (> ${SOMMETS_PAN_MAX})`)
+    const dessin = aire3d(f.sommets)
+    if (f.surface > 1 && Math.abs(dessin - f.surface) > 0.05 * f.surface + 1) {
+      defauts.push(`${nom} : dessiné ${dessin.toFixed(1)} m² pour ${f.surface} m² mesurés`)
+    }
+  }
+
+  // Le pied de chaque mur : pas de dents de scie.
+  for (const f of murs) {
+    const n = f.sommets.length / 2
+    for (let i = 0; i + 1 < n; i++) {
+      const saut = Math.abs(f.sommets[i + 1][2] - f.sommets[i][2])
+      if (saut > 0.4) {
+        defauts.push(`mur ${f.ref} : pied qui saute de ${saut.toFixed(2)} m`)
+        break
+      }
+    }
+  }
+
+  // Les murs forment un anneau : chaque bout de mur touche un autre mur.
+  const bouts: { p: XY; ref: string }[] = []
+  for (const f of murs.filter((x) => !x.retrait && !x.ref.startsWith('b'))) {
+    const n = f.sommets.length / 2
+    bouts.push({ p: [f.sommets[0][0], f.sommets[0][1]], ref: f.ref }, { p: [f.sommets[n - 1][0], f.sommets[n - 1][1]], ref: f.ref })
+  }
+  for (const b of bouts) {
+    if (!bouts.some((c) => c !== b && c.ref !== b.ref && Math.hypot(c.p[0] - b.p[0], c.p[1] - b.p[1]) < 0.3)) {
+      defauts.push(`anneau des murs ouvert au bout du mur ${b.ref} (${b.p[0].toFixed(1)} ; ${b.p[1].toFixed(1)})`)
+    }
+  }
+
+  // Un bord libre d'un pan (que ne partage aucun autre pan) a un mur sous lui :
+  // un débord en arrière du bord, puisque le toit déborde du mur.
+  const segments = murs.flatMap((f) => {
+    const n = f.sommets.length / 2
+    const s: [XY, XY][] = []
+    for (let i = 0; i + 1 < n; i++) s.push([[f.sommets[i][0], f.sommets[i][1]], [f.sommets[i + 1][0], f.sommets[i + 1][1]]])
+    return s
+  })
+  for (const f of pans) {
+    const autres = pans.filter((g) => g !== f)
+    const P = f.plan2d
+    const sens = aire2d(P) > 0 ? 1 : -1
+    let sansMur = 0, total = 0, premier: XY | null = null
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length]
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1])
+      const n: XY = [(sens * (b[1] - a[1])) / L, (-sens * (b[0] - a[0])) / L]
+      for (let s = 0.125; s < L; s += 0.25) {
+        const q: XY = [a[0] + ((b[0] - a[0]) * s) / L, a[1] + ((b[1] - a[1]) * s) / L]
+        if (autres.some((g) => g.plan2d.some((v, j) => distanceASegment(q, v, g.plan2d[(j + 1) % g.plan2d.length]) < 0.8))) continue
+        // Sans mur possible : un pan qui domine un autre pan plus haut que lui (le bord d'une terrasse contre la maison).
+        total++
+        if (!murSous(q, n, segments, r.debord.max ?? 0.4)) {
+          sansMur++
+          premier ??= q
+        }
+      }
+    }
+    if (total && sansMur / total > 0.2) {
+      defauts.push(`pan ${f.ref} : ${Math.round((100 * sansMur) / total)} % de ses bords libres sans mur dessous (dès ${premier![0].toFixed(1)} ; ${premier![1].toFixed(1)})`)
+    }
+  }
+  return defauts
 }
 
 /** L'aire d'un polygone 3D plan (formule de Newell). */

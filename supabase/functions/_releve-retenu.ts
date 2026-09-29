@@ -29,36 +29,64 @@ export function pansParDefaut(r: Releve): number[] | null {
   return r.pans.filter((p) => !p.terrasse).map((p) => p.id)
 }
 
-/** La toiture retenue : la somme des pans choisis, tous si `pans` est nul. */
+/**
+ * La toiture retenue : la somme des pans choisis, tous si `pans` est nul.
+ *
+ * DEUX « PENTES ». `pente` est l'ÉQUIVALENTE : celle qui, sur toute la surface
+ * retenue, donne la même surface vraie — la base la recalcule ainsi (0178), ce
+ * qui garde « enregistré = affiché ». Elle se dilue dans une partie plate ou un
+ * petit pan doux (36,7 % sur deux pans à 48-49 %). `penteDesPans` est celle
+ * que lit le couvreur : la moyenne des pans EN PENTE, à leur surface ;
+ * `platPlan` dit ce qui est plat, à part.
+ */
 export function toitRetenu(
   r: Releve,
   pans: number[] | null,
-): { plan: number; vrai: number; pente: number; nb: number } {
+): { plan: number; vrai: number; pente: number; penteDesPans: number; platPlan: number; nb: number } {
   const gardes = r.pans.filter((p) => !pans || pans.includes(p.id))
   const plan = gardes.reduce((s, p) => s + p.airePlan, 0)
   const vrai = gardes.reduce((s, p) => s + p.aireVraie, 0)
   // La pente qui, sur la surface retenue, donne la même surface vraie.
   const pente = vrai > 0 && plan > 0 ? Math.round(1000 * Math.tan(Math.acos(Math.min(1, plan / vrai)))) / 10 : 0
-  return { plan: r2(plan), vrai: r2(vrai), pente, nb: gardes.length }
+  const pentus = gardes.filter((p) => p.orientation !== 'plat')
+  const planPentus = pentus.reduce((s, p) => s + p.airePlan, 0)
+  const penteDesPans = planPentus > 0 ? Math.round((10 * pentus.reduce((s, p) => s + p.pente * p.airePlan, 0)) / planPentus) / 10 : 0
+  const platPlan = gardes.filter((p) => p.orientation === 'plat').reduce((s, p) => s + p.airePlan, 0)
+  return { plan: r2(plan), vrai: r2(vrai), pente, penteDesPans, platPlan: r2(platPlan), nb: gardes.length }
 }
 
 /**
  * Une façade : les murs relevés d'une orientation. La partie mitoyenne ne se
  * traite pas : elle est hors de la surface, et dite à part.
+ *
+ * « FAÇADE SUD » DÉSIGNE L'ORIENTATION ENTIÈRE, partout (fiche 3D, tableau,
+ * PDF, sur place). Elle peut compter plusieurs murs : un décroché, un mur en
+ * retrait au-dessus d'une terrasse. `surface` et `longueur` les additionnent
+ * TOUS (la base fait la même somme à l'enregistrement, 0178) ; `retrait` en dit
+ * la part déduite de l'égout au-dessus d'une terrasse, pour l'écrire à côté.
  */
 export function facadeRetenue(
   r: Releve,
   orientation: string,
-): { murs: FacadeReleve[]; surface: number; longueur: number; hauteur: number | null; accole: number } {
+): {
+  murs: FacadeReleve[]
+  surface: number
+  longueur: number
+  hauteur: number | null
+  accole: number
+  retrait: { surface: number; longueur: number }
+} {
   const murs = r.facades.filter((f) => f.orientation === orientation)
   const surface = murs.reduce((s, f) => s + f.surfaceLibre, 0)
   const longueur = murs.reduce((s, f) => s + Math.max(0, f.longueur - f.accole), 0)
+  const retrait = murs.filter((f) => f.retrait)
   return {
     murs,
     surface: r2(surface),
     longueur: r2(longueur),
     hauteur: longueur > 0 ? r2(surface / longueur) : null,
     accole: r2(murs.reduce((s, f) => s + f.accole, 0)),
+    retrait: { surface: r2(retrait.reduce((s, f) => s + f.surfaceLibre, 0)), longueur: r2(retrait.reduce((s, f) => s + f.longueur, 0)) },
   }
 }
 

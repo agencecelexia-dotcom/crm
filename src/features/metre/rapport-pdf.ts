@@ -119,7 +119,7 @@ export async function construireRapport(r: RapportMetre, releve: Releve, image3d
 
   // ---------- Les chiffres clés ----------
   const cles: [string, string, string][] = [
-    ['Toiture', formatM2(r.toiture.surface), `${r.toiture.nombre} pans, pente ${pct(r.toiture.pente)}`],
+    ['Toiture', formatM2(r.toiture.surface), `${r.toiture.nombre} pans, pente ${pct(r.toiture.penteDesPans)}`],
     [
       'Façades',
       formatM2(r.totalFacades.nette ?? r.totalFacades.brute),
@@ -195,7 +195,7 @@ export async function construireRapport(r: RapportMetre, releve: Releve, image3d
     ['Pan', 'Pente', 'Surface (m²)', 'Compté'],
     [
       ...r.toiture.pans.map((p) => [p.nom, p.terrasse ? '—' : `${p.pente} %`, m2(p.surface), p.retenu ? 'oui' : 'non']),
-      ['Total compté', pct(r.toiture.pente), m2(r.toiture.surface), ''],
+      ['Total compté', pct(r.toiture.penteDesPans), m2(r.toiture.surface), ''],
     ],
     [80, 30, 40, 30],
     [false, true, true, true],

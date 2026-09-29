@@ -85,7 +85,7 @@ function anneau(g?: { type?: string; coordinates?: unknown }): Point[] {
 }
 
 /** Lancer de rayon, en degrés : suffisant à l'échelle d'une parcelle. */
-function contient(P: Point[], p: Point): boolean {
+export function contient(P: Point[], p: Point): boolean {
   let dedans = false
   for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
     const [xi, yi] = P[i], [xj, yj] = P[j]

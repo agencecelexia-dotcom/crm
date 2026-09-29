@@ -5,10 +5,10 @@ import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { depuisLambert93, versLambert93 } from '../../supabase/functions/_calcul-toit'
 import { decoderNuage, encoderNuage } from '../../supabase/functions/_nuage'
-import { releverBatiment, type Releve } from '../../supabase/functions/_releve'
+import { hauteurGouttiere, releverBatiment, type Releve } from '../../supabase/functions/_releve'
 import { facadeRetenue, lignesRetenues, orientationsDesFacades, pansParDefaut, toitRetenu } from '../../supabase/functions/_releve-retenu'
 import { quantitesDuReleve } from '../../supabase/functions/_mesures-chantier'
-import { contourDe, deuxPans, nuageDe, quatrePans, type Scene } from './aide-nuage'
+import { boitePlate, contourDe, deuxPans, nuageDe, polygoneDe, quatrePans, type Scene } from './aide-nuage'
 
 // Le relevé d'une maison dans son nuage de points LiDAR.
 //
@@ -76,6 +76,12 @@ describe('toit synthétique à deux pans, cadastre décalé', () => {
     pres(totaux.egout.longueur, 26, 0.02)
     pres(totaux.rive.longueur, 4 * 4.5 * Math.sqrt(1 + 0.7 ** 2), 0.02)
     expect(totaux.aretier.nombre + totaux.noue.nombre).toBe(0)
+  })
+
+  it('donne la hauteur à la gouttière : le dessous de la couverture au droit du mur', () => {
+    expect(Math.abs(r.hauteurs.gouttiere! - 4.75)).toBeLessThanOrEqual(0.1)
+    // Sur ce toit le terrain est plat : l'éventail est étroit.
+    expect(r.hauteurs.gouttiereMax! - r.hauteurs.gouttiereMin!).toBeLessThanOrEqual(0.3)
   })
 
   it('dessine deux gouttereaux et deux pignons', () => {
@@ -390,4 +396,70 @@ it('garde l’extrait d’un grand bâtiment sans déborder la pile', () => {
   const lu = decoderNuage(encoderNuage([nu], zone))
   expect(lu.nb).toBe(n)
   expect(lu.z[999]).toBeCloseTo(209.99, 2)
+})
+
+describe('la hauteur à la gouttière ne se laisse pas tirer par une annexe', () => {
+  it('pèse chaque hauteur à sa longueur : 24 m d’égout à 4,75 m et 3 m d’annexe à 1,5 m', () => {
+    const g = hauteurGouttiere(
+      [{ h: 4.75, l: 24 }, { h: 1.5, l: 3 }],
+      [],
+    )!
+    expect(g.mediane).toBe(4.75)
+  })
+
+  it('retrouve celle de la longue façade même si les petits murs sont plus nombreux', () => {
+    const egouts = [{ h: 6.9, l: 12 }, ...Array.from({ length: 5 }, () => ({ h: 2.1, l: 1.5 }))]
+    expect(hauteurGouttiere(egouts, [])!.mediane).toBe(6.9)
+  })
+
+  it('en existe une même sans égout lu : la médiane des murs à leur longueur', () => {
+    const g = hauteurGouttiere([], [
+      { surfaceLibre: 40, hauteurBasse: 4.2, longueur: 10 },
+      { surfaceLibre: 8, hauteurBasse: 1.1, longueur: 2 },
+    ])
+    expect(g?.mediane).toBe(4.2)
+  })
+
+  it('n’en invente pas sans mur ni égout', () => {
+    expect(hauteurGouttiere([], [])).toBeNull()
+  })
+})
+
+describe('la pente que lit le couvreur', () => {
+  it('ne se dilue ni dans une partie plate ni dans un petit pan doux (Nogent 44 : 48 et 49 %, plat, 20 %)', () => {
+    const pan = (id: number, orientation: string, pente: number, plan: number) =>
+      ({ id, orientation, pente, airePlan: plan, aireVraie: plan * Math.sqrt(1 + (pente / 100) ** 2), terrasse: false }) as unknown as Releve['pans'][number]
+    const r = { pans: [pan(1, 'plat', 0, 39.7), pan(2, 'nord', 48, 33), pan(3, 'sud', 49, 32), pan(4, 'sud', 20, 10.4)] } as Releve
+    const t = toitRetenu(r, null)
+    expect(t.penteDesPans).toBeGreaterThan(43)
+    expect(t.penteDesPans).toBeLessThan(49)
+    expect(t.pente).toBeLessThan(40)
+    expect(t.platPlan).toBe(39.7)
+  })
+})
+
+describe('maison à deux pans avec deux annexes basses collées : la gouttière est celle de la maison', () => {
+  // La maison : 8 × 12 m, toit à deux pans, dessus du toit à 5 m au droit des murs.
+  // Les annexes : 3 × 4 m, toit plat à 2,5 m, contre chaque pignon. Le contour est en H.
+  const scene: Scene = {
+    origine: [845000, 6525000],
+    rotation: 25,
+    volumes: [deuxPans({ l: 8, y0: -6, y1: 6, p: 0.7, d: 0.5, h: 5 }), boitePlate([4, -2, 7, 2], 2.5), boitePlate([-7, -2, -4, 2], 2.5)],
+  }
+  const { nuage, zone } = nuageDe(scene)
+  const contour = polygoneDe(scene, [[-4, -6], [4, -6], [4, -2], [7, -2], [7, 2], [4, 2], [4, 6], [-4, 6], [-4, 2], [-7, 2], [-7, -2], [-4, -2]])
+  const r = releverBatiment({ nuage, zone, contour, voisins: [], vol: null })
+
+  it('lit les deux pans de la maison et les parties plates des annexes', () => {
+    expect(r.pans.filter((p) => p.orientation !== 'plat')).toHaveLength(2)
+    expect(r.pans.some((p) => p.orientation === 'plat')).toBe(true)
+  })
+
+  it('donne 4,75 m à la gouttière, pas la hauteur de l’annexe', () => {
+    expect(Math.abs(r.hauteurs.gouttiere! - 4.75)).toBeLessThanOrEqual(0.15)
+  })
+
+  it('compte des murs plus bas que la gouttière (les annexes), qui ne la tirent pas', () => {
+    expect(r.facades.some((f) => f.hauteurBasse < 3.5)).toBe(true)
+  })
 })
