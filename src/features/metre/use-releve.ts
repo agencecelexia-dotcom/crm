@@ -5,6 +5,12 @@ import type { Releve } from './releve'
 
 export * from './releve'
 
+/**
+ * Ce que l'écran de l'AGENCE envoie à la place d'un jeton d'artisan : les
+ * fonctions vérifient alors la session du membre (`_membre.ts`), jamais ce mot.
+ */
+export const JETON_AGENCE = 'agence'
+
 /** Ce que rend la fonction `releve-lidar`. */
 export interface ReponseReleve {
   ok?: boolean

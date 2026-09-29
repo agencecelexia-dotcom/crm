@@ -24,7 +24,8 @@
 // de l'IGN n'ont pas à figurer dans la politique de sécurité du site, et la
 // pré-mesure des chantiers (sans écran) a besoin du même calcul. Ce calcul vit
 // dans `../_batiment.ts`, partagé avec le banc de justesse ; ici, l'accès (le
-// jeton de l'artisan) et la mémoire du projet.
+// jeton de l'artisan, ou la session d'un membre de l'agence) et la mémoire du
+// projet.
 
 import {
   identifierMaison,
@@ -32,6 +33,7 @@ import {
   maisonDeLAdresseChoisie,
   type Dossier,
 } from '../_batiment.ts'
+import { JETON_AGENCE, jetonDe, membreActif } from '../_membre.ts'
 
 const ORIGINES = [
   'http://localhost:5173',
@@ -64,6 +66,37 @@ async function rpc(nom: string, params: unknown) {
   return await res.json()
 }
 
+interface Contexte {
+  ok: boolean
+  error?: string
+  projet_id: string | null
+  client_adresse: string | null
+  client_code_postal: string | null
+  client_ville: string | null
+  latitude: number | null
+  longitude: number | null
+  batiment_cleabs: string | null
+  batiment_source: string | null
+  batiment_confirme_at: string | null
+  batiment_lon: number | null
+  batiment_lat: number | null
+}
+
+/**
+ * Le projet, lu avec la SESSION du membre : la RLS ne lui montre que les
+ * projets qu'il voit déjà dans le CRM.
+ */
+async function projetVuPar(jeton: string, id: string): Promise<Contexte | null> {
+  const res = await fetch(
+    `${Deno.env.get('SUPABASE_URL')}/rest/v1/projets?id=eq.${id}&select=id,client_adresse,client_code_postal,client_ville,` +
+      'latitude,longitude,batiment_cleabs,batiment_source,batiment_confirme_at,batiment_lon,batiment_lat',
+    { headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY')!, authorization: `Bearer ${jeton}` } },
+  )
+  if (!res.ok) return null
+  const [p] = (await res.json()) as (Omit<Contexte, 'ok' | 'projet_id'> & { id: string })[]
+  return p ? { ...p, ok: true, projet_id: p.id } : null
+}
+
 /** L'adresse choisie par l'artisan, si elle est bien formée : un identifiant BAN et un point. */
 function lireAdresseChoisie(a: { id?: unknown; label?: unknown; point?: unknown } | undefined) {
   if (!a || typeof a.id !== 'string' || !/^[\w-]{5,64}$/.test(a.id) || !Array.isArray(a.point)) return null
@@ -80,33 +113,37 @@ Deno.serve(async (req) => {
     const corps = (await req.json().catch(() => ({}))) as {
       token?: string
       affectation_token?: string
+      /** L'agence : le projet dont on cherche la maison. */
+      projet_id?: string
       rafraichir?: boolean
       /** Une adresse que l'artisan a cherchée lui-même, à la place de celle du dossier. */
       adresse?: { id?: unknown; label?: unknown; point?: unknown }
     }
-    if (typeof corps.token !== 'string' || typeof corps.affectation_token !== 'string') {
-      return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
-    }
-
-    // Le contexte vérifie le jeton de l'artisan, son affectation, et ne donne
-    // l'adresse qu'une fois le contrat signé.
-    const ctx = (await rpc('metre_contexte_by_token', {
-      p_token: corps.token,
-      p_affectation_token: corps.affectation_token,
-    })) as {
-      ok: boolean
-      error?: string
-      projet_id: string | null
-      client_adresse: string | null
-      client_code_postal: string | null
-      client_ville: string | null
-      latitude: number | null
-      longitude: number | null
-      batiment_cleabs: string | null
-      batiment_source: string | null
-      batiment_confirme_at: string | null
-      batiment_lon: number | null
-      batiment_lat: number | null
+    let ctx: Contexte | null
+    if (corps.token === JETON_AGENCE) {
+      // L'agence : un membre actif, par sa session.
+      const jeton = jetonDe(req)
+      if (!(await membreActif(jeton))) return json({ ok: false, error: 'acces_refuse' }, 403, CORS)
+      // Une adresse cherchée dans le CRM, hors de tout projet.
+      const libre = lireAdresseChoisie(corps.adresse)
+      if (libre && !corps.projet_id) {
+        const vide: Dossier = { adresse: null, codePostal: null, ville: null, point: null }
+        return json(await maisonDeLAdresseChoisie(vide, libre), 200, CORS)
+      }
+      if (typeof corps.projet_id !== 'string' || !/^[0-9a-f-]{36}$/.test(corps.projet_id)) {
+        return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
+      }
+      ctx = await projetVuPar(jeton!, corps.projet_id)
+    } else {
+      if (typeof corps.token !== 'string' || typeof corps.affectation_token !== 'string') {
+        return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
+      }
+      // Le contexte vérifie le jeton de l'artisan, son affectation, et ne donne
+      // l'adresse qu'une fois le contrat signé.
+      ctx = (await rpc('metre_contexte_by_token', {
+        p_token: corps.token,
+        p_affectation_token: corps.affectation_token,
+      })) as Contexte
     }
     if (!ctx?.ok) return json({ ok: false, error: ctx?.error ?? 'acces_refuse' }, 403, CORS)
 

@@ -15,6 +15,7 @@
 // Le contour vient de la BD TOPO, relu ici même : jamais du navigateur, car
 // le relevé gardé sert à tous.
 
+import { JETON_AGENCE, jetonDe, membreActif } from '../_membre.ts'
 import { reserverReleve, releverEtGarder, rpcService } from '../_releve-serveur.ts'
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
@@ -36,6 +37,19 @@ function cors(origin: string | null) {
 const json = (b: unknown, s: number, h: Record<string, string>) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...h, 'content-type': 'application/json' } })
 
+/** Le relevé d'une maison, lu pour un membre de l'agence : les mêmes champs que `releve_by_token`. */
+async function releveGardeAgence(cleabs: string) {
+  const cle = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const res = await fetch(
+    `${Deno.env.get('SUPABASE_URL')}/rest/v1/releve_batiment?cleabs=eq.${cleabs}` +
+      '&select=id,statut,version,motif,confiance,releve,essais,demande_le,fait_le',
+    { headers: { apikey: cle, authorization: `Bearer ${cle}` } },
+  )
+  if (!res.ok) throw new Error(`releve ${res.status}`)
+  const [v] = (await res.json()) as ({ statut: string; releve: unknown } & Record<string, unknown>)[]
+  return v ? { trouve: true, ...v, releve: v.statut === 'fait' ? v.releve : null } : { trouve: false }
+}
+
 const estPoint = (p: unknown): p is [number, number] =>
   Array.isArray(p) && p.length === 2 && p.every((v) => typeof v === 'number' && Number.isFinite(v)) &&
   p[0] > -6 && p[0] < 10 && p[1] > 41 && p[1] < 52
@@ -52,10 +66,14 @@ Deno.serve(async (req) => {
     if (typeof token !== 'string' || typeof cleabs !== 'string' || !/^BATIMENT\d{16}$/.test(cleabs)) {
       return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
     }
-    const lire = () => rpcService('releve_by_token', { p_token: token, p_cleabs: cleabs }) as Promise<{
-      trouve?: boolean
-      error?: string
-    }>
+    // L'artisan par son jeton ; l'agence par la session d'un membre actif.
+    const agence = token === JETON_AGENCE
+    if (agence && !(await membreActif(jetonDe(req)))) return json({ ok: false, error: 'token_invalide' }, 403, CORS)
+    const lire = () =>
+      (agence ? releveGardeAgence(cleabs) : rpcService('releve_by_token', { p_token: token, p_cleabs: cleabs })) as Promise<{
+        trouve?: boolean
+        error?: string
+      }>
     const actuel = await lire()
     if (actuel.error === 'token_invalide') return json({ ok: false, error: 'token_invalide' }, 403, CORS)
 

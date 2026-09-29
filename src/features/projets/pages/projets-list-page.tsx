@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
-import { Mic, RotateCcw, UserCheck } from 'lucide-react'
+import { Box, Mic, RotateCcw, UserCheck } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { StatutBadge } from '@/components/statut-badge'
 import { Button } from '@/components/ui/button'
@@ -162,6 +162,13 @@ export function ProjetsListPage() {
               <Link to="/projets/a-reattribuer">
                 <RotateCcw className="size-4" />
                 <span className="hidden sm:inline">À réattribuer</span>
+              </Link>
+            </Button>
+            {/* Une adresse, la maison en 3D : aussi au téléphone, où la barre du bas n'a pas la place. */}
+            <Button asChild variant="outline" size="sm" title="Une adresse : la maison en 3D et ses métrés">
+              <Link to="/maison-3d">
+                <Box className="size-4" />
+                <span className="hidden sm:inline">Maison 3D</span>
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" title="Prendre un appel avec assistance">

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut,
-  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, Compass, Sparkles,
+  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, Compass, Sparkles, Box,
   type LucideIcon,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
@@ -51,6 +51,7 @@ const GROUPES: { titre: string; items: Item[] }[] = [
       { to: '/mon-pipe', label: 'Mon pipe', icon: Briefcase, end: false, commercialSeul: true },
       { to: '/artisans', label: 'Artisans', icon: Users, end: false },
       { to: '/carte', label: 'Carte', icon: Map, end: false },
+      { to: '/maison-3d', label: 'Maison 3D', icon: Box, end: false },
       { to: '/couverture', label: 'Couverture', icon: Target, end: false, fondateurSeul: true },
     ],
   },

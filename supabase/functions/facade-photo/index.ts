@@ -17,10 +17,12 @@
 // Après une lecture ou un retrait, les dossiers de métrés des chantiers de la
 // maison suivent (`_dossier-serveur.ts`, sous l'interrupteur de la pré-mesure).
 //
-// Accès par le jeton de l'artisan, comme les autres fonctions du métré.
+// Accès par le jeton de l'artisan, comme les autres fonctions du métré, ou
+// par la session d'un membre actif de l'agence (`_membre.ts`).
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.129.0'
 import { reporterAuDossier } from '../_dossier-serveur.ts'
+import { JETON_AGENCE, jetonDe, membreActif } from '../_membre.ts'
 import type { MateriauxGardes } from '../_materiaux.ts'
 import { lireToit } from '../_materiaux-serveur.ts'
 import { consigne, SCHEMA_LECTURE, tirerOuvertures, type LectureVision } from '../_ouvertures.ts'
@@ -65,10 +67,24 @@ async function rest<T>(chemin: string, init: RequestInit = {}): Promise<T> {
   return (r.status === 204 ? null : await r.json()) as T
 }
 
-async function artisanDe(jeton: string): Promise<string | null> {
-  const [a] = await rest<{ id: string }[]>(`artisans?token=eq.${encodeURIComponent(jeton)}&ecarte_at=is.null&select=id`)
-  return a?.id ?? null
+/** Qui appelle : un artisan (son jeton), ou un membre de l'agence (sa session). */
+interface Acteur {
+  id: string
+  artisan: string | null
+  membre: string | null
 }
+
+async function acteurDe(req: Request, jeton: string): Promise<Acteur | null> {
+  if (jeton === JETON_AGENCE) {
+    const m = await membreActif(jetonDe(req))
+    return m ? { id: m.user_id, artisan: null, membre: m.user_id } : null
+  }
+  const [a] = await rest<{ id: string }[]>(`artisans?token=eq.${encodeURIComponent(jeton)}&ecarte_at=is.null&select=id`)
+  return a ? { id: a.id, artisan: a.id, membre: null } : null
+}
+
+/** Les lectures de cet acteur depuis un jour : le quota se compte par personne. */
+const filtreLecteur = (a: Acteur) => (a.artisan ? `lu_par=eq.${a.artisan}` : `lu_par_membre=eq.${a.membre}`)
 
 async function releveDe(
   cleabs: string,
@@ -141,7 +157,7 @@ async function chercher(cleabs: string): Promise<LignePhoto[]> {
 }
 
 /** Lire une photo : Claude, puis la surface d'ouvertures rapportée au mur relevé. */
-async function lire(photo: LignePhoto, artisan: string) {
+async function lire(photo: LignePhoto, acteur: Acteur) {
   const l = await releveDe(photo.cleabs)
   if (!l) return { ok: false, error: 'releve_absent' }
   const murs = l.releve.facades.filter((f) => f.orientation === photo.orientation && f.surfaceLibre > 0)
@@ -212,7 +228,13 @@ async function lire(photo: LignePhoto, artisan: string) {
   await rest(`facade_photo?id=eq.${photo.id}`, {
     method: 'PATCH',
     headers: { prefer: 'return=minimal' },
-    body: JSON.stringify({ lecture, lu_le: new Date().toISOString(), lu_par: artisan, modele: reponse.model }),
+    body: JSON.stringify({
+      lecture,
+      lu_le: new Date().toISOString(),
+      lu_par: acteur.artisan,
+      lu_par_membre: acteur.membre,
+      modele: reponse.model,
+    }),
   })
   suivreAuDossier(photo.cleabs)
   return { ok: true, lecture }
@@ -236,8 +258,8 @@ Deno.serve(async (req) => {
       hauteur?: number
     }
     if (typeof b.token !== 'string') return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
-    const artisan = await artisanDe(b.token)
-    if (!artisan) return json({ ok: false, error: 'token_invalide' }, 403, CORS)
+    const acteur = await acteurDe(req, b.token)
+    if (!acteur) return json({ ok: false, error: 'token_invalide' }, 403, CORS)
     const cleabs = typeof b.cleabs === 'string' && /^BATIMENT\d{16}$/.test(b.cleabs) ? b.cleabs : null
     const orientation = typeof b.orientation === 'string' && /^[a-z-]{3,12}$/.test(b.orientation) ? b.orientation : null
 
@@ -279,7 +301,8 @@ Deno.serve(async (req) => {
           pris_le: new Date().toISOString(),
           largeur: dim(b.largeur),
           hauteur: dim(b.hauteur),
-          deposee_par: artisan,
+          deposee_par: acteur.artisan,
+          deposee_par_membre: acteur.membre,
         }),
       })
       return json({ ok: true, photo: ligne ? { ...ligne, url: await signer(ligne.chemin) } : null }, 200, CORS)
@@ -288,13 +311,13 @@ Deno.serve(async (req) => {
     if (b.action === 'lire') {
       if (typeof b.id !== 'string' || !/^[0-9a-f-]{36}$/.test(b.id)) return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
       const depuis = new Date(Date.now() - 86400e3).toISOString()
-      const lues = await rest<{ id: string }[]>(`facade_photo?lu_par=eq.${artisan}&lu_le=gt.${depuis}&select=id`)
+      const lues = await rest<{ id: string }[]>(`facade_photo?${filtreLecteur(acteur)}&lu_le=gt.${depuis}&select=id`)
       if (lues.length >= LECTURES_PAR_JOUR) return json({ ok: false, error: 'quota_atteint' }, 200, CORS)
       const [photo] = await rest<LignePhoto[]>(`facade_photo?id=eq.${b.id}&select=${COLONNES}`)
       if (!photo) return json({ ok: false, error: 'photo_introuvable' }, 404, CORS)
       // Une photo déjà lue ne se relit pas : même réponse, sans nouveau coût.
       if (photo.lecture) return json({ ok: true, lecture: photo.lecture }, 200, CORS)
-      return json(await lire(photo, artisan), 200, CORS)
+      return json(await lire(photo, acteur), 200, CORS)
     }
 
     if (b.action === 'ecarter') {
@@ -327,11 +350,11 @@ Deno.serve(async (req) => {
       // Le même quota que les photos : chaque lecture coûte quelques centimes.
       const depuis = new Date(Date.now() - 86400e3).toISOString()
       const [photosLues, toitsLus] = await Promise.all([
-        rest<{ id: string }[]>(`facade_photo?lu_par=eq.${artisan}&lu_le=gt.${depuis}&select=id`),
-        rest<{ id: string }[]>(`releve_batiment?materiaux->>lu_par=eq.${artisan}&materiaux_le=gt.${depuis}&select=id`),
+        rest<{ id: string }[]>(`facade_photo?${filtreLecteur(acteur)}&lu_le=gt.${depuis}&select=id`),
+        rest<{ id: string }[]>(`releve_batiment?materiaux->>lu_par=eq.${acteur.id}&materiaux_le=gt.${depuis}&select=id`),
       ])
       if (photosLues.length + toitsLus.length >= LECTURES_PAR_JOUR) return json({ ok: false, error: 'quota_atteint' }, 200, CORS)
-      const lu = await lireToit(cleabs, artisan)
+      const lu = await lireToit(cleabs, acteur.id)
       if (lu.ok) suivreAuDossier(cleabs)
       return json(lu, 200, CORS)
     }

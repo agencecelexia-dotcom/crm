@@ -33,6 +33,9 @@ const CartePage = lazy(() => import('@/features/carte/carte-page').then((m) => (
 const MetragesAVerifierPage = lazy(() =>
   import('@/features/metre/metrages-a-verifier-page').then((m) => ({ default: m.MetragesAVerifierPage })),
 )
+const Maison3DPage = lazy(() =>
+  import('@/features/metre/maison-3d-page').then((m) => ({ default: m.Maison3DPage })),
+)
 import { CommissionsPage } from '@/features/commissions/commissions-page'
 import { TachesPage } from '@/features/taches/taches-page'
 const CouverturePage = lazy(() => import('@/features/couverture/couverture-page').then((m) => ({ default: m.CouverturePage })))
@@ -124,6 +127,8 @@ export default function App() {
                 {/* L'outil mesure, l'agence tranche : les écarts entre ce que
                     dit le client et ce que mesure l'outil. */}
                 <Route path="/metres-a-verifier" element={<MetragesAVerifierPage />} />
+                {/* Une adresse : la maison en 3D et tous ses métrés. */}
+                <Route path="/maison-3d" element={<Maison3DPage />} />
 
                 <Route path="/appel" element={<AppelPage />} />
                 <Route path="/projets" element={<ProjetsListPage />} />

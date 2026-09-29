@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import type { Point } from './geometrie'
 import { messageMetre, type Adresse } from './use-metres'
+import { JETON_AGENCE } from './use-releve'
 
 /**
  * LA maison du chantier, désignée par le serveur (`batiment-chantier`).
@@ -39,7 +40,12 @@ export interface MaisonChantier {
 const DELAI_MS = 12_000
 
 async function identifier(
-  corps: { token: string; affectation_token: string; adresse?: { id: string; label: string; point: Point } },
+  corps: {
+    token: string
+    affectation_token?: string
+    projet_id?: string
+    adresse?: { id: string; label: string; point: Point }
+  },
   signal?: AbortSignal,
 ): Promise<MaisonChantier> {
   const ctrl = new AbortController()
@@ -116,6 +122,28 @@ export function useRetenirMaison(token: string | undefined, affectationToken: st
               message: null,
             }
           : avant,
+      ),
+  })
+}
+
+/**
+ * VUE DE L'AGENCE. La maison d'un projet (confirmée, ou reliée à l'adresse
+ * par le RNB), ou celle d'une adresse cherchée dans le CRM. La fonction
+ * vérifie la session du membre ; un projet n'est lu qu'avec ses droits.
+ */
+export function useMaisonAgence(cible: { projetId: string } | { adresse: Adresse } | null) {
+  return useQuery({
+    queryKey: ['batiment-agence', cible && 'projetId' in cible ? cible.projetId : (cible?.adresse.id ?? null)],
+    enabled: !!cible,
+    staleTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    queryFn: ({ signal }) =>
+      identifier(
+        cible && 'projetId' in cible
+          ? { token: JETON_AGENCE, projet_id: cible.projetId }
+          : { token: JETON_AGENCE, adresse: { id: cible!.adresse.id, label: cible!.adresse.label, point: [cible!.adresse.lon, cible!.adresse.lat] } },
+        signal,
       ),
   })
 }
