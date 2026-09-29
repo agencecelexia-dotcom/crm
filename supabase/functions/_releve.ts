@@ -126,6 +126,11 @@ export interface FacadeReleve {
 
 export interface Releve {
   version: number
+  /**
+   * L'IGN a-t-il sa photo très fine (5 à 10 cm) sur cette maison ? Posé par
+   * la lecture à l'IGN (une tuile essayée) ; absent sur les relevés anciens.
+   */
+  ortho5cm?: boolean
   /** Fin du vol LiDAR : la maison a pu changer depuis. */
   vol: string | null
   /** `maison_absente` : aucun toit sous le contour (démolie, pas encore bâtie, ou mauvais bâtiment). */

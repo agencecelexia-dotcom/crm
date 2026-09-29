@@ -157,8 +157,9 @@ export function CarteMetre({
           maxZoom={21}
         />
         {/* LA PHOTO TRÈS FINE, là où l'IGN l'a : 5 à 10 cm par pixel (Paris,
-            petite couronne, Marseille…), nette jusqu'au zoom 21. Ailleurs ses
-            tuiles manquent, et la photo à 20 cm reste dessous. */}
+            petite couronne, Marseille…), nette jusqu'au zoom 21. Le relevé dit
+            si elle couvre la maison ; ailleurs on ne la demande pas. */}
+        {releve?.ortho5cm && (
         <TileLayer
           key="ortho-thr"
           attribution={ATTRIB_IGN}
@@ -168,6 +169,7 @@ export function CarteMetre({
           maxZoom={21}
           zIndex={2}
         />
+        )}
         </>
       ) : (
         <TileLayer

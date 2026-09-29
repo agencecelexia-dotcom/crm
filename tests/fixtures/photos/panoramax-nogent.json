@@ -1,0 +1,1012 @@
+{
+  "features": [
+    {
+      "id": "1125a225-ead0-4200-854e-e8781ad46e41",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4786893,
+          48.8339408
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:38:10.900000+00:00",
+        "view:azimuth": 129,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/11/25/a2/25/ead0-4200-854e-e8781ad46e41/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/11/25/a2/25/ead0-4200-854e-e8781ad46e41.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b7eaf6de-af0c-4277-86fa-24b08ebc56f7",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4787388,
+          48.8339005
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:39:04.993000+00:00",
+        "view:azimuth": 220,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/b7/ea/f6/de/af0c-4277-86fa-24b08ebc56f7/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/b7/ea/f6/de/af0c-4277-86fa-24b08ebc56f7.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "166b4f59-1237-4531-ae4e-a64ead70b4d9",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4781144,
+          48.834019
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:37:57.813000+00:00",
+        "view:azimuth": 97,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/16/6b/4f/59/1237-4531-ae4e-a64ead70b4d9/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/16/6b/4f/59/1237-4531-ae4e-a64ead70b4d9.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "995985cd-a31c-4332-9d7b-df30f67cd70c",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4781144,
+          48.834019
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:37:42.016000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/99/59/85/cd/a31c-4332-9d7b-df30f67cd70c/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/99/59/85/cd/a31c-4332-9d7b-df30f67cd70c.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bf309732-11df-4b52-9fad-0aada22d7b44",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4781144,
+          48.834019
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:37:53.523000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/bf/30/97/32/11df-4b52-9fad-0aada22d7b44/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/bf/30/97/32/11df-4b52-9fad-0aada22d7b44.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "4e2c60e7-bad8-4561-963e-88a2ec3dd2af",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4781144,
+          48.834019
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:37:20.622000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/4e/2c/60/e7/bad8-4561-963e-88a2ec3dd2af/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/4e/2c/60/e7/bad8-4561-963e-88a2ec3dd2af.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cbc15247-7ad1-4a2b-b398-31bc36995064",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4781144,
+          48.834019
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:37:13.289000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/cb/c1/52/47/7ad1-4a2b-b398-31bc36995064/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/cb/c1/52/47/7ad1-4a2b-b398-31bc36995064.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "41e17f1c-0dd2-4a1d-b01f-78f31a4fe21c",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4786864,
+          48.8338388
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:39:35.463000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/41/e1/7f/1c/0dd2-4a1d-b01f-78f31a4fe21c/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/41/e1/7f/1c/0dd2-4a1d-b01f-78f31a4fe21c.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b7e06263-8bb7-4fb7-8f18-a0b8d438a65a",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4786864,
+          48.8338388
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:39:54.548000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/b7/e0/62/63/8bb7-4fb7-8f18-a0b8d438a65a/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/b7/e0/62/63/8bb7-4fb7-8f18-a0b8d438a65a.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "880138a9-9431-4bcd-967e-b9c371bb4631",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4786864,
+          48.8338388
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:39:13.708000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/88/01/38/a9/9431-4bcd-967e-b9c371bb4631/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/88/01/38/a9/9431-4bcd-967e-b9c371bb4631.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "e0508148-c3b8-4786-9f3f-775d8a14a5a4",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4786864,
+          48.8338388
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:39:27.491000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/e0/50/81/48/c3b8-4786-9f3f-775d8a14a5a4/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/e0/50/81/48/c3b8-4786-9f3f-775d8a14a5a4.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fb7ec83c-d648-46d0-9106-07417d9facfe",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4786864,
+          48.8338388
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:40:04.278000+00:00",
+        "view:azimuth": 176,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/fb/7e/c8/3c/d648-46d0-9106-07417d9facfe/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/fb/7e/c8/3c/d648-46d0-9106-07417d9facfe.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "6e84bc1c-f952-44ff-8f7b-35605be9b3f2",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4776922,
+          48.834005
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:36:29.927000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/6e/84/bc/1c/f952-44ff-8f7b-35605be9b3f2/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/6e/84/bc/1c/f952-44ff-8f7b-35605be9b3f2.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "79b8e25d-b1c3-43b9-a88f-e35714a480a5",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4776922,
+          48.834005
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:36:33.440000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/79/b8/e2/5d/b1c3-43b9-a88f-e35714a480a5/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/79/b8/e2/5d/b1c3-43b9-a88f-e35714a480a5.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a5571c72-43b2-4722-b009-b18bf80334ee",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4776922,
+          48.834005
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:36:13.476000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/a5/57/1c/72/43b2-4722-b009-b18bf80334ee/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/a5/57/1c/72/43b2-4722-b009-b18bf80334ee.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "43ab0849-46fc-4aff-aa85-f05a21ad969a",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4776922,
+          48.834005
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:36:19.961000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/43/ab/08/49/46fc-4aff-aa85-f05a21ad969a/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/43/ab/08/49/46fc-4aff-aa85-f05a21ad969a.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "f4bc1d00-0f42-48b1-97d5-5035739b559f",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4776922,
+          48.834005
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:36:36.548000+00:00",
+        "view:azimuth": null,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/f4/bc/1d/00/0f42-48b1-97d5-5035739b559f/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/f4/bc/1d/00/0f42-48b1-97d5-5035739b559f.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "51dbb8ee-5624-4f98-b291-468839878fa6",
+      "collection": "e8370824-1b06-48e5-9e46-95e175370920",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          2.4776922,
+          48.834005
+        ]
+      },
+      "properties": {
+        "datetime": "2026-03-29T15:36:53.318000+00:00",
+        "view:azimuth": 88,
+        "pers:interior_orientation": {
+          "camera_model": "Galaxy S25 Ultra",
+          "focal_length": 6.3,
+          "field_of_view": 40,
+          "camera_manufacturer": "samsung",
+          "sensor_array_dimensions": [
+            4000,
+            3000
+          ]
+        },
+        "license": "CC-BY-SA-4.0",
+        "geovisio:producer": "pyrog"
+      },
+      "assets": {
+        "sd": {
+          "href": "https://panoramax.openstreetmap.fr/derivates/51/db/b8/ee/5624-4f98-b291-468839878fa6/sd.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "visual"
+          ],
+          "title": "SD picture",
+          "description": "Picture in standard definition (fixed width of 2048px)"
+        },
+        "hd": {
+          "href": "https://panoramax.openstreetmap.fr/images/51/db/b8/ee/5624-4f98-b291-468839878fa6.jpg",
+          "type": "image/jpeg",
+          "roles": [
+            "data"
+          ],
+          "title": "HD picture",
+          "description": "Highest resolution available of this picture"
+        }
+      },
+      "providers": [
+        {
+          "id": "70e8e7b1-7cb0-4978-b27f-09c847b25b33",
+          "name": "pyrog",
+          "roles": [
+            "producer"
+          ]
+        }
+      ]
+    }
+  ]
+}

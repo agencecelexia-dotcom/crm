@@ -76,6 +76,29 @@ export async function maisonEtVoisins(
   return { contour: maison.contour, voisins }
 }
 
+/**
+ * La photo très fine de l'IGN (5 à 10 cm) couvre-t-elle ce point ? Elle
+ * n'existe que sur quelques territoires (Paris, petite couronne, Marseille…)
+ * et sa couche se déclare mondiale : on essaie une tuile, au zoom 18.
+ */
+export async function orthoTresFine(lon: number, lat: number): Promise<boolean> {
+  const n = 2 ** 18
+  const x = Math.floor(((lon + 180) / 360) * n)
+  const r = (lat * Math.PI) / 180
+  const y = Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n)
+  try {
+    const res = await fetch(
+      'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=THR.ORTHOIMAGERY.ORTHOPHOTOS' +
+        `&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM_6_21&TILEMATRIX=18&TILEROW=${y}&TILECOL=${x}`,
+      { signal: AbortSignal.timeout(10000) },
+    )
+    await res.body?.cancel()
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 /** Ce qui n'est pas une rue devant une maison. */
 const PAS_UNE_RUE = new Set(['Sentier', 'Escalier', 'Piste cyclable'])
 
@@ -154,7 +177,13 @@ export async function releverDepuisIgn(
   if (!maison) return { statut: 'introuvable', motif: 'batiment_introuvable' }
   const zone = zoneAutour(maison.contour)
   const journal: Journal = { requetes: 0, octets: 0, detail: [] }
-  const [lu, routes] = await Promise.all([lireNuage(zone, decompresser, journal), routesAutour(zone)])
+  const lonC = maison.contour.reduce((s, p) => s + p[0], 0) / maison.contour.length
+  const latC = maison.contour.reduce((s, p) => s + p[1], 0) / maison.contour.length
+  const [lu, routes, ortho5cm] = await Promise.all([
+    lireNuage(zone, decompresser, journal),
+    routesAutour(zone),
+    orthoTresFine(lonC, latC),
+  ])
   if (!lu) return { statut: 'hors_couverture', motif: 'hors_couverture' }
   // Le vol le plus récent : c'est lui qui date ce qu'on a vu.
   const vol = lu.dalles.map((d) => d.vol).filter((v): v is string => !!v).sort().pop() ?? null
@@ -168,7 +197,7 @@ export async function releverDepuisIgn(
   })
   return {
     statut: 'fait',
-    releve,
+    releve: { ...releve, ortho5cm },
     entree: {
       version: VERSION_RELEVE,
       cleabs,
