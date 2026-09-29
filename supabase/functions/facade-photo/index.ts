@@ -9,17 +9,26 @@
 // - « lire » : Claude lit la photo — la façade, ses ouvertures, sa hauteur —
 //   et `_ouvertures.ts` en tire la surface à déduire. Vingt lectures par
 //   artisan et par jour : chaque lecture coûte quelques centimes.
+// - « ecarter » : l'artisan retire une ouverture lue (un reflet, une grille),
+//   ou la remet ; la surface se recalcule sans elle.
+// - « materiau_toit » : Claude lit le matériau du toit sur la photo aérienne
+//   de l'IGN (`_materiaux.ts`) ; une lecture par maison, gardée avec son relevé.
+//
+// Après une lecture ou un retrait, les dossiers de métrés des chantiers de la
+// maison suivent (`_dossier-serveur.ts`, sous l'interrupteur de la pré-mesure).
 //
 // Accès par le jeton de l'artisan, comme les autres fonctions du métré.
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.129.0'
-import { depuisLambert93, versLambert93 } from '../_calcul-toit.ts'
-import type { Point } from '../_geometrie.ts'
+import { reporterAuDossier } from '../_dossier-serveur.ts'
+import type { MateriauxGardes } from '../_materiaux.ts'
+import { lireToit } from '../_materiaux-serveur.ts'
 import { consigne, SCHEMA_LECTURE, tirerOuvertures, type LectureVision } from '../_ouvertures.ts'
-import { photosMapillary, photosPanoramax, type PhotoRue } from '../_photos-rue.ts'
+import { chercherPhotosRue } from '../_photos-serveur.ts'
 import type { Releve } from '../_releve.ts'
 import { releveUtilisable } from '../_releve-retenu.ts'
-import { vuesDesFacades } from '../_vue-facade.ts'
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
 
 const MODELE = 'claude-opus-5'
 const LECTURES_PAR_JOUR = 20
@@ -61,23 +70,22 @@ async function artisanDe(jeton: string): Promise<string | null> {
   return a?.id ?? null
 }
 
-async function releveDe(cleabs: string): Promise<{ releve: Releve; version: number } | null> {
-  const [l] = await rest<{ releve: Releve; version: number }[]>(
-    `releve_batiment?cleabs=eq.${encodeURIComponent(cleabs)}&statut=eq.fait&select=releve,version`,
+async function releveDe(
+  cleabs: string,
+): Promise<{ releve: Releve; version: number; materiaux: MateriauxGardes | null } | null> {
+  const [l] = await rest<{ releve: Releve; version: number; materiaux: MateriauxGardes | null }[]>(
+    `releve_batiment?cleabs=eq.${encodeURIComponent(cleabs)}&statut=eq.fait&select=releve,version,materiaux`,
   )
   return l && releveUtilisable(l.releve) ? l : null
 }
 
-/** Les voisins gardés avec l'extrait du relevé, déplacés comme la maison. */
-async function voisinsDe(cleabs: string, version: number, r: Releve): Promise<Point[][]> {
-  const res = await fetch(`${URL_BASE()}/storage/v1/object/releves/${cleabs}/v${version}/entree.json`, { headers: entetes() })
-  if (!res.ok) return []
-  const e = (await res.json()) as { voisins?: { contour: Point[] }[] }
-  return (e.voisins ?? []).map((v) =>
-    v.contour.map(([lon, lat]) => {
-      const [x, y] = versLambert93(lon, lat)
-      return depuisLambert93(x + r.recalage.dx, y + r.recalage.dy)
-    }),
+/** Les dossiers des chantiers de la maison suivent, après la réponse. */
+function suivreAuDossier(cleabs: string) {
+  EdgeRuntime.waitUntil(
+    (async () => {
+      const l = await releveDe(cleabs)
+      if (l) await reporterAuDossier(cleabs, l.releve)
+    })().catch((e) => console.error('facade-photo: dossier', e)),
   )
 }
 
@@ -90,19 +98,6 @@ async function signer(chemin: string): Promise<string | null> {
   if (!r.ok) return null
   const { signedURL } = (await r.json()) as { signedURL?: string }
   return signedURL ? `${URL_BASE()}/storage/v1${signedURL}` : null
-}
-
-/** Copie l'image de la photo dans notre stockage (le site n'autorise pas les hôtes des fournisseurs). */
-async function copier(url: string, chemin: string) {
-  const img = await fetch(url, { signal: AbortSignal.timeout(20000) })
-  if (!img.ok) throw new Error(`image_${img.status}`)
-  const octets = new Uint8Array(await img.arrayBuffer())
-  const r = await fetch(`${URL_BASE()}/storage/v1/object/facades/${chemin}`, {
-    method: 'POST',
-    headers: entetes({ 'content-type': 'image/jpeg', 'x-upsert': 'true' }),
-    body: octets,
-  })
-  if (!r.ok) throw new Error(`stockage_${r.status}`)
 }
 
 interface LignePhoto {
@@ -124,10 +119,11 @@ interface LignePhoto {
   colonnes: number[] | null
   lecture: unknown
   lu_le: string | null
+  ecartees: number[]
 }
 
 const COLONNES =
-  'id,cleabs,orientation,source,photo_ref,chemin,auteur,licence,page,pris_le,largeur,hauteur,note,distance_m,incidence,colonnes,lecture,lu_le'
+  'id,cleabs,orientation,source,photo_ref,chemin,auteur,licence,page,pris_le,largeur,hauteur,note,distance_m,incidence,colonnes,lecture,lu_le,ecartees'
 
 async function photosGardees(cleabs: string): Promise<LignePhoto[]> {
   return await rest<LignePhoto[]>(`facade_photo?cleabs=eq.${encodeURIComponent(cleabs)}&select=${COLONNES}&order=cree_le.desc`)
@@ -137,66 +133,11 @@ async function avecLiens(lignes: LignePhoto[]) {
   return await Promise.all(lignes.map(async (l) => ({ ...l, url: await signer(l.chemin) })))
 }
 
-/** Chercher les photos de rue et garder la meilleure de chaque façade. */
+/** Chercher les photos de rue (`_photos-serveur.ts`), puis rendre celles qu'on garde. */
 async function chercher(cleabs: string): Promise<LignePhoto[]> {
   const gardees = await photosGardees(cleabs)
   if (gardees.some((p) => p.source !== 'artisan')) return gardees
-  const l = await releveDe(cleabs)
-  if (!l) return gardees
-  const r = l.releve
-  const lon = r.murs.reduce((s, p) => s + p[0], 0) / r.murs.length
-  const lat = r.murs.reduce((s, p) => s + p[1], 0) / r.murs.length
-  const jeton = Deno.env.get('MAPILLARY_TOKEN')
-  const [pano, mapi] = await Promise.all([
-    photosPanoramax(lon, lat).catch(() => [] as PhotoRue[]),
-    jeton ? photosMapillary(lon, lat, jeton).catch(() => [] as PhotoRue[]) : Promise.resolve([] as PhotoRue[]),
-  ])
-  const obstacles = [...(await voisinsDe(cleabs, l.version, r)), r.murs]
-  const murs = r.facades.map((f) => ({
-    orientation: f.orientation,
-    azimut: f.azimut,
-    longueur: f.longueur,
-    a: f.a,
-    b: f.b,
-    surface: f.surfaceLibre,
-  }))
-  const vues = vuesDesFacades(murs, [...pano, ...mapi], obstacles, 1)
-  for (const [orientation, [v]] of Object.entries(vues)) {
-    if (!v) continue
-    const chemin = `${cleabs}/${v.photo.source}-${v.photo.id}.jpg`
-    try {
-      await copier(v.photo.url, chemin)
-    } catch (e) {
-      console.error('facade-photo: copie', v.photo.url, e)
-      continue
-    }
-    await rest('facade_photo?on_conflict=cleabs,orientation,source,photo_ref', {
-      method: 'POST',
-      headers: { prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({
-        cleabs,
-        orientation,
-        source: v.photo.source,
-        photo_ref: v.photo.id,
-        chemin,
-        auteur: v.photo.auteur,
-        licence: v.photo.licence,
-        page: v.photo.page,
-        pris_le: v.photo.date,
-        lon: v.photo.lon,
-        lat: v.photo.lat,
-        cap: v.photo.cap,
-        champ: v.photo.champ,
-        largeur: v.photo.largeur,
-        hauteur: v.photo.hauteur,
-        note: v.note,
-        distance_m: v.distance,
-        incidence: v.incidence,
-        colonnes: v.colonnes,
-      }),
-    })
-  }
-  return await photosGardees(cleabs)
+  return (await chercherPhotosRue(cleabs)) ? await photosGardees(cleabs) : gardees
 }
 
 /** Lire une photo : Claude, puis la surface d'ouvertures rapportée au mur relevé. */
@@ -273,6 +214,7 @@ async function lire(photo: LignePhoto, artisan: string) {
     headers: { prefer: 'return=minimal' },
     body: JSON.stringify({ lecture, lu_le: new Date().toISOString(), lu_par: artisan, modele: reponse.model }),
   })
+  suivreAuDossier(photo.cleabs)
   return { ok: true, lecture }
 }
 
@@ -286,6 +228,9 @@ Deno.serve(async (req) => {
       cleabs?: string
       orientation?: string
       id?: string
+      rang?: number
+      ecartee?: boolean
+      lire?: boolean
       chemin?: string
       largeur?: number
       hauteur?: number
@@ -350,6 +295,45 @@ Deno.serve(async (req) => {
       // Une photo déjà lue ne se relit pas : même réponse, sans nouveau coût.
       if (photo.lecture) return json({ ok: true, lecture: photo.lecture }, 200, CORS)
       return json(await lire(photo, artisan), 200, CORS)
+    }
+
+    if (b.action === 'ecarter') {
+      if (typeof b.id !== 'string' || !/^[0-9a-f-]{36}$/.test(b.id) || !Number.isInteger(b.rang) || b.rang! < 0 || b.rang! > 200) {
+        return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
+      }
+      const [photo] = await rest<LignePhoto[]>(`facade_photo?id=eq.${b.id}&select=${COLONNES}`)
+      if (!photo) return json({ ok: false, error: 'photo_introuvable' }, 404, CORS)
+      const avant = new Set(photo.ecartees ?? [])
+      if (b.ecartee === false) avant.delete(b.rang!)
+      else avant.add(b.rang!)
+      const ecartees = [...avant].sort((x, y) => x - y)
+      await rest(`facade_photo?id=eq.${b.id}`, {
+        method: 'PATCH',
+        headers: { prefer: 'return=minimal' },
+        body: JSON.stringify({ ecartees }),
+      })
+      suivreAuDossier(photo.cleabs)
+      return json({ ok: true, ecartees }, 200, CORS)
+    }
+
+    if (b.action === 'materiau_toit') {
+      if (!cleabs) return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
+      const [garde] = await rest<{ materiaux: MateriauxGardes | null }[]>(
+        `releve_batiment?cleabs=eq.${cleabs}&select=materiaux`,
+      )
+      if (garde?.materiaux?.toit) return json({ ok: true, materiaux: garde.materiaux }, 200, CORS)
+      // L'écran demande d'abord ce qui est gardé, sans rien faire lire.
+      if (b.lire !== true) return json({ ok: true, materiaux: null }, 200, CORS)
+      // Le même quota que les photos : chaque lecture coûte quelques centimes.
+      const depuis = new Date(Date.now() - 86400e3).toISOString()
+      const [photosLues, toitsLus] = await Promise.all([
+        rest<{ id: string }[]>(`facade_photo?lu_par=eq.${artisan}&lu_le=gt.${depuis}&select=id`),
+        rest<{ id: string }[]>(`releve_batiment?materiaux->>lu_par=eq.${artisan}&materiaux_le=gt.${depuis}&select=id`),
+      ])
+      if (photosLues.length + toitsLus.length >= LECTURES_PAR_JOUR) return json({ ok: false, error: 'quota_atteint' }, 200, CORS)
+      const lu = await lireToit(cleabs, artisan)
+      if (lu.ok) suivreAuDossier(cleabs)
+      return json(lu, 200, CORS)
     }
 
     return json({ ok: false, error: 'action_inconnue' }, 400, CORS)

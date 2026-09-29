@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { aire3d, modeleDuReleve } from '../../supabase/functions/_modele3d'
+import { aire3d, contourNet, modeleDuReleve } from '../../supabase/functions/_modele3d'
 import { releverBatiment, type Releve } from '../../supabase/functions/_releve'
 import { contourDe, deuxPans, nuageDe, type Scene } from './aide-nuage'
 
@@ -82,5 +82,37 @@ describe('maison synthétique à deux pans', () => {
     expect(o.surface).toBeCloseTo(1 * 1.9, 1)
     const [s0, s1] = [o.plan2d[0][0], o.plan2d[1][0]]
     expect((s0 + s1) / 2).toBeCloseTo(sud.longueur / 2, 0)
+  })
+})
+
+describe('contour d’un pan sans ses marches', () => {
+  // Un demi-carré de 5 m, dont l'arête est tracée en marches de 25 cm.
+  const marches: [number, number][] = [[0, 0], [5, 0], [5, 5]]
+  for (let i = 19; i >= 1; i--) marches.push([i * 0.25, (i + 1) * 0.25], [i * 0.25, i * 0.25])
+  marches.push([0, 0.25])
+
+  it('se pose sur la ligne du toit', () => {
+    const net = contourNet(marches, [{ a: [0, 0], b: [5, 5] }])
+    expect(net).toHaveLength(3)
+    expect(net).toContainEqual([5, 5])
+  })
+
+  it('garde le contour sans ligne à suivre', () => {
+    expect(contourNet(marches, [])).toBe(marches)
+  })
+
+  it('garde le contour si le calage le déforme', () => {
+    // Un petit pan à 60 cm d'une ligne : s'y poser l'agrandirait de moitié.
+    const carre: [number, number][] = [[0, 0], [1, 0], [1, 1], [0, 1]]
+    expect(contourNet(carre, [{ a: [0, 1.6], b: [1, 1.6] }])).toBe(carre)
+  })
+})
+
+describe.each(releves)('contours nettoyés : $nom', ({ r }) => {
+  it('garde la surface du toit à 5 % près', () => {
+    const m = modeleDuReleve(r)
+    const dessin = m.faces.filter((f) => f.type === 'pan').reduce((s, f) => s + aire3d(f.sommets), 0)
+    const brut = r.pans.reduce((s, p) => s + p.aireVraie, 0)
+    expect(Math.abs(dessin - brut) / brut).toBeLessThan(0.05)
   })
 })

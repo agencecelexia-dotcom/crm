@@ -5,10 +5,10 @@
 import type { Point } from './_geometrie.ts'
 import { decompresserLaz } from './_laz.ts'
 import { releverDepuisIgn } from './_lecture-releve.ts'
-import { quantitesDuReleve } from './_mesures-chantier.ts'
-import { clesDuChantier } from './_metrage.ts'
+import { reporterAuDossier, rpcService } from './_dossier-serveur.ts'
 import { VERSION_RELEVE, type Releve } from './_releve.ts'
-import { releveUtilisable } from './_releve-retenu.ts'
+
+export { reporterAuDossier, rpcService }
 
 const URL_BASE = () => Deno.env.get('SUPABASE_URL')!
 const CLE_SERVICE = () => Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -18,18 +18,8 @@ const entetes = () => ({
   authorization: `Bearer ${CLE_SERVICE()}`,
 })
 
-export async function rpcService(nom: string, params: unknown): Promise<unknown> {
-  const res = await fetch(`${URL_BASE()}/rest/v1/rpc/${nom}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', apikey: CLE_SERVICE(), authorization: `Bearer ${CLE_SERVICE()}` },
-    body: JSON.stringify(params),
-  })
-  if (!res.ok) throw new Error(`${nom} ${res.status} ${(await res.text()).slice(0, 200)}`)
-  return await res.json()
-}
-
 async function gzip(octets: Uint8Array): Promise<Uint8Array> {
-  const flux = new Blob([octets]).stream().pipeThrough(new CompressionStream('gzip'))
+  const flux = new Blob([octets as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new CompressionStream('gzip'))
   return new Uint8Array(await new Response(flux).arrayBuffer())
 }
 
@@ -42,7 +32,7 @@ async function deposer(chemin: string, corps: Uint8Array | string, type: string)
       'content-type': type,
       'x-upsert': 'true',
     },
-    body: corps,
+    body: corps as BodyInit,
   })
   if (!res.ok) throw new Error(`stockage_${res.status}`)
 }
@@ -66,53 +56,6 @@ export async function releveGarde(cleabs: string): Promise<Releve | null> {
   )
   const [ligne] = res.ok ? ((await res.json()) as { releve: Releve | null }[]) : []
   return ligne?.releve ?? null
-}
-
-/**
- * LE DOSSIER SUIT LE RELEVÉ. Les chantiers de cette maison (sûre : reliée à
- * l'adresse par le RNB, ou confirmée par un humain) reçoivent les chiffres du
- * relevé comme valeur MESURÉE — ceux que l'écran affiche. Une valeur
- * confirmée par un humain reste la valeur retenue ; seules les quantités du
- * métier du chantier sont écrites. C'est la pré-mesure : son interrupteur
- * (« auto_pre_metre ») la coupe ici aussi.
- */
-export async function reporterAuDossier(cleabs: string, r: Releve): Promise<number> {
-  if (!releveUtilisable(r)) return 0
-  if ((await rpcService('automatisation_active', { p_cle: 'auto_pre_metre' })) !== true) return 0
-  const res = await fetch(
-    `${URL_BASE()}/rest/v1/projets?batiment_cleabs=eq.${encodeURIComponent(cleabs)}` +
-      '&or=(batiment_source.in.(rnb,artisan,agence),batiment_confirme_at.not.is.null)&select=id,metier,metiers',
-    { headers: entetes() },
-  )
-  if (!res.ok) return 0
-  const projets = (await res.json()) as { id: string; metier: string | null; metiers: string[] | null }[]
-  const quantites = quantitesDuReleve(r)
-  const maintenant = new Date().toISOString()
-  let n = 0
-  for (const p of projets) {
-    const cles = clesDuChantier([...(p.metiers ?? []), p.metier])
-    const lignes = quantites
-      .filter((q) => cles.has(q.cle))
-      .map((q) => ({
-        projet_id: p.id,
-        cle: q.cle,
-        unite: q.unite,
-        valeur_mesuree: q.valeur,
-        mesure_source: q.source,
-        mesure_precision: q.precision ?? null,
-        mesure_detail: q.detail ?? null,
-        mesuree_le: maintenant,
-      }))
-    if (!lignes.length) continue
-    const ecrit = await fetch(`${URL_BASE()}/rest/v1/metrage_chantier?on_conflict=projet_id,cle`, {
-      method: 'POST',
-      headers: { ...entetes(), prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify(lignes),
-    })
-    if (ecrit.ok) n += lignes.length
-    else console.error('releve: dossier non mis à jour', p.id, ecrit.status, await ecrit.text())
-  }
-  return n
 }
 
 /**

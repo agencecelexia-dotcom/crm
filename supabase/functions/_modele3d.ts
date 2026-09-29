@@ -10,7 +10,7 @@
 // celle qui s'enregistre), pas celle de son dessin — le dessin d'un pan suit
 // des cases de 25 cm, le métré est calculé au plus juste.
 
-import { versLambert93 } from './_calcul-toit.ts'
+import { depuisLambert93, versLambert93 } from './_calcul-toit.ts'
 import type { Point } from './_geometrie.ts'
 import type { Boite, LectureVision } from './_ouvertures.ts'
 import type { FacadeReleve, Releve } from './_releve.ts'
@@ -37,6 +37,10 @@ export interface Face3D {
   /** Mur entièrement mitoyen : il ne se traite pas. */
   mitoyen?: boolean
   type_ouverture?: string
+  /** Ouverture : la photo où elle a été lue, son rang dans la lecture, et si l'artisan l'a retirée. */
+  photo?: string
+  rang?: number
+  ecartee?: boolean
 }
 
 export interface Modele3D {
@@ -49,6 +53,8 @@ export interface Modele3D {
 export interface OuverturesVues {
   orientation: string
   lecture: Pick<LectureVision, 'cadre' | 'ligne_sol' | 'ligne_gouttiere' | 'ouvertures' | 'meme_maison'>
+  photo?: string
+  ecartees?: number[]
 }
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000
@@ -61,10 +67,11 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
   }
   const faces: Face3D[] = []
 
-  // LES PANS : leur contour, porté à l'altitude de leur plan.
+  // LES PANS : leur contour, calé sur les lignes du toit, porté à l'altitude de leur plan.
+  const nets = pansNets(r, loc)
   for (const p of r.pans) {
     const [a, b, c] = p.plan
-    const xy = p.contour.map(loc)
+    const xy = nets.get(p.id)!
     faces.push({
       type: 'pan',
       ref: String(p.id),
@@ -142,7 +149,7 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
       }
       faces.push({
         type: 'ouverture',
-        ref: `${f.index}-${i}`,
+        ref: `${v.photo ?? f.index}-${i}`,
         sommets: [pose(s0, z0), pose(s1, z0), pose(s1, z1), pose(s0, z1)],
         plan2d: [
           [s0, z0],
@@ -153,6 +160,9 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
         surface: r3((s1 - s0) * (z1 - z0)),
         orientation: f.orientation,
         type_ouverture: o.type,
+        photo: v.photo,
+        rang: i,
+        ecartee: v.ecartees?.includes(i) || undefined,
       })
     })
   }
@@ -161,6 +171,115 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
   const min: Vec3 = [0, 1, 2].map((k) => Math.min(...tous.map((p) => p[k]))) as Vec3
   const max: Vec3 = [0, 1, 2].map((k) => Math.max(...tous.map((p) => p[k]))) as Vec3
   return { faces, min, max }
+}
+
+type XY = [number, number]
+
+function pansNets(r: Releve, loc: (p: Point) => XY): Map<number, XY[]> {
+  const lignes = (r.lignes ?? []).map((l) => ({ pans: l.pans, a: loc(l.a), b: loc(l.b) }))
+  return new Map(r.pans.map((p) => [p.id, contourNet(p.contour.map(loc), lignes.filter((l) => l.pans.includes(p.id)))]))
+}
+
+/** Les contours des pans sans leurs marches, en longitude-latitude : ceux que la carte dessine. */
+export function contoursDesPans(r: Releve): Map<number, Point[]> {
+  const depart = r.pans[0]?.contour[0]
+  if (!depart) return new Map()
+  const [ox, oy] = r.origine ?? versLambert93(depart[0], depart[1])
+  const loc = ([lon, lat]: Point): XY => {
+    const [x, y] = versLambert93(lon, lat)
+    return [x - ox, y - oy]
+  }
+  const nets = pansNets(r, loc)
+  return new Map([...nets].map(([id, xy]) => [id, xy.map(([x, y]) => depuisLambert93(x + ox, y + oy))]))
+}
+
+/** À moins de cette distance d'une ligne du toit, un sommet de pan s'y pose. */
+const CALAGE = 0.7
+
+/**
+ * Le contour d'un pan, débarrassé de ses marches. Le relevé le trace en cases
+ * de 25 cm ; ses lignes (faîtage, arêtiers, noues, égouts, rives) sont, elles,
+ * droites, tirées de l'intersection des plans. Chaque sommet proche d'une
+ * ligne du pan s'y pose (sur son bout s'il en est près) ; les sommets alignés
+ * tombent. Deux pans voisins se calent sur la même ligne : pas de jour entre
+ * eux. Si le résultat s'écarte trop du contour d'origine, on garde celui-ci.
+ */
+export function contourNet(contour: XY[], lignes: { a: XY; b: XY }[]): XY[] {
+  if (!lignes.length || contour.length < 4) return contour
+  const bouts = lignes.flatMap((l) => [l.a, l.b])
+  const cale = contour.map((v): XY => {
+    let mieux: XY = v, dMieux = CALAGE
+    for (const q of bouts) {
+      const d = Math.hypot(q[0] - v[0], q[1] - v[1])
+      if (d < dMieux) {
+        mieux = q
+        dMieux = d
+      }
+    }
+    if (mieux !== v) return mieux
+    for (const l of lignes) {
+      const q = projete(v, l.a, l.b)
+      const d = Math.hypot(q[0] - v[0], q[1] - v[1])
+      if (d < dMieux) {
+        mieux = q
+        dMieux = d
+      }
+    }
+    return mieux
+  })
+  // Les doublons, puis les sommets alignés, tombent.
+  let net = cale.filter((v, i) => {
+    const w = cale[(i + 1) % cale.length]
+    return Math.hypot(w[0] - v[0], w[1] - v[1]) > 0.05
+  })
+  for (let change = true; change && net.length > 3; ) {
+    change = false
+    for (let i = 0; i < net.length && net.length > 3; i++) {
+      const u = net[(i - 1 + net.length) % net.length], v = net[i], w = net[(i + 1) % net.length]
+      if (distanceASegment(v, u, w) < 0.08) {
+        net = net.filter((_, k) => k !== i)
+        change = true
+      }
+    }
+  }
+  const avant = Math.abs(aire2d(contour)), apres = Math.abs(aire2d(net))
+  if (net.length < 3 || Math.abs(apres - avant) > 0.06 * avant + 0.5 || seCroise(net)) return contour
+  return net
+}
+
+function projete(v: XY, a: XY, b: XY): XY {
+  const dx = b[0] - a[0], dy = b[1] - a[1]
+  const L2 = dx * dx + dy * dy
+  const t = L2 > 0 ? Math.min(1, Math.max(0, ((v[0] - a[0]) * dx + (v[1] - a[1]) * dy) / L2)) : 0
+  return [a[0] + dx * t, a[1] + dy * t]
+}
+
+function distanceASegment(v: XY, a: XY, b: XY): number {
+  const q = projete(v, a, b)
+  return Math.hypot(q[0] - v[0], q[1] - v[1])
+}
+
+function aire2d(P: XY[]): number {
+  let s = 0
+  for (let i = 0; i < P.length; i++) {
+    const [x1, y1] = P[i], [x2, y2] = P[(i + 1) % P.length]
+    s += x1 * y2 - x2 * y1
+  }
+  return s / 2
+}
+
+/** Deux côtés non voisins du polygone se croisent-ils ? */
+function seCroise(P: XY[]): boolean {
+  const n = P.length
+  const orient = (a: XY, b: XY, c: XY) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]))
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue
+      const a = P[i], b = P[(i + 1) % n], c = P[j], d = P[(j + 1) % n]
+      if (orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0) return true
+    }
+  }
+  return false
 }
 
 /** Le tracé d'un mur en plan : ses arêtes du contour, ou sa ligne s'il est en retrait. */

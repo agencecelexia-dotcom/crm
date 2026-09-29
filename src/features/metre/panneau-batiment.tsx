@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Check, Copy, Loader2, TriangleAlert } from 'lucide-react'
+import { useState, type RefObject } from 'react'
+import { Check, Copy, Loader2, MapPinCheck, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,11 @@ import { FicheMesures, type CarteMesure } from './fiche-mesures'
 import { Provenance } from './provenance'
 import { ToitReleve } from './toit-releve'
 import { PhotosFacade } from './photo-facade'
+import { MateriauToit } from './materiau-toit'
+import { ExportsMetre } from './exports-metre'
+import { SurPlace } from './sur-place'
+import type { Face3D } from './modele3d'
+import type { OutilsVue3D } from './vue-3d'
 import {
   debordCourt,
   debordLisible,
@@ -109,6 +114,8 @@ export function PanneauBatiment({
   enCours,
   onMurChoisi,
   onPansEcartes,
+  faceChoisie,
+  outils3d,
   token,
   voisins,
   vue = 'tout',
@@ -131,6 +138,10 @@ export function PanneauBatiment({
   onMurChoisi: (f: Facade | null) => void
   /** Les pans du relevé que l'artisan écarte : la carte les éteint. */
   onPansEcartes?: (ecartes: Set<number>) => void
+  /** La face touchée dans la vue 3D : le panneau s'ouvre sur son onglet. */
+  faceChoisie?: Face3D | null
+  /** La vue 3D ouverte : son image va au rapport, son modèle au fichier .glb. */
+  outils3d?: RefObject<OutilsVue3D | null>
   token: string
 }) {
   // Le métier ouvre sur SON onglet : le façadier n'a pas à chercher ses murs.
@@ -262,12 +273,25 @@ export function PanneauBatiment({
   }
   // La façade du relevé en cours de chiffrage : ses murs, par orientation.
   const [orientationChoisie, setOrientationChoisie] = useState<string | null>(null)
+  const [surPlace, setSurPlace] = useState(false)
   const facadeMesuree = releve && orientationChoisie ? facadeRetenue(releve, orientationChoisie) : null
   const surfaceFacadeReleve = facadeMesuree ? Math.max(0, facadeMesuree.surface - ouvertures) : null
   function choisirOrientation(o: string | null) {
     setOrientationChoisie(o)
     setOuverturesPhoto(null)
     onMurChoisi(o && releve ? facadeDuReleve(o, facadeRetenue(releve, o).murs) : null)
+  }
+  // Une face touchée dans la vue 3D ouvre son onglet, et sa façade. Ajusté au
+  // rendu, pas dans un effet : l'écran ne passe pas par l'ancien onglet.
+  const [faceVue, setFaceVue] = useState(faceChoisie ?? null)
+  if ((faceChoisie ?? null) !== faceVue) {
+    setFaceVue(faceChoisie ?? null)
+    if (faceChoisie?.type === 'pan') setOnglet('toiture')
+    else if (faceChoisie) {
+      setOnglet('facades')
+      setOrientationChoisie(faceChoisie.orientation)
+      setOuverturesPhoto(null)
+    }
   }
   const totalFacadesReleve = releve
     ? orientationsDesFacades(releve).reduce((s, o) => s + facadeRetenue(releve, o).surface, 0)
@@ -472,10 +496,11 @@ export function PanneauBatiment({
           </p>
 
           <ToitReleve releve={releve} ecartes={ecartes} onBasculer={basculerPan} />
+          <MateriauToit token={token} cleabs={batiment.cleabs ?? null} bdnb={fiche?.bdnb?.mat_toit_txt} />
           <p className="text-[11px] leading-snug text-muted-foreground">
             Sur la carte&nbsp;: chaque pan dans sa couleur, le bord du toit en pointillé blanc, les
             murs en violet — recalés sur le toit —, le tracé du cadastre en pointillé jaune. Le
-            bouton 3D montre le relief relevé.
+            bouton relief montre les toits vus par le LiDAR&nbsp;; le bouton 3D, la maison en volume.
           </p>
 
           {/* D'OÙ VIENT LE CHIFFRE — en une phrase, et le détail sous « ⓘ ». */}
@@ -785,6 +810,26 @@ export function PanneauBatiment({
         </>
       ) : onglet === 'facades' && releve ? (
         <>
+          {/* Devant la maison : chaque façade vue, photographiée, cotée. */}
+          <Button
+            variant={surPlace ? 'default' : 'outline'}
+            className="min-h-11 w-full"
+            aria-pressed={surPlace}
+            onClick={() => setSurPlace((v) => !v)}
+          >
+            <MapPinCheck className="size-4" />
+            {surPlace ? 'Sur place : façade par façade' : 'Je suis sur place'}
+          </Button>
+          {surPlace && (
+            <SurPlace
+              token={token}
+              affectationToken={affectationToken}
+              cleabs={batiment.cleabs ?? null}
+              releve={releve}
+              orientationChoisie={orientationChoisie}
+              onChoisir={(o) => choisirOrientation(o)}
+            />
+          )}
           {/* Le croquis coté, sur le contour RECALÉ : chaque mur avec sa
               longueur ; toucher un mur choisit sa façade. */}
           <CroquisCote
@@ -856,7 +901,8 @@ export function PanneauBatiment({
                     compter à la main
                   </button>
                 </div>
-              ) : (
+              ) : surPlace ? null : (
+                // Sur place, les ouvertures se comptent dans la liste des façades.
                 <CompteurOuvertures n={nbOuvertures} surface={ouvertures} onChanger={setNbOuvertures} />
               )}
               <Provenance lignes={provenanceFacade(releve, facadeMesuree.murs)} />
@@ -1087,6 +1133,18 @@ export function PanneauBatiment({
         <Copy className="size-4" />
         Copier les mesures
       </Button>
+      {releve && (
+        <ExportsMetre
+          token={token}
+          cleabs={batiment.cleabs ?? null}
+          releve={releve}
+          pans={pansRetenus}
+          titre={titre ?? null}
+          adresse={adresse ?? null}
+          bdnb={fiche?.bdnb ? { toit: fiche.bdnb.mat_toit_txt, murs: fiche.bdnb.mat_mur_txt } : null}
+          outils3d={outils3d}
+        />
+      )}
     </>
   )
 }

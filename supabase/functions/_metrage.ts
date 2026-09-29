@@ -17,6 +17,8 @@ export const CLES_METRAGE: Record<string, 'm2' | 'ml' | 'm' | 'pct' | 'u' | 'oui
   facades_total: 'm2',
   hauteur_murs: 'm',
   ouvertures: 'u',
+  ouvertures_surface: 'm2',
+  facade_nette: 'm2',
   cloture_longueur: 'ml',
   cloture_hauteur: 'm',
   portail: 'oui_non',
@@ -30,7 +32,7 @@ export const CLES_METRAGE: Record<string, 'm2' | 'ml' | 'm' | 'pct' | 'u' | 'oui
 }
 
 const TOIT = ['toit_surface', 'toit_pente', 'toit_pans', 'egouts', 'faitage', 'rives', 'aretiers', 'noues', 'fenetres_toit', 'cheminees']
-const FACADES = ['facades_total', 'hauteur_murs', 'ouvertures']
+const FACADES = ['facades_total', 'hauteur_murs', 'ouvertures', 'ouvertures_surface', 'facade_nette']
 
 /**
  * Les quantités de chaque métier, dans l'ordre où on les demande. La

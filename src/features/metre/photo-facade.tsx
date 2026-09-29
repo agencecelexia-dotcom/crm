@@ -4,9 +4,11 @@ import { Camera, Loader2, ScanSearch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatM, formatM2 } from './geometrie'
 import { moisDuVol } from './affichage-releve'
+import { photoDeLaFacade, resultatRetenu } from './ouvertures'
 import {
   MESSAGES_PHOTO,
   useDeposerPhoto,
+  useEcarterOuverture,
   useLirePhoto,
   usePhotosFacade,
   type PhotoFacade,
@@ -49,15 +51,15 @@ export function PhotosFacade({
   const { data: photos, isLoading } = usePhotosFacade(token, cleabs, true)
   const lireP = useLirePhoto(token, cleabs)
   const deposer = useDeposerPhoto(token, cleabs)
+  const ecarter = useEcarterOuverture(token, cleabs)
   const fichier = useRef<HTMLInputElement>(null)
   // La photo de l'artisan d'abord (il l'a prise pour ça), sinon celle de la rue.
-  const photo =
-    photos?.find((p) => p.orientation === orientation && p.source === 'artisan') ??
-    photos?.find((p) => p.orientation === orientation) ??
-    null
+  const photo = photoDeLaFacade(photos ?? [], orientation)
   const lecture = photo?.lecture ?? null
-  const erreur = lireP.error ?? deposer.error
-  const r = lecture?.resultat
+  const erreur = lireP.error ?? deposer.error ?? ecarter.error
+  // Sans les ouvertures que l'artisan a retirées.
+  const r = photo ? resultatRetenu(photo) : null
+  const ecartees = new Set(photo?.ecartees ?? [])
 
   return (
     <div className="space-y-2">
@@ -81,6 +83,7 @@ export function PhotosFacade({
           <div className="relative overflow-hidden rounded-xl border border-border bg-muted">
             <img src={photo.url} alt={`Façade ${orientation}`} className="block h-auto w-full" loading="lazy" />
             <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 size-full">
+              {/* Toucher une ouverture la retire (un reflet, une grille), ou la remet. */}
               {lecture?.vision.cadre ? (
                 <>
                   <rect
@@ -93,20 +96,28 @@ export function PhotosFacade({
                     strokeWidth={4}
                     vectorEffect="non-scaling-stroke"
                   />
-                  {lecture.vision.ouvertures.map((o, i) => (
-                    <rect
-                      key={i}
-                      x={o.gauche}
-                      y={o.haut}
-                      width={o.droite - o.gauche}
-                      height={o.bas - o.haut}
-                      fill="#2563EB"
-                      fillOpacity={0.25}
-                      stroke="#2563EB"
-                      strokeWidth={2}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  ))}
+                  {lecture.vision.ouvertures.map((o, i) => {
+                    const retiree = ecartees.has(i)
+                    return (
+                      <rect
+                        key={i}
+                        x={o.gauche}
+                        y={o.haut}
+                        width={o.droite - o.gauche}
+                        height={o.bas - o.haut}
+                        fill={retiree ? '#64748B' : '#2563EB'}
+                        fillOpacity={retiree ? 0.08 : 0.25}
+                        stroke={retiree ? '#64748B' : '#2563EB'}
+                        strokeDasharray={retiree ? '4 4' : undefined}
+                        strokeWidth={2}
+                        vectorEffect="non-scaling-stroke"
+                        className="pointer-events-auto cursor-pointer"
+                        role="button"
+                        aria-label={retiree ? 'Remettre cette ouverture' : 'Retirer cette ouverture'}
+                        onClick={() => !ecarter.isPending && ecarter.mutate({ id: photo.id, rang: i, ecartee: !retiree })}
+                      />
+                    )
+                  })}
                 </>
               ) : photo.colonnes?.length === 2 ? (
                 // Avant lecture : là où la façade devrait être, d'après la position de l'appareil.
@@ -179,6 +190,15 @@ export function PhotosFacade({
                 ? 'Cette photo semble montrer une autre maison : prenez-en une vous-même.'
                 : 'La façade ne se voit pas assez sur cette photo : prenez-en une vous-même.'}
             </p>
+          )}
+          {ecartees.size > 0 && (
+            <p className="text-muted-foreground">
+              {ecartees.size} ouverture{ecartees.size > 1 ? 's' : ''} retirée{ecartees.size > 1 ? 's' : ''} par vous (en pointillé).
+              Touchez-la sur la photo pour la remettre.
+            </p>
+          )}
+          {lecture && lecture.vision.ouvertures.length > 0 && ecartees.size === 0 && (
+            <p className="text-muted-foreground">Une ouverture en trop ? Touchez-la sur la photo pour la retirer.</p>
           )}
           {r.motif === 'facade_partielle' && (
             <p className="text-[#B45309]">

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Box,
   Check,
   Crosshair,
   Layers,
   Loader2,
   MapPin,
+  Mountain,
   Pencil,
   Ruler,
   Search,
@@ -42,8 +44,13 @@ import { situerChantier } from './position'
 import { BandeauMaison } from './bandeau-maison'
 import { vueDuChantier } from './vue-par-metier'
 import { PanneauCloture } from './panneau-cloture'
-import { releveUtilisable, useReleve } from './use-releve'
-import { ecartesParDefaut } from './affichage-releve'
+import { facadeRetenue, releveUtilisable, useReleve } from './use-releve'
+import { ecartesParDefaut, facadeDuReleve } from './affichage-releve'
+import { FicheFace3D } from './fiche-face-3d'
+import { modeleDuReleve, type Face3D } from './modele3d'
+import { photoDeLaFacade } from './ouvertures'
+import { useMateriauxToit, usePhotosFacade } from './use-photos-facade'
+import type { OutilsVue3D } from './vue-3d'
 import { parcelleSous, troncons } from './parcelle'
 import {
   maisonDeLAdresse,
@@ -51,6 +58,9 @@ import {
   useRetenirMaison,
   type MaisonChantier,
 } from './use-batiment-chantier'
+
+// La 3D (Three.js, ~150 Ko) ne se charge qu'à l'ouverture de la vue.
+const Vue3D = lazy(() => import('./vue-3d'))
 
 /**
  * Prendre un métré sans se déplacer.
@@ -195,6 +205,46 @@ export function FeuilleMetre({
   // panneau (le cache la partage), et les pans que l'artisan y écarte.
   const { data: repReleve } = useReleve(token, choisi?.cleabs ?? null, choisi?.centre ?? null)
   const releveCarte = releveUtilisable(repReleve?.releve) ? repReleve!.releve! : null
+
+  // LA MAISON EN 3D : tirée du relevé (version 5 : plans des pans, sol des
+  // murs), avec les ouvertures lues sur les photos de ses façades.
+  const [vue3d, setVue3d] = useState(false)
+  // Une fois ouverte, la vue 3D reste montée (cachée sous la carte) : son image va au rapport.
+  const [vu3d, setVu3d] = useState(false)
+  const [pret3d, setPret3d] = useState(false)
+  if (vue3d && !vu3d) setVu3d(true)
+  const [faceChoisie, setFaceChoisie] = useState<Face3D | null>(null)
+  // Une autre maison : la face touchée sur la précédente ne vaut plus.
+  const [faceDe, setFaceDe] = useState(choisi?.cleabs ?? null)
+  if (faceDe !== (choisi?.cleabs ?? null)) {
+    setFaceDe(choisi?.cleabs ?? null)
+    setFaceChoisie(null)
+  }
+  const outils3d = useRef<OutilsVue3D | null>(null)
+  const modelable = !!releveCarte?.origine && releveCarte.pans.every((p) => p.plan)
+  const { data: photos3d } = usePhotosFacade(token, choisi?.cleabs ?? null, vue3d && modelable)
+  const { data: materiaux } = useMateriauxToit(token, choisi?.cleabs ?? null, vue3d && modelable)
+  const modele = useMemo(() => {
+    if (!releveCarte || !modelable) return null
+    // Par façade, la photo qui compte (celle de l'artisan d'abord), comme au panneau.
+    const vues = [...new Set((photos3d ?? []).map((p) => p.orientation))]
+      .map((o) => photoDeLaFacade(photos3d ?? [], o))
+      .filter((p) => p?.lecture && p.lecture.resultat.motif !== 'autre_batiment')
+      .map((p) => ({ orientation: p!.orientation, lecture: p!.lecture!.vision, photo: p!.id, ecartees: p!.ecartees }))
+    return modeleDuReleve(releveCarte, vues)
+  }, [releveCarte, modelable, photos3d])
+  // La feuille s'ouvre sur la maison en 3D dès que son relevé est prêt : une
+  // fois, pour la maison du chantier. Pas pour la clôture, qui vit sur la carte.
+  const [auto3d, setAuto3d] = useState(false)
+  if (!auto3d && modele && vue !== 'terrain') {
+    setAuto3d(true)
+    setVue3d(true)
+  }
+  // Toucher un mur le montre aussi sur la carte, comme depuis le panneau.
+  function choisirFace(f: Face3D | null) {
+    setFaceChoisie(f)
+    if (f && f.type !== 'pan' && releveCarte) setMurChoisi(facadeDuReleve(f.orientation, facadeRetenue(releveCarte, f.orientation).murs))
+  }
   const [ecartes, setEcartes] = useState<{ cleabs: string; pans: Set<number> } | null>(null)
 
   // Les autres bâtiments chargés : ils disent quels murs de la maison sont accolés.
@@ -374,6 +424,8 @@ export function FeuilleMetre({
       onEnregistrer={garder}
       onMurChoisi={setMurChoisi}
       onPansEcartes={(e) => choisi?.cleabs && setEcartes({ cleabs: choisi.cleabs, pans: e })}
+      faceChoisie={faceChoisie}
+      outils3d={pret3d ? outils3d : undefined}
       voisins={voisins}
       vue={vue}
       titre={titre}
@@ -419,6 +471,42 @@ export function FeuilleMetre({
             pansEcartes={ecartes?.cleabs === choisi?.cleabs ? ecartes?.pans : ecartesParDefaut(releveCarte)}
           />
 
+          {/* La maison en 3D, par-dessus la carte (qui garde son état dessous). */}
+          {vu3d && modele && (
+            <div className={cn('absolute inset-0 z-[1000] bg-background', !vue3d && 'hidden')}>
+              <Suspense
+                fallback={
+                  <div className="grid size-full place-items-center">
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                  </div>
+                }
+              >
+                <Vue3D
+                  modele={modele}
+                  pansEcartes={ecartes?.cleabs === choisi?.cleabs ? ecartes?.pans : ecartesParDefaut(releveCarte)}
+                  choisie={faceChoisie}
+                  onChoisir={choisirFace}
+                  onPret={(o) => {
+                    outils3d.current = o
+                    setPret3d(!!o)
+                  }}
+                />
+              </Suspense>
+              {vue3d && faceChoisie && releveCarte && (
+                <FicheFace3D
+                  // La face telle que le modèle la montre maintenant (une ouverture retirée change).
+                  face={modele.faces.find((f) => f.type === faceChoisie.type && f.ref === faceChoisie.ref) ?? faceChoisie}
+                  releve={releveCarte}
+                  photos={photos3d ?? []}
+                  materiaux={materiaux ?? null}
+                  token={token}
+                  cleabs={choisi?.cleabs ?? null}
+                  onFermer={() => setFaceChoisie(null)}
+                />
+              )}
+            </div>
+          )}
+
           {enRecherche && (
             <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[500] flex justify-center">
               <span className="flex items-center gap-2 rounded-full bg-card px-3 py-1.5 text-xs shadow-card">
@@ -439,11 +527,11 @@ export function FeuilleMetre({
           )}
 
           {/* Fonds de plan */}
-          <div className="absolute right-2 top-2 z-[500] flex flex-col gap-1.5">
+          <div className="absolute right-2 top-2 z-[1010] flex flex-col gap-1.5">
             <Button
               size="icon"
               variant="secondary"
-              className="size-9 shadow-card"
+              className={cn('size-9 shadow-card', vue3d && modele && 'hidden')}
               aria-label={fond === 'plan' ? 'Passer à la photo' : 'Passer au plan'}
               onClick={() => setFond((f) => (f === 'plan' ? 'ortho' : 'plan'))}
             >
@@ -452,7 +540,7 @@ export function FeuilleMetre({
             <Button
               size="icon"
               variant={cadastre ? 'default' : 'secondary'}
-              className="size-9 shadow-card"
+              className={cn('size-9 shadow-card', vue3d && modele && 'hidden')}
               aria-label="Limites de parcelle"
               onClick={() => setCadastre((c) => !c)}
             >
@@ -463,18 +551,34 @@ export function FeuilleMetre({
             <Button
               size="icon"
               variant={fond === 'relief' ? 'default' : 'secondary'}
-              className="size-9 shadow-card"
+              className={cn('size-9 shadow-card', vue3d && modele && 'hidden')}
               aria-label="Relief des toits (LiDAR)"
               onClick={() => setFond((f) => (f === 'relief' ? 'ortho' : 'relief'))}
             >
-              <span className="text-[9px] font-bold">3D</span>
+              <Mountain className="size-4" />
             </Button>
+            {/* La maison en 3D : dès que le relevé est prêt. */}
+            {modele && (
+              <Button
+                size="icon"
+                variant={vue3d ? 'default' : 'secondary'}
+                className="size-9 shadow-card"
+                aria-label={vue3d ? 'Revenir à la carte' : 'Voir la maison en 3D'}
+                aria-pressed={vue3d}
+                onClick={() => {
+                  setVue3d((v) => !v)
+                  setFaceChoisie(null)
+                }}
+              >
+                <Box className="size-4" />
+              </Button>
+            )}
           </div>
 
           {/* Recherche d'adresse : le recours quand le chantier n'est pas
               géolocalisé. Décalée à gauche pour laisser les boutons de zoom de
               Leaflet, qui occupent le coin haut-gauche. */}
-          <div className="absolute left-14 right-14 top-2 z-[500]">
+          <div className={cn('absolute left-14 right-14 top-2 z-[500]', vue3d && modele && 'hidden')}>
             {chercheOuverte ? (
               <div className="space-y-1 rounded-xl bg-card p-2 shadow-card">
                 <div className="relative">
@@ -520,7 +624,13 @@ export function FeuilleMetre({
         {/* Le panneau DÉFILE, et laisse au moins un tiers de l'écran à la carte :
             sans défilement, sur un téléphone, le bas du panneau — et le bouton
             d'enregistrement — sortait de l'écran sans qu'on puisse l'atteindre. */}
-        <div className="max-h-[62dvh] shrink-0 space-y-3 overflow-y-auto overscroll-contain border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div
+          className={cn(
+            'shrink-0 space-y-3 overflow-y-auto overscroll-contain border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+            // En 3D, la maison prend plus de place : on la tourne, on la touche.
+            vue3d && modele ? 'max-h-[42dvh]' : 'max-h-[62dvh]',
+          )}
+        >
           {/* Ce qu'on sait — ou pas — de l'endroit où l'on est. */}
           {secours && situation?.message && (
             <div
