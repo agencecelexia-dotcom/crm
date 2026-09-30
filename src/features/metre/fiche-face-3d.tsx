@@ -53,26 +53,41 @@ export function FicheFace3D({
     note = p?.terrasse
       ? 'Plus basse que les égouts : hors du toit par défaut.'
       : `Surface vraie, pente comprise, mesurée dans les points LiDAR.${lu ? ` ${LIBELLES_TOIT[lu.materiau]} (${lu.couleur}), lu sur la photo aérienne.` : ''}`
+  } else if (face.type === 'mur' && face.complement) {
+    // Un mur que le modèle ajoute pour fermer le volume : il ne compte pas au métré.
+    titre = face.retrait ? 'Mur en retrait sous le toit' : 'Petit mur du contour'
+    detail = `${formatM2(face.surface)}${face.hauteur ? ` · ${face.hauteur[1] - face.hauteur[0] < 0.3 ? hauteur(face.hauteur[0]) : `${hauteur(face.hauteur[0])} à ${hauteur(face.hauteur[1])}`}` : ''}`
+    note = 'Dessiné pour fermer le volume de la maison (décroché, mur sous un bord de toit, terrasse) : il n’est pas compté dans les façades.'
   } else if (face.type === 'mur') {
     const f = releve.facades.find((x) => String(x.index) === face.ref)
-    titre = `Façade ${face.orientation}${f?.retrait ? ', en retrait' : ''}`
-    detail = f
-      ? `${formatM2(f.surfaceLibre)} · ${formatM(f.longueur)} · ${f.hauteurHaute - f.hauteurBasse < 0.3 ? hauteur(f.hauteurBasse) : `${hauteur(f.hauteurBasse)} à ${hauteur(f.hauteurHaute)}`}`
+    // « Façade sud » est l'orientation ENTIÈRE, comme au tableau et au PDF : le mur
+    // touché n'en est qu'une partie, dite en dessous.
+    const tout = facadeRetenue(releve, face.orientation)
+    const bas = Math.min(...tout.murs.map((m) => m.hauteurBasse))
+    const haut = Math.max(...tout.murs.map((m) => m.hauteurHaute))
+    titre = `Façade ${face.orientation}`
+    detail = tout.murs.length
+      ? `${formatM2(tout.surface)} · ${formatM(tout.longueur)} · ${haut - bas < 0.3 ? hauteur(bas) : `${hauteur(bas)} à ${hauteur(haut)}`}`
       : ''
+    const rang = tout.murs.findIndex((m) => String(m.index) === face.ref) + 1
+    const ceMur =
+      f && tout.murs.length > 1
+        ? `Ce mur : ${formatM(f.longueur)}, ${formatM2(f.surfaceLibre)} (mur ${rang} sur ${tout.murs.length}${f.retrait ? ', en retrait' : ''}). `
+        : ''
     // Les ouvertures lues sur la photo de cette façade, sans celles retirées.
     const photo = photoDeLaFacade(photos, face.orientation)
     const r = photo ? resultatRetenu(photo) : null
-    const brute = facadeRetenue(releve, face.orientation).surface
+    const brute = tout.surface
     const ouvertures =
       r?.utilisable && r.surface != null
         ? `${r.nombre} ouverture${r.nombre > 1 ? 's' : ''} lue${r.nombre > 1 ? 's' : ''} (${formatM2(r.surface)}) : façade ${face.orientation} nette ${formatM2(Math.max(0, brute - r.surface))}.`
         : null
     const materiau = photo?.lecture?.vision.materiau ? ` ${photo.lecture.vision.materiau}.` : ''
     note = f?.retrait
-      ? 'Mur déduit de l’égout au-dessus d’une terrasse : à vérifier sur place.'
+      ? `${ceMur}Mur déduit de l’égout au-dessus d’une terrasse : à vérifier sur place.`
       : face.mitoyen
-        ? 'Mur mitoyen : hors surface.'
-        : `${ouvertures ?? 'Ouvertures non déduites : photographiez la façade.'}${materiau}`
+        ? `${ceMur}Mur mitoyen : hors surface.`
+        : `${ceMur}${ouvertures ?? 'Ouvertures non déduites : photographiez la façade.'}${materiau}`
   } else {
     titre = TYPES_OUVERTURE[face.type_ouverture ?? 'autre'] ?? 'Ouverture'
     detail = `≈ ${formatM2(face.surface)} · façade ${face.orientation}`

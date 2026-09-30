@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { aire3d, contourNet, modeleDuReleve } from '../../supabase/functions/_modele3d'
+import { aire3d, alleger, contourNet, contourPropre, modeleDuReleve, verifierModele } from '../../supabase/functions/_modele3d'
 import { releverBatiment, type Releve } from '../../supabase/functions/_releve'
 import { contourDe, deuxPans, nuageDe, type Scene } from './aide-nuage'
 
@@ -19,7 +19,14 @@ describe.each(releves)('maison réelle : $nom', ({ r }) => {
 
   it('dessine chaque pan et chaque mur', () => {
     expect(m.faces.filter((f) => f.type === 'pan')).toHaveLength(r.pans.length)
-    expect(m.faces.filter((f) => f.type === 'mur')).toHaveLength(r.facades.length)
+    // Chaque façade a son mur ; le modèle en ajoute pour fermer le volume (décrochés, bords de toit).
+    const murs = m.faces.filter((f) => f.type === 'mur')
+    for (const f of r.facades) expect(murs.some((x) => x.ref === String(f.index) && !x.complement)).toBe(true)
+    expect(murs.filter((x) => !x.complement)).toHaveLength(r.facades.length)
+  })
+
+  it('n’a aucun défaut : pans nets, murs fermés, terrasse posée, pied de mur sans dents de scie', () => {
+    expect(verifierModele(m, r)).toEqual([])
   })
 
   it('le toit dessiné retrouve la surface mesurée (à 5 % près)', () => {
@@ -29,7 +36,7 @@ describe.each(releves)('maison réelle : $nom', ({ r }) => {
 
   it('chaque mur dessiné retrouve sa surface (à 5 % près)', () => {
     for (const f of r.facades) {
-      const face = m.faces.find((x) => x.type === 'mur' && x.ref === String(f.index))!
+      const face = m.faces.find((x) => x.type === 'mur' && x.ref === String(f.index) && !x.complement)!
       if (f.surface < 5) continue
       // Un mur fait de plusieurs arêtes n'est pas plan : on somme ses tranches.
       let aire = 0
@@ -114,5 +121,34 @@ describe.each(releves)('contours nettoyés : $nom', ({ r }) => {
     const dessin = m.faces.filter((f) => f.type === 'pan').reduce((s, f) => s + aire3d(f.sommets), 0)
     const brut = r.pans.reduce((s, p) => s + p.aireVraie, 0)
     expect(Math.abs(dessin - brut) / brut).toBeLessThan(0.05)
+  })
+})
+
+describe('un contour de pan en escalier devient un tracé de toit', () => {
+  // Un rectangle de 10 × 4 m dont le bas est une marche d'escalier de cases de 25 cm.
+  const escalier = (): [number, number][] => {
+    const P: [number, number][] = [[0, 0]]
+    for (let i = 0; i < 40; i++) P.push([i * 0.25, (i % 2) * 0.25], [(i + 1) * 0.25, (i % 2) * 0.25])
+    P.push([10, 4], [0, 4])
+    return P
+  }
+
+  it('garde peu de sommets, sans se croiser, à 5 % près de l’aire', () => {
+    const P = escalier()
+    const L = alleger(P)
+    expect(L.length).toBeLessThanOrEqual(12)
+    const aire = (Q: [number, number][]) => Math.abs(Q.reduce((s, [x1, y1], i) => s + x1 * Q[(i + 1) % Q.length][1] - Q[(i + 1) % Q.length][0] * y1, 0) / 2)
+    expect(Math.abs(aire(L) - aire(P))).toBeLessThan(0.05 * aire(P) + 1)
+  })
+
+  it('se cale sur la ligne du toit sans dépasser douze sommets', () => {
+    const net = contourPropre(escalier(), [{ a: [0, 0.1], b: [10, 0.1] }])
+    expect(net.length).toBeLessThanOrEqual(12)
+    expect(net.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('laisse un rectangle propre tel quel', () => {
+    const R: [number, number][] = [[0, 0], [8, 0], [8, 5], [0, 5]]
+    expect(alleger(R)).toEqual(R)
   })
 })

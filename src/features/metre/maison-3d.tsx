@@ -111,7 +111,7 @@ export function Maison3D({
                     choisie={face}
                     onChoisir={(f) => {
                       setFace(f)
-                      if (f && f.type !== 'pan') setFacade(f.orientation)
+                      if (f && f.type !== 'pan' && !f.complement) setFacade(f.orientation)
                     }}
                     onPret={(o) => {
                       outils3d.current = o
@@ -145,7 +145,7 @@ export function Maison3D({
             {rapport && (
               <div className="space-y-3 border-t border-border p-4 md:border-l md:border-t-0">
                 <div className="grid grid-cols-2 gap-2">
-                  <Chiffre titre="Toiture" valeur={formatM2(rapport.toiture.surface)} detail={`${rapport.toiture.nombre} pans, pente ${pct(rapport.toiture.pente)}`} fort />
+                  <Chiffre titre="Toiture" valeur={formatM2(rapport.toiture.surface)} detail={`${rapport.toiture.nombre} pans, pente ${pct(rapport.toiture.penteDesPans)}`} fort />
                   <Chiffre
                     titre={rapport.totalFacades.nette != null ? 'Façades nettes' : 'Façades brutes'}
                     valeur={formatM2(rapport.totalFacades.nette ?? rapport.totalFacades.brute)}

@@ -243,7 +243,7 @@ export function FeuilleMetre({
   // Toucher un mur le montre aussi sur la carte, comme depuis le panneau.
   function choisirFace(f: Face3D | null) {
     setFaceChoisie(f)
-    if (f && f.type !== 'pan' && releveCarte) setMurChoisi(facadeDuReleve(f.orientation, facadeRetenue(releveCarte, f.orientation).murs))
+    if (f && f.type !== 'pan' && !f.complement && releveCarte) setMurChoisi(facadeDuReleve(f.orientation, facadeRetenue(releveCarte, f.orientation).murs))
   }
   const [ecartes, setEcartes] = useState<{ cleabs: string; pans: Set<number> } | null>(null)
 

@@ -40,7 +40,7 @@ export function BandeauMaison({
     return <Repere texte="Maison confirmée" />
   }
   if (surLaCible && maison.confiance === 'officielle') {
-    return <Repere texte={cherchee ? 'Maison reliée à l’adresse cherchée' : 'Maison reliée à l’adresse du chantier'} />
+    return <Repere texte={`${cherchee ? 'Maison reliée à l’adresse cherchée' : 'Maison reliée à l’adresse du chantier'}${preuveDuLien(maison)}`} />
   }
   if (surLaCible && maison.confiance === 'a_confirmer') {
     return (
@@ -50,6 +50,7 @@ export function BandeauMaison({
           <div className="min-w-0 text-xs text-[#92400E]">
             <p className="text-sm font-semibold text-[#B45309]">C’est bien la maison ?</p>
             <p>{pourquoi(maison)}</p>
+            {maison.doute && <p>{maison.doute}</p>}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -73,6 +74,14 @@ export function BandeauMaison({
     )
   }
   return null
+}
+
+/** Ce qui prouve le lien, en quelques mots : « (le numéro est sur la maison) », « (même parcelle) »… */
+function preuveDuLien(m: MaisonChantier): string {
+  if (m.preuve === 'dans') return ' (le numéro est sur la maison)'
+  if (m.preuve === 'proche') return ` (à ${String(m.distance_m ?? 0).replace('.', ',')} m du numéro)`
+  if (m.preuve === 'parcelle') return ` (sur la parcelle du numéro, à ${String(m.distance_m ?? 0).replace('.', ',')} m)`
+  return ''
 }
 
 /** La raison du doute, dite avec les mots du dossier. */

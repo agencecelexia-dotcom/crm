@@ -68,6 +68,19 @@ export function nuageDe(s: Scene): { nuage: Nuage; zone: Zone } {
   }
 }
 
+/** Un contour quelconque (repère local, mètres), en longitude, latitude — pour une maison en L. */
+export function polygoneDe(s: Pick<Scene, 'origine' | 'rotation'>, points: [number, number][]): [number, number][] {
+  const th = (s.rotation * Math.PI) / 180
+  return points.map(([u, v]) =>
+    depuisLambert93(s.origine[0] + u * Math.cos(th) - v * Math.sin(th), s.origine[1] + u * Math.sin(th) + v * Math.cos(th)),
+  )
+}
+
+/** Une boîte plate (toit-terrasse, annexe) : `h` mètres au-dessus du sol sur [x0, x1] × [y0, y1]. */
+export function boitePlate([x0, y0, x1, y1]: [number, number, number, number], h: number): Volume {
+  return { toit: (x, y) => (x >= x0 && x <= x1 && y >= y0 && y <= y1 ? h : null) }
+}
+
 /** Un rectangle de murs [x0, x1] × [y0, y1] du repère local, en longitude, latitude, décalé de (dx, dy) mètres (Lambert-93). */
 export function contourDe(
   s: Pick<Scene, 'origine' | 'rotation'>,

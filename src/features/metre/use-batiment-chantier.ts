@@ -29,6 +29,12 @@ export interface MaisonChantier {
   commune_differente: boolean
   /** Le numéro saisi, quand la BAN en a retrouvé un autre dans la même rue. */
   numero_saisi: string | null
+  /** À quelle distance du point d'adresse est la maison (m ; 0 : le point est dessus). */
+  distance_m?: number | null
+  /** Ce qui prouve le lien : le point est sur la maison, tout près, ou sur sa parcelle cadastrale. */
+  preuve?: 'dans' | 'proche' | 'parcelle' | null
+  /** Ce qui empêche de conclure, en clair. */
+  doute?: string | null
   message: string | null
 }
 
