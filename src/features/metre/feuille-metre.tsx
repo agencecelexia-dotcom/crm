@@ -48,6 +48,8 @@ import { facadeRetenue, releveUtilisable, useReleve } from './use-releve'
 import { ecartesParDefaut, facadeDuReleve } from './affichage-releve'
 import { FicheFace3D } from './fiche-face-3d'
 import { modeleDuReleve, type Face3D } from './modele3d'
+import { PanneauMetreIA } from './metre-ia-panneau'
+import { useMetreIA } from './use-metre-ia'
 import { photoDeLaFacade } from './ouvertures'
 import { useMateriauxToit, usePhotosFacade } from './use-photos-facade'
 import type { OutilsVue3D } from './vue-3d'
@@ -224,6 +226,17 @@ export function FeuilleMetre({
   const modelable = !!releveCarte?.origine && releveCarte.pans.every((p) => p.plan)
   const { data: photos3d } = usePhotosFacade(token, choisi?.cleabs ?? null, vue3d && modelable)
   const { data: materiaux } = useMateriauxToit(token, choisi?.cleabs ?? null, vue3d && modelable)
+  // « Mesurer avec l'IA » : ce que l'IA a compris de la maison choisie (terrasses, escaliers…).
+  const ia = useMetreIA(token, choisi?.cleabs ?? null, choisi?.centre ?? null)
+  const relirePhotosIA = ia.refaire
+  useEffect(() => {
+    if (ia.statut === 'fait') relirePhotosIA()
+  }, [ia.statut, relirePhotosIA])
+  const donneesIA = ia.etat.data
+  const lectureIA = useMemo(
+    () => (donneesIA?.statut === 'fait' && donneesIA.scene && donneesIA.niveaux ? { scene: donneesIA.scene, niveaux: donneesIA.niveaux } : null),
+    [donneesIA],
+  )
   const modele = useMemo(() => {
     if (!releveCarte || !modelable) return null
     // Par façade, la photo qui compte (celle de l'artisan d'abord), comme au panneau.
@@ -231,8 +244,8 @@ export function FeuilleMetre({
       .map((o) => photoDeLaFacade(photos3d ?? [], o))
       .filter((p) => p?.lecture && p.lecture.resultat.motif !== 'autre_batiment')
       .map((p) => ({ orientation: p!.orientation, lecture: p!.lecture!.vision, photo: p!.id, ecartees: p!.ecartees }))
-    return modeleDuReleve(releveCarte, vues)
-  }, [releveCarte, modelable, photos3d])
+    return modeleDuReleve(releveCarte, vues, lectureIA)
+  }, [releveCarte, modelable, photos3d, lectureIA])
   // La feuille s'ouvre sur la maison en 3D dès que son relevé est prêt : une
   // fois, pour la maison du chantier. Pas pour la clôture, qui vit sur la carte.
   const [auto3d, setAuto3d] = useState(false)
@@ -631,6 +644,20 @@ export function FeuilleMetre({
             vue3d && modele ? 'max-h-[42dvh]' : 'max-h-[62dvh]',
           )}
         >
+          {/* « Mesurer avec l'IA » : confirmer la maison, lancer, lire ce que l'IA a compris. */}
+          {choisi?.cleabs && (
+            <div className="-mx-3 -mt-3">
+              <PanneauMetreIA
+                etat={ia.etat.data}
+                enCours={ia.enCours}
+                onLancer={() => ia.lancer.mutate()}
+                erreur={ia.lancer.data?.ok === false ? (ia.lancer.data.error ?? 'echec') : ia.lancer.isError ? 'echec' : null}
+                contour={choisi.contour}
+                adresse={null}
+              />
+            </div>
+          )}
+
           {/* Ce qu'on sait — ou pas — de l'endroit où l'on est. */}
           {secours && situation?.message && (
             <div

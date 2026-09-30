@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Loader2, MapPinOff } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
@@ -8,11 +8,13 @@ import { ExportsMetre } from './exports-metre'
 import { FicheFace3D } from './fiche-face-3d'
 import { formatM, formatM2 } from './geometrie'
 import { MateriauToit } from './materiau-toit'
+import { PanneauMetreIA } from './metre-ia-panneau'
 import { modeleDuReleve, type Face3D } from './modele3d'
 import { photoDeLaFacade } from './ouvertures'
 import { PhotosFacade } from './photo-facade'
 import { rapportMetre } from './rapport-metre'
 import type { Point } from './geometrie'
+import { useMetreIA } from './use-metre-ia'
 import { useMateriauxToit, usePhotosFacade } from './use-photos-facade'
 import { JETON_AGENCE, releveUtilisable, useReleve } from './use-releve'
 import type { OutilsVue3D } from './vue-3d'
@@ -33,20 +35,36 @@ export function Maison3D({
   point,
   titre,
   adresse,
+  contour = null,
 }: {
   cleabs: string
   point: Point | null
   titre: string | null
   adresse: string | null
+  /** Le contour de la maison retenue : pour la reconnaître sur la photo avant de lancer l'IA. */
+  contour?: Point[] | null
 }) {
   const t = JETON_AGENCE
   const { data: rep, isLoading, error } = useReleve(t, cleabs, point)
   const releve = releveUtilisable(rep?.releve) ? rep!.releve! : null
   const { data: photos } = usePhotosFacade(t, cleabs, !!releve)
   const { data: materiaux } = useMateriauxToit(t, cleabs, !!releve)
+  const ia = useMetreIA(t, cleabs, point)
+  // Les façades lues par l'IA sont en base quand sa lecture finit : les photos se relisent alors.
+  const statutIA = ia.statut
+  const relirePhotos = ia.refaire
+  useEffect(() => {
+    if (statutIA === 'fait') relirePhotos()
+  }, [statutIA, relirePhotos])
+  const donneesIA = ia.etat.data
+  const lectureIA = useMemo(
+    () => (donneesIA?.statut === 'fait' && donneesIA.scene && donneesIA.niveaux ? { scene: donneesIA.scene, niveaux: donneesIA.niveaux } : null),
+    [donneesIA],
+  )
   const [face, setFace] = useState<Face3D | null>(null)
   const [facade, setFacade] = useState<string | null>(null)
   const [pret3d, setPret3d] = useState(false)
+  const [cotes, setCotes] = useState(true)
   const outils3d = useRef<OutilsVue3D | null>(null)
 
   const modele = useMemo(() => {
@@ -55,8 +73,8 @@ export function Maison3D({
       .map((o) => photoDeLaFacade(photos ?? [], o))
       .filter((p) => p?.lecture && p.lecture.resultat.motif !== 'autre_batiment')
       .map((p) => ({ orientation: p!.orientation, lecture: p!.lecture!.vision, photo: p!.id, ecartees: p!.ecartees }))
-    return modeleDuReleve(releve, vues)
-  }, [releve, photos])
+    return modeleDuReleve(releve, vues, lectureIA)
+  }, [releve, photos, lectureIA])
   const rapport = useMemo(
     () => (releve ? rapportMetre({ titre, adresse, date: new Date(), releve, pans: null, photos: photos ?? [], materiaux: materiaux ?? null }) : null),
     [releve, photos, materiaux, titre, adresse],
@@ -76,6 +94,15 @@ export function Maison3D({
           </span>
         )}
       </div>
+
+      <PanneauMetreIA
+        etat={ia.etat.data}
+        enCours={ia.enCours}
+        onLancer={() => ia.lancer.mutate()}
+        erreur={ia.lancer.data?.ok === false ? (ia.lancer.data.error ?? 'echec') : ia.lancer.isError ? 'echec' : null}
+        contour={contour}
+        adresse={adresse}
+      />
 
       {!releve ? (
         <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
@@ -107,6 +134,7 @@ export function Maison3D({
                 >
                   <Vue3D
                     modele={modele}
+                    cotes={cotes}
                     pansEcartes={ecartesParDefaut(releve)}
                     choisie={face}
                     onChoisir={(f) => {
@@ -123,6 +151,19 @@ export function Maison3D({
                 <p className="grid size-full place-items-center p-6 text-center text-sm text-muted-foreground">
                   Relevé ancien : la 3D arrive au prochain relevé de la maison.
                 </p>
+              )}
+              {modele && (
+                <button
+                  type="button"
+                  onClick={() => setCotes((v) => !v)}
+                  aria-pressed={cotes}
+                  className={cn(
+                    'absolute right-3 top-3 z-[450] min-h-9 rounded-full border px-3 text-xs shadow-card backdrop-blur',
+                    cotes ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border bg-card/90',
+                  )}
+                >
+                  Cotes
+                </button>
               )}
               {face && modele && (
                 <FicheFace3D

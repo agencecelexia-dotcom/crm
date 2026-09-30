@@ -17,6 +17,7 @@ const COULEURS = {
   retrait: '#DCCDB4',
   mitoyen: '#C4C4C4',
   ouverture: '#3B82F6',
+  marche: '#A8A29E',
   ecartee: '#94A3B8',
   terrasse: '#B8BCC4',
   aretes: '#334155',
@@ -39,8 +40,46 @@ const vers3 = ([x, y, z]: Vec3) => new THREE.Vector3(x, z, -y)
 
 function couleurDe(f: Face3D): string {
   if (f.type === 'ouverture') return f.ecartee ? COULEURS.ecartee : COULEURS.ouverture
+  if (f.type === 'marche') return COULEURS.marche
   if (f.type === 'mur') return f.mitoyen ? COULEURS.mitoyen : f.retrait ? COULEURS.retrait : COULEURS.mur
   return f.terrasse ? COULEURS.terrasse : couleurPan(Number(f.ref))
+}
+
+const virgule = (n: number, d = 1) => n.toFixed(d).replace('.', ',')
+
+/** Une étiquette de cote : un texte sur fond clair, toujours face à la caméra. */
+function etiquette(texte: string): THREE.Sprite {
+  const c = document.createElement('canvas')
+  c.width = 320
+  c.height = 80
+  const g = c.getContext('2d')!
+  g.fillStyle = 'rgba(255,255,255,0.92)'
+  g.strokeStyle = '#334155'
+  g.lineWidth = 3
+  g.beginPath()
+  g.roundRect(4, 4, 312, 72, 16)
+  g.fill()
+  g.stroke()
+  g.fillStyle = '#0f172a'
+  g.font = '600 34px system-ui, sans-serif'
+  g.textAlign = 'center'
+  g.textBaseline = 'middle'
+  g.fillText(texte, 160, 42)
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }))
+  s.renderOrder = 10
+  return s
+}
+
+/** La longueur et la hauteur d'un mur dessiné : de quoi coter la façade sur la 3D. */
+function coteDuMur(f: Face3D): { texte: string; milieu: Vec3 } | null {
+  const n = f.sommets.length / 2
+  if (f.type !== 'mur' || n < 2 || f.complement || f.mitoyen) return null
+  const bas = f.sommets.slice(0, n), haut = f.sommets.slice(n).reverse()
+  const L = f.plan2d[n - 1][0] - f.plan2d[0][0]
+  if (L < 1.5) return null
+  const h = f.hauteur ? (f.hauteur[0] + f.hauteur[1]) / 2 : Math.max(...haut.map((p, i) => p[2] - bas[i][2]))
+  const m = (a: Vec3, b: Vec3): Vec3 => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
+  return { texte: `${virgule(L)} m × ${virgule(h)} m`, milieu: m(m(bas[0], bas[n - 1]), m(haut[0], haut[n - 1])) }
 }
 
 /** Une face en triangles : découpée dans son propre plan, puis remise en 3D. */
@@ -67,8 +106,11 @@ export default function Vue3D({
   choisie,
   onChoisir,
   onPret,
+  cotes = true,
 }: {
   modele: Modele3D
+  /** Les longueurs et hauteurs des façades, écrites sur la 3D. */
+  cotes?: boolean
   pansEcartes?: Set<number>
   choisie?: Face3D | null
   onChoisir: (f: Face3D | null) => void
@@ -132,6 +174,26 @@ export default function Vue3D({
       maison.add(aretes)
     }
     scene.add(maison)
+
+    // Les cotes des façades : à part de la maison, pour ne pas partir dans le .glb.
+    const etiquettes = new THREE.Group()
+    if (cotes) {
+      const [ax, ay, az] = modele.min, [bx, by, bz] = modele.max
+      const centreMaison = vers3([(ax + bx) / 2, (ay + by) / 2, (az + bz) / 2])
+      const taille0 = Math.max(bx - ax, by - ay, bz - az, 6)
+      for (const f of modele.faces) {
+        const cote = coteDuMur(f)
+        if (!cote) continue
+        const p = vers3(cote.milieu)
+        // Un mètre en avant du mur, du côté opposé au centre de la maison.
+        const dir = new THREE.Vector3(p.x - centreMaison.x, 0, p.z - centreMaison.z).normalize()
+        const s = etiquette(cote.texte)
+        s.position.set(p.x + dir.x * 1, p.y, p.z + dir.z * 1)
+        s.scale.set(taille0 * 0.2, taille0 * 0.05, 1)
+        etiquettes.add(s)
+      }
+    }
+    scene.add(etiquettes)
 
     // Le sol, sous la maison.
     const [x0, y0, z0] = modele.min
@@ -220,6 +282,10 @@ export default function Vue3D({
           o.geometry.dispose()
           ;(o.material as THREE.Material).dispose()
         }
+        if (o instanceof THREE.Sprite) {
+          o.material.map?.dispose()
+          o.material.dispose()
+        }
       })
       renderer.dispose()
       renderer.domElement.remove()
@@ -228,7 +294,7 @@ export default function Vue3D({
     }
     // La scène se reconstruit quand le modèle change ; le reste se règle sans la refaire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modele, indisponible])
+  }, [modele, indisponible, cotes])
 
   // Les pans écartés s'effacent, la face choisie s'éclaire — sans refaire la scène.
   useEffect(() => {

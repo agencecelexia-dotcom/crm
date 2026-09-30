@@ -47,7 +47,7 @@ export function Maison3DProjet({ projetId, titre, adresse }: { projetId: string;
   return (
     <div className="space-y-2">
       <Avertissement m={m} />
-      <Maison3D cleabs={m.principal.cleabs} point={m.point} titre={titre} adresse={m.adresse_retrouvee ?? adresse} />
+      <Maison3D cleabs={m.principal.cleabs} point={m.point} titre={titre} adresse={m.adresse_retrouvee ?? adresse} contour={m.principal.contour} />
     </div>
   )
 }
@@ -130,7 +130,7 @@ export function Maison3DPage() {
         ) : m?.principal ? (
           <div className="space-y-2">
             <Avertissement m={m} />
-            <Maison3D cleabs={m.principal.cleabs} point={m.point} titre={null} adresse={m.adresse_retrouvee ?? choisie.label} />
+            <Maison3D cleabs={m.principal.cleabs} point={m.point} titre={null} adresse={m.adresse_retrouvee ?? choisie.label} contour={m.principal.contour} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Aucune maison trouvée à cette adresse.</p>

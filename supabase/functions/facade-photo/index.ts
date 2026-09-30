@@ -24,6 +24,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk@0.129.0'
 import { reporterAuDossier } from '../_dossier-serveur.ts'
 import { JETON_AGENCE, jetonDe, membreActif } from '../_membre.ts'
 import type { MateriauxGardes } from '../_materiaux.ts'
+import { modeleVision } from '../_modeles.ts'
 import { lireToit } from '../_materiaux-serveur.ts'
 import { consigne, SCHEMA_LECTURE, tirerOuvertures, type LectureVision } from '../_ouvertures.ts'
 import { chercherPhotosRue } from '../_photos-serveur.ts'
@@ -32,8 +33,8 @@ import { releveUtilisable } from '../_releve-retenu.ts'
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
 
-const MODELE = 'claude-opus-5'
-const LECTURES_PAR_JOUR = 20
+// Une lecture de maison par l'IA lit chaque façade : de quoi en lire quelques-unes par jour.
+const LECTURES_PAR_JOUR = 60
 
 const URL_BASE = () => Deno.env.get('SUPABASE_URL')!
 const CLE = () => Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -180,7 +181,7 @@ async function lire(photo: LignePhoto, acteur: Acteur) {
   const client = new Anthropic({ apiKey: cle })
   // Repli automatique sur un autre modèle si celui-ci décline la demande.
   const requete = {
-    model: MODELE,
+    model: modeleVision(),
     max_tokens: 16000,
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',

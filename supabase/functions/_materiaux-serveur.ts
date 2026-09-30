@@ -5,10 +5,10 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.129.0'
 import { cadreDuToit, consigneToit, SCHEMA_TOIT, urlOrtho, type LectureToit, type MateriauxGardes } from './_materiaux.ts'
+import { modeleVision } from './_modeles.ts'
 import type { Releve } from './_releve.ts'
 import { releveUtilisable } from './_releve-retenu.ts'
 
-const MODELE = 'claude-opus-5'
 
 const URL_BASE = () => Deno.env.get('SUPABASE_URL')!
 const CLE = () => Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -53,7 +53,7 @@ export async function lireToit(cleabs: string, artisan: string | null): Promise<
 
   const client = new Anthropic({ apiKey: cle })
   const requete = {
-    model: MODELE,
+    model: modeleVision(),
     max_tokens: 4000,
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
