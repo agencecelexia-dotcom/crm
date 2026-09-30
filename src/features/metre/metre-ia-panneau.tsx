@@ -1,13 +1,14 @@
-import { useEffect } from 'react'
+import { lazy, Suspense } from 'react'
 import { AlertTriangle, Check, Loader2, Sparkles } from 'lucide-react'
-import { MapContainer, Polygon, TileLayer, useMap } from 'react-leaflet'
-import type { LatLngBoundsExpression } from 'leaflet'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Point } from './geometrie'
 import { LIBELLES_VOLUME } from './scene-ia'
 import type { ReponseMetreIA } from './use-metre-ia'
+
+// Leaflet (≈ 155 Ko) ne se charge qu'à l'ouverture du panneau : la fiche du client, elle, s'affiche sans lui.
+const CarteMaison = lazy(() => import('./carte-maison-ia'))
 
 /** Ce que dit la fonction quand la lecture n'a pas abouti, avec les mots de l'écran. */
 const MOTIFS: Record<string, string> = {
@@ -20,37 +21,6 @@ const MOTIFS: Record<string, string> = {
   releve_hors_couverture: 'L’IGN n’a pas encore survolé cette commune en LiDAR : pas de lecture possible ici.',
 }
 const motif = (m?: string | null) => (m ? (MOTIFS[m] ?? (m.startsWith('releve_') ? 'Le relevé LiDAR de cette maison n’a pas abouti.' : 'La lecture n’a pas abouti.')) : 'La lecture n’a pas abouti.')
-
-const ATTRIB_IGN = '&copy; <a href="https://www.ign.fr">IGN</a> — Géoplateforme'
-
-function Cadrer({ contour }: { contour: Point[] }) {
-  const carte = useMap()
-  useEffect(() => {
-    const ll = contour.map(([lon, lat]) => [lat, lon] as [number, number])
-    const lats = ll.map((p) => p[0]), lons = ll.map((p) => p[1])
-    const b: LatLngBoundsExpression = [[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]]
-    carte.fitBounds(b, { padding: [40, 40], maxZoom: 20 })
-  }, [carte, contour])
-  return null
-}
-
-/** La maison à confirmer : la photo aérienne de l'IGN et son contour. Le contour ne sert qu'à la reconnaître. */
-function CarteMaison({ contour }: { contour: Point[] }) {
-  return (
-    <div className="h-52 overflow-hidden rounded-xl border border-border">
-      <MapContainer center={[contour[0][1], contour[0][0]]} zoom={19} className="size-full" scrollWheelZoom={false} attributionControl>
-        <TileLayer
-          attribution={ATTRIB_IGN}
-          url="https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}"
-          maxNativeZoom={19}
-          maxZoom={21}
-        />
-        <Polygon positions={contour.map(([lon, lat]) => [lat, lon] as [number, number])} pathOptions={{ color: '#7C3AED', weight: 3, fillOpacity: 0.08, dashArray: '6 4' }} />
-        <Cadrer contour={contour} />
-      </MapContainer>
-    </div>
-  )
-}
 
 /**
  * « Mesurer avec l'IA » : la maison à confirmer, puis la lecture — ses étapes, ce
@@ -95,7 +65,9 @@ export function PanneauMetreIA({
           {contour && contour.length >= 3 ? (
             <>
               <p className="text-sm font-medium">Est-ce bien la maison{adresse ? ` de ${adresse}` : ''}&nbsp;?</p>
-              <CarteMaison contour={contour} />
+              <Suspense fallback={<div className="grid h-52 place-items-center rounded-xl border border-border"><Loader2 className="size-4 animate-spin text-muted-foreground" /></div>}>
+                <CarteMaison contour={contour} />
+              </Suspense>
             </>
           ) : (
             <p className="text-sm text-[#B45309]">Aucune maison n’est retenue pour ce dossier : choisissez d’abord l’adresse.</p>
