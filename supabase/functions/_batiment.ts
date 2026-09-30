@@ -24,12 +24,12 @@ import {
 import { contient, parcelleSous } from './_parcelle.ts'
 
 /** Un appel HTTP avec délai de garde et réessais : l'IGN et le RNB étranglent parfois. */
-export async function lireJson(url: string, essais = 2): Promise<unknown> {
+export async function lireJson(url: string, essais = 2, delaiMs = 8000): Promise<unknown> {
   let derniere: unknown
   for (let i = 0; i < essais; i++) {
     try {
       const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 8000)
+      const t = setTimeout(() => ctrl.abort(), delaiMs)
       const r = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json' } })
       clearTimeout(t)
       if (!r.ok) throw new Error(`http_${r.status}`)
@@ -158,8 +158,8 @@ function aire(P: [number, number][]): number {
   return Math.abs(s) / 2
 }
 
-export async function lireBatiments(filtre: string): Promise<BatimentBd[]> {
-  const j = (await lireJson(`${WFS}&COUNT=50&CQL_FILTER=${encodeURIComponent(filtre)}`)) as {
+export async function lireBatiments(filtre: string, delaiMs = 8000): Promise<BatimentBd[]> {
+  const j = (await lireJson(`${WFS}&COUNT=50&CQL_FILTER=${encodeURIComponent(filtre)}`, 2, delaiMs)) as {
     features?: { properties: Record<string, unknown>; geometry: { type?: string; coordinates?: unknown } }[]
   }
   return (j.features ?? [])
@@ -197,7 +197,8 @@ export async function parCleabs(ids: string[], points: ([number, number] | null)
     )).filter((b) => voulus.has(b.cleabs))
     if (trouves.length) return trouves
   }
-  return lireBatiments(`cleabs IN (${ids.map((i) => `'${i.replace(/'/g, '')}'`).join(',')})`)
+  // Le filtre lent : 22 à 25 s mesurées depuis les serveurs de Supabase. Un délai de 8 s le faisait échouer à coup sûr.
+  return lireBatiments(`cleabs IN (${ids.map((i) => `'${i.replace(/'/g, '')}'`).join(',')})`, 45_000)
 }
 export const contenant = (p: [number, number]) => lireBatiments(`INTERSECTS(geometrie,SRID=4326;POINT(${f7(p[0])} ${f7(p[1])}))`)
 

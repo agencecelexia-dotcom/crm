@@ -8,7 +8,7 @@
 // Il faut `.env.secrets.local` (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Écrit
 // un rapport Markdown sur la sortie standard (à rediriger dans un fichier).
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { toitRetenu, pansParDefaut } from '../supabase/functions/_releve-retenu.ts'
 import type { Releve } from '../supabase/functions/_releve.ts'
 import type { SceneIA, VerifScene } from '../supabase/functions/_scene-ia.ts'
@@ -47,6 +47,14 @@ const relire = process.argv.includes('--relire')
 const noms = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const choisies = noms.length ? REFERENCES.filter((r) => noms.includes(r.nom)) : REFERENCES
 
+/** Le centre de la maison, lu dans sa fixture : un point d'appui qui évite au serveur le filtre lent de l'IGN (22 s). */
+function pointDe(nom: string): [number, number] | null {
+  const fichier = `tests/fixtures/copc/${{ nogent27bis: 'terrasse', sathonay: 'deux-pans-simple' }[nom] ?? nom}/maison.json`
+  if (!existsSync(fichier)) return null
+  const { contour } = JSON.parse(readFileSync(fichier, 'utf8')) as { contour: [number, number][] }
+  return [contour.reduce((s, p) => s + p[0], 0) / contour.length, contour.reduce((s, p) => s + p[1], 0) / contour.length]
+}
+
 async function fonction(corps: Record<string, unknown>) {
   const r = await fetch(`${URL_BASE}/functions/v1/metre-ia`, {
     method: 'POST',
@@ -70,7 +78,7 @@ console.log('| Maison | Statut | Durée | Jetons (entrée/sortie) | Gouttière |
 console.log('|---|---|---|---|---|---|---|---|---|---|')
 const details: string[] = []
 for (const ref of choisies) {
-  let etat = await fonction({ cleabs: ref.cleabs, action: 'lire', relire })
+  let etat = await fonction({ cleabs: ref.cleabs, action: 'lire', relire, point: pointDe(ref.nom) })
   for (let i = 0; i < 100 && etat.statut === 'en_cours'; i++) {
     await new Promise((ok) => setTimeout(ok, 5000))
     etat = await fonction({ cleabs: ref.cleabs, action: 'etat' })

@@ -426,13 +426,13 @@ describe('la hauteur à la gouttière ne se laisse pas tirer par une annexe', ()
 })
 
 describe('la pente que lit le couvreur', () => {
-  it('ne se dilue ni dans une partie plate ni dans un petit pan doux (Nogent 44 : 48 et 49 %, plat, 20 %)', () => {
+  it('ne se dilue ni dans une partie plate ni dans un petit pan doux (Nogent 44 : 48 et 49 %, plat, 20 %) : la médiane des pans, à leur surface', () => {
     const pan = (id: number, orientation: string, pente: number, plan: number) =>
       ({ id, orientation, pente, airePlan: plan, aireVraie: plan * Math.sqrt(1 + (pente / 100) ** 2), terrasse: false }) as unknown as Releve['pans'][number]
     const r = { pans: [pan(1, 'plat', 0, 39.7), pan(2, 'nord', 48, 33), pan(3, 'sud', 49, 32), pan(4, 'sud', 20, 10.4)] } as Releve
     const t = toitRetenu(r, null)
-    expect(t.penteDesPans).toBeGreaterThan(43)
-    expect(t.penteDesPans).toBeLessThan(49)
+    expect(t.penteDesPans).toBeGreaterThanOrEqual(48)
+    expect(t.penteDesPans).toBeLessThanOrEqual(49)
     expect(t.pente).toBeLessThan(40)
     expect(t.platPlan).toBe(39.7)
   })

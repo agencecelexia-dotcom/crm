@@ -639,10 +639,12 @@ export function verifierModele(m: Modele3D, r: Releve): string[] {
   const bouts: { p: XY; ref: string }[] = []
   for (const f of murs.filter((x) => !x.retrait && !x.ref.startsWith('b'))) {
     const n = f.sommets.length / 2
+    // Un décroché de moins de 60 cm est un éclat du contour : il ne fait pas l'anneau.
+    if (f.complement && f.plan2d[n - 1][0] - f.plan2d[0][0] < 0.6) continue
     bouts.push({ p: [f.sommets[0][0], f.sommets[0][1]], ref: f.ref }, { p: [f.sommets[n - 1][0], f.sommets[n - 1][1]], ref: f.ref })
   }
   for (const b of bouts) {
-    if (!bouts.some((c) => c !== b && c.ref !== b.ref && Math.hypot(c.p[0] - b.p[0], c.p[1] - b.p[1]) < 0.3)) {
+    if (!bouts.some((c) => c !== b && c.ref !== b.ref && Math.hypot(c.p[0] - b.p[0], c.p[1] - b.p[1]) < 0.5)) {
       defauts.push(`anneau des murs ouvert au bout du mur ${b.ref} (${b.p[0].toFixed(1)} ; ${b.p[1].toFixed(1)})`)
     }
   }
