@@ -40,3 +40,8 @@ verify_jwt = false
 # JWT. Elle n'accepte que la clé partagée PRE_METRE_CLE (coffre de la base).
 [functions.pre-metre]
 verify_jwt = false
+
+# Métré par IA : appelée avec la clé publique (espace artisan) ou la session d'un
+# membre. L'accès est vérifié DANS la fonction ; elle est payante à l'usage.
+[functions.metre-ia]
+verify_jwt = false

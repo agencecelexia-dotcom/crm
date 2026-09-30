@@ -12,14 +12,16 @@
 
 import { depuisLambert93, versLambert93 } from './_calcul-toit.ts'
 import { cardinal, type Point } from './_geometrie.ts'
+import type { Niveaux } from './_niveaux.ts'
+import { LIBELLES_VOLUME, type SceneIA } from './_scene-ia.ts'
 import type { Boite, LectureVision } from './_ouvertures.ts'
 import { EPAISSEUR_COUVERTURE, type FacadeReleve, type Releve } from './_releve.ts'
 
 export type Vec3 = [number, number, number]
 
 export interface Face3D {
-  type: 'pan' | 'mur' | 'ouverture'
-  /** Pan : son numéro ; mur : l'index de sa façade ; ouverture : `façade-rang`. */
+  type: 'pan' | 'mur' | 'ouverture' | 'marche'
+  /** Pan : son numéro ; mur : l'index de sa façade ; ouverture : `façade-rang` ; marche : `e<transition>-<rang>`. */
   ref: string
   sommets: Vec3[]
   /**
@@ -42,6 +44,10 @@ export interface Face3D {
    * pas au métré, qui ne le lit pas dans les façades.
    */
   complement?: boolean
+  /** Ce que l'IA a reconnu (« Terrasse haute », « Maison »…) : un nom, jamais une mesure. */
+  genre?: string
+  /** Le volume de la scène de l'IA auquel appartient cette face. */
+  volume?: string
   type_ouverture?: string
   /** Ouverture : la photo où elle a été lue, son rang dans la lecture, et si l'artisan l'a retirée. */
   photo?: string
@@ -65,7 +71,13 @@ export interface OuverturesVues {
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000
 
-export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D {
+/** Ce que la lecture par l'IA ajoute au modèle : la scène, et les niveaux du terrain qu'elle nomme. */
+export interface LectureIA {
+  scene: SceneIA
+  niveaux: Pick<Niveaux, 'niveaux' | 'transitions'>
+}
+
+export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = [], ia: LectureIA | null = null): Modele3D {
   const [ox, oy] = r.origine
   const loc = ([lon, lat]: Point): [number, number] => {
     const [x, y] = versLambert93(lon, lat)
@@ -87,6 +99,7 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
       orientation: p.orientation,
       pente: p.pente,
       terrasse: p.terrasse,
+      ...genreDuPan(ia, p.id),
     })
   }
 
@@ -288,6 +301,54 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
     })
   }
 
+  // LES ESCALIERS que l'IA a reconnus entre deux niveaux mesurés : des marches
+  // (hauteur d'une marche ≈ 17 cm, giron 30 cm), dont le nombre vient du dénivelé mesuré.
+  if (ia) {
+    ia.scene.escaliers.forEach((e) => {
+      const t = ia.niveaux.transitions[e.transition]
+      if (!t) return
+      const bas = ia.niveaux.niveaux[t.entre[0]], haut = ia.niveaux.niveaux[t.entre[1]]
+      if (!bas || !haut) return
+      const n = Math.max(2, Math.round(t.denivele / 0.17))
+      const hMarche = t.denivele / n, giron = 0.3
+      const large = Math.min(Math.max(t.longueur, 1), 3)
+      // Les lectures gardées avant `sens` : du niveau haut vers le bas.
+      const [sx, sy] = t.sens ?? ((): XY => {
+        const dx = bas.centre[0] - haut.centre[0], dy = bas.centre[1] - haut.centre[1], L = Math.hypot(dx, dy) || 1
+        return [dx / L, dy / L]
+      })()
+      const u: XY = [-sy, sx]
+      // Une dalle a son bord AU départ de l'escalier ; une bande de cases, en son milieu.
+      const depart = haut.origine === 'dalle' ? 0 : (-n * giron) / 2
+      const az = cardinal(((Math.atan2(sx, sy) * 180) / Math.PI + 360) % 360)
+      const pt = (d: number, w: number, z: number): Vec3 => [r3(t.centre[0] + sx * d + u[0] * w), r3(t.centre[1] + sy * d + u[1] * w), r3(z)]
+      for (let i = 0; i < n; i++) {
+        const z = haut.z - (i + 1) * hMarche
+        const d0 = depart + i * giron, d1 = d0 + giron
+        faces.push({
+          type: 'marche',
+          ref: `e${e.transition}-${i}`,
+          sommets: [pt(d0, -large / 2, z), pt(d1, -large / 2, z), pt(d1, large / 2, z), pt(d0, large / 2, z)],
+          plan2d: [[0, 0], [giron, 0], [giron, large], [0, large]],
+          surface: r3(giron * large),
+          orientation: az,
+          genre: 'Escalier',
+          complement: true,
+        })
+        faces.push({
+          type: 'marche',
+          ref: `e${e.transition}-${i}h`,
+          sommets: [pt(d1, -large / 2, z), pt(d1, large / 2, z), pt(d1, large / 2, z - hMarche), pt(d1, -large / 2, z - hMarche)],
+          plan2d: [[0, 0], [large, 0], [large, -hMarche], [0, -hMarche]],
+          surface: r3(large * hMarche),
+          orientation: az,
+          genre: 'Escalier',
+          complement: true,
+        })
+      }
+    })
+  }
+
   const tous = faces.flatMap((f) => f.sommets)
   const min: Vec3 = [0, 1, 2].map((k) => Math.min(...tous.map((p) => p[k]))) as Vec3
   const max: Vec3 = [0, 1, 2].map((k) => Math.max(...tous.map((p) => p[k]))) as Vec3
@@ -295,6 +356,12 @@ export function modeleDuReleve(r: Releve, vues: OuverturesVues[] = []): Modele3D
 }
 
 type XY = [number, number]
+
+/** Ce que l'IA a reconnu pour un pan : le genre de son volume. */
+function genreDuPan(ia: LectureIA | null, id: number): { genre?: string; volume?: string } {
+  const v = ia?.scene.volumes.find((x) => x.pans.includes(id))
+  return v ? { genre: LIBELLES_VOLUME[v.genre], volume: v.ref } : {}
+}
 
 /**
  * Le pied d'un mur sans ses marches : médiane glissante sur cinq points, puis
@@ -572,10 +639,12 @@ export function verifierModele(m: Modele3D, r: Releve): string[] {
   const bouts: { p: XY; ref: string }[] = []
   for (const f of murs.filter((x) => !x.retrait && !x.ref.startsWith('b'))) {
     const n = f.sommets.length / 2
+    // Un décroché de moins de 60 cm est un éclat du contour : il ne fait pas l'anneau.
+    if (f.complement && f.plan2d[n - 1][0] - f.plan2d[0][0] < 0.6) continue
     bouts.push({ p: [f.sommets[0][0], f.sommets[0][1]], ref: f.ref }, { p: [f.sommets[n - 1][0], f.sommets[n - 1][1]], ref: f.ref })
   }
   for (const b of bouts) {
-    if (!bouts.some((c) => c !== b && c.ref !== b.ref && Math.hypot(c.p[0] - b.p[0], c.p[1] - b.p[1]) < 0.3)) {
+    if (!bouts.some((c) => c !== b && c.ref !== b.ref && Math.hypot(c.p[0] - b.p[0], c.p[1] - b.p[1]) < 0.5)) {
       defauts.push(`anneau des murs ouvert au bout du mur ${b.ref} (${b.p[0].toFixed(1)} ; ${b.p[1].toFixed(1)})`)
     }
   }

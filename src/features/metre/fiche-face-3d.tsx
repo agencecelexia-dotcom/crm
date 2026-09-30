@@ -48,11 +48,17 @@ export function FicheFace3D({
   if (face.type === 'pan') {
     const p = releve.pans.find((x) => String(x.id) === face.ref)
     titre = p?.terrasse ? 'Terrasse' : p?.orientation === 'plat' ? 'Partie plate' : `Pan ${face.orientation}`
+    // Ce que l'IA a reconnu : un nom, jamais une mesure.
+    if (face.genre) titre = `${titre} · ${face.genre.toLowerCase()} (lu par l’IA)`
     detail = `${p ? formatM2(p.aireVraie) : ''}${p && !p.terrasse ? ` · pente ${Math.round(p.pente)} %` : ''}`
     const lu = materiaux?.toit?.meme_batiment && materiaux.toit.materiau !== 'indetermine' ? materiaux.toit : null
     note = p?.terrasse
       ? 'Plus basse que les égouts : hors du toit par défaut.'
       : `Surface vraie, pente comprise, mesurée dans les points LiDAR.${lu ? ` ${LIBELLES_TOIT[lu.materiau]} (${lu.couleur}), lu sur la photo aérienne.` : ''}`
+  } else if (face.type === 'marche') {
+    titre = 'Escalier reconnu par l’IA'
+    detail = 'Marches d’après le dénivelé mesuré'
+    note = 'L’IA a reconnu un escalier entre deux niveaux du terrain mesurés au laser ; le nombre de marches vient du dénivelé, l’emplacement exact est à confirmer sur place.'
   } else if (face.type === 'mur' && face.complement) {
     // Un mur que le modèle ajoute pour fermer le volume : il ne compte pas au métré.
     titre = face.retrait ? 'Mur en retrait sous le toit' : 'Petit mur du contour'

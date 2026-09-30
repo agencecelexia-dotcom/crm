@@ -2,6 +2,7 @@
 // pour VOIR ce que la vue 3D montrera, avant de la lancer.
 //
 //   npx jiti scripts/rendre-3d.ts <dossier-de-sortie> <nom> [<nom>…]
+//   IA=<lecture.json> npx jiti scripts/rendre-3d.ts …   (ajoute la lecture par l'IA : escaliers, genres)
 //
 // Lit tests/fixtures/copc/<nom>/releve.json, en tire le modèle (`modeleDuReleve`)
 // et écrit <nom>.png : la vue de dessus, puis quatre vues obliques (du sud, de
@@ -20,6 +21,7 @@ import type { Releve } from '../supabase/functions/_releve.ts'
 const PALETTE = ['#c2304a', '#2e7f9c', '#b8651b', '#3a9a54', '#7c3aed', '#c026d3', '#0e7490', '#ca8a04', '#be123c', '#4d7c0f']
 const couleur = (f: Face3D): string => {
   if (f.type === 'ouverture') return '#3b82f6'
+  if (f.type === 'marche') return '#a8a29e'
   if (f.type === 'mur') return f.mitoyen ? '#c4c4c4' : f.retrait ? '#dccdb4' : '#e8e1d5'
   return f.terrasse ? '#b8bcc4' : PALETTE[(Number(f.ref) - 1) % PALETTE.length]
 }
@@ -89,7 +91,8 @@ mkdirSync(sortie, { recursive: true })
 const navigateur = await chromium.launch()
 for (const nom of noms) {
   const r = JSON.parse(readFileSync(join('tests/fixtures/copc', nom, 'releve.json'), 'utf8')) as Releve
-  const m = modeleDuReleve(r)
+  const ia = process.env.IA ? (JSON.parse(readFileSync(process.env.IA, 'utf8')) as { scene: never; niveaux: never }) : null
+  const m = modeleDuReleve(r, [], ia)
   const L = 620, H = 470
   const vues = [
     [0, 90, 'dessus'],

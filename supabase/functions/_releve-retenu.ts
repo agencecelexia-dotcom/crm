@@ -36,7 +36,8 @@ export function pansParDefaut(r: Releve): number[] | null {
  * retenue, donne la même surface vraie — la base la recalcule ainsi (0178), ce
  * qui garde « enregistré = affiché ». Elle se dilue dans une partie plate ou un
  * petit pan doux (36,7 % sur deux pans à 48-49 %). `penteDesPans` est celle
- * que lit le couvreur : la moyenne des pans EN PENTE, à leur surface ;
+ * que lit le couvreur : la MÉDIANE des pans EN PENTE, pondérée par leur surface
+ * (un petit pan doux — 20 % à côté de deux pans à 48 % — ne la tire pas) ;
  * `platPlan` dit ce qui est plat, à part.
  */
 export function toitRetenu(
@@ -50,7 +51,17 @@ export function toitRetenu(
   const pente = vrai > 0 && plan > 0 ? Math.round(1000 * Math.tan(Math.acos(Math.min(1, plan / vrai)))) / 10 : 0
   const pentus = gardes.filter((p) => p.orientation !== 'plat')
   const planPentus = pentus.reduce((s, p) => s + p.airePlan, 0)
-  const penteDesPans = planPentus > 0 ? Math.round((10 * pentus.reduce((s, p) => s + p.pente * p.airePlan, 0)) / planPentus) / 10 : 0
+  let penteDesPans = 0
+  if (planPentus > 0) {
+    let cumul = 0
+    for (const p of [...pentus].sort((a, b) => a.pente - b.pente)) {
+      cumul += p.airePlan
+      if (cumul >= planPentus / 2) {
+        penteDesPans = Math.round(p.pente * 10) / 10
+        break
+      }
+    }
+  }
   const platPlan = gardes.filter((p) => p.orientation === 'plat').reduce((s, p) => s + p.airePlan, 0)
   return { plan: r2(plan), vrai: r2(vrai), pente, penteDesPans, platPlan: r2(platPlan), nb: gardes.length }
 }
