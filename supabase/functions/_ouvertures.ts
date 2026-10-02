@@ -258,7 +258,9 @@ export interface PhotoLue {
  */
 export function photoDeLaFacade<T extends PhotoLue>(photos: T[], orientation: string): T | null {
   const ici = photos.filter((p) => p.orientation === orientation)
-  return ici.find((p) => p.source === 'artisan') ?? ici.find((p) => p.lecture) ?? ici[0] ?? null
+  // Celle de l'artisan d'abord ; puis une photo lue ET exploitable (la mauvaise — autre maison, façade cachée — est écartée) ; puis n'importe quelle lue.
+  const bonne = (p: T) => !!p.lecture && p.lecture.resultat.utilisable && p.lecture.resultat.motif !== 'autre_batiment'
+  return ici.find((p) => p.source === 'artisan') ?? ici.find(bonne) ?? ici.find((p) => p.lecture) ?? ici[0] ?? null
 }
 
 /** Ce que la lecture donne, sans les ouvertures que l'artisan a retirées. */

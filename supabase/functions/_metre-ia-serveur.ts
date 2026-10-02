@@ -13,14 +13,15 @@
 // La lecture ne lève jamais : un échec s'écrit comme tel, avec son motif.
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.129.0'
-import { urlOrtho } from './_materiaux.ts'
 import { modeleVision } from './_modeles.ts'
 import { niveauxDuTerrain, type Niveaux } from './_niveaux.ts'
 import { decoderNuage } from './_nuage.ts'
 import { cadreDeLaMaison, carteDesHauteurs } from './_preuves.ts'
 import { metreur, type Reponse, type ResultatMetreur } from './_metreur-ia.ts'
-import { chargerOrtho, imageLaser, reliefDe, vueDessus, vueOblique, type Vue } from './_vues-ia.ts'
-import { releverBatiment, VERSION_RELEVE, type Releve } from './_releve.ts'
+import { chargerOrtho, imageLaser, reliefDe, vueDessus, vueOblique } from './_vues-ia.ts'
+import { ETAPES_PREVUES } from './_metre-ia-phases.ts'
+import { trierPhotos, type PhotoRue, type TriPhotos } from './_tri-photos.ts'
+import { releverBatiment, VERSION_RELEVE } from './_releve.ts'
 import { releveUtilisable } from './_releve-retenu.ts'
 import { releverEtGarder, releveGarde, rpcService } from './_releve-serveur.ts'
 import { depuisLambert93 } from './_calcul-toit.ts'
@@ -48,7 +49,11 @@ async function rest<T>(chemin: string, init: RequestInit = {}): Promise<T> {
 export interface Etape {
   cle: string
   libelle: string
+  /** La phase vue par l'utilisateur : 1 photos, 2 analyse, 3 mesures, 4 la 3D. */
+  phase: number
   ms: number
+  /** Vrai tant que l'étape tourne. */
+  en_cours?: boolean
 }
 
 /** Ce que la fonction garde par maison. */
@@ -149,54 +154,55 @@ export interface Suivi {
   t0: number
 }
 
-async function etape<T>(cleabs: string, suivi: Suivi, cle: string, libelle: string, f: () => Promise<T>): Promise<T> {
-  await ecrire(cleabs, { etape: libelle, etapes: suivi.etapes })
+/** Une étape : écrite « en cours » avant, rendue « faite » avec sa durée après. L'écran la montre au fil de l'eau. */
+async function etape<T>(cleabs: string, suivi: Suivi, cle: string, f: () => Promise<T>): Promise<T> {
+  const prevue = ETAPES_PREVUES.find((e) => e.cle === cle) ?? { cle, libelle: cle, phase: 3 as const }
+  const ligne: Etape = { cle, libelle: prevue.libelle, phase: prevue.phase, ms: 0, en_cours: true }
+  suivi.etapes.push(ligne)
+  await ecrire(cleabs, { etape: prevue.libelle, etapes: suivi.etapes })
   const t = performance.now()
-  const r = await f()
-  suivi.etapes.push({ cle, libelle, ms: Math.round(performance.now() - t) })
-  await ecrire(cleabs, { etapes: suivi.etapes })
-  return r
+  try {
+    return await f()
+  } finally {
+    ligne.ms = Math.round(performance.now() - t)
+    delete ligne.en_cours
+    await ecrire(cleabs, { etapes: suivi.etapes }).catch(() => undefined)
+  }
 }
 
-/** Lire une façade : chercher ses photos de rue, lire la meilleure. Ne lève jamais. */
-async function lireFacades(cleabs: string, releve: Releve, a: Appelant): Promise<{ lues: number; sans_photo: string[]; erreurs: string[] }> {
-  // Le banc n'a ni jeton d'artisan ni session : il ne lit pas les façades.
-  if (a.token === 'banc') return { lues: 0, sans_photo: [], erreurs: [] }
-  const appel = async (corps: Record<string, unknown>) => {
-    const r = await fetch(`${URL_BASE()}/functions/v1/facade-photo`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(a.autorisation ? { authorization: a.autorisation } : { authorization: `Bearer ${CLE()}` }) },
-      body: JSON.stringify({ token: a.token, cleabs, ...corps }),
-      signal: AbortSignal.timeout(120_000),
-    })
-    return (await r.json().catch(() => ({ ok: false, error: `http_${r.status}` }))) as { ok: boolean; error?: string; photos?: { id: string; orientation: string; note: number | null; lecture: unknown }[] }
+/** Parler à `facade-photo` au nom de l'appelant (même jeton, même quota). */
+async function appelFacade(cleabs: string, a: Appelant, corps: Record<string, unknown>) {
+  const r = await fetch(`${URL_BASE()}/functions/v1/facade-photo`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: a.autorisation ?? `Bearer ${CLE()}` },
+    body: JSON.stringify({ token: a.token, cleabs, ...corps }),
+    signal: AbortSignal.timeout(120_000),
+  })
+  return (await r.json().catch(() => ({ ok: false, error: `http_${r.status}` }))) as {
+    ok: boolean
+    error?: string
+    photos?: PhotoRue[]
+    lecture?: PhotoRue['lecture']
   }
-  const sortie = { lues: 0, sans_photo: [] as string[], erreurs: [] as string[] }
-  const chercher = await appel({ action: 'chercher' })
-  if (!chercher.ok) return { ...sortie, erreurs: [chercher.error ?? 'photos_indisponibles'] }
-  const photos = chercher.photos ?? []
-  const orientations = [...new Set(releve.facades.filter((f) => !f.retrait && f.surfaceLibre > 0).map((f) => f.orientation))]
-  for (const o of orientations) {
-    const candidates = photos.filter((p) => p.orientation === o).sort((x, y) => (y.note ?? 0) - (x.note ?? 0))
-    const lue = candidates.find((p) => p.lecture)
-    if (lue) {
-      sortie.lues++
-      continue
-    }
-    const meilleure = candidates[0]
-    if (!meilleure) {
-      sortie.sans_photo.push(o)
-      continue
-    }
-    const lecture = await appel({ action: 'lire', id: meilleure.id })
-    if (lecture.ok) sortie.lues++
-    else sortie.erreurs.push(`${o} : ${lecture.error ?? 'échec'}`)
-  }
-  return sortie
+}
+
+/** Les photos de la rue (Panoramax, Mapillary) : cherchées et copiées chez nous. Ne lève jamais. Le banc n'a pas de jeton : il n'en cherche pas. */
+async function chercherPhotosRue(cleabs: string, a: Appelant): Promise<{ photos: PhotoRue[]; erreur: string | null }> {
+  if (a.token === 'banc') return { photos: [], erreur: null }
+  const r = await appelFacade(cleabs, a, { action: 'chercher' }).catch((e) => ({ ok: false, error: String(e), photos: undefined }))
+  return r.ok ? { photos: r.photos ?? [], erreur: null } : { photos: [], erreur: r.error ?? 'photos_indisponibles' }
+}
+
+/** Les octets d'une photo de la rue gardée chez nous. */
+async function octetsPhoto(chemin: string): Promise<Uint8Array | null> {
+  const r = await fetch(`${URL_BASE()}/storage/v1/object/facades/${chemin}`, { headers: entetes() }).catch(() => null)
+  return r?.ok ? new Uint8Array(await r.arrayBuffer()) : null
 }
 
 /**
- * La lecture complète. Ne lève jamais : écrit `fait` ou `echec`.
+ * La lecture complète, dans l'ordre que vit l'utilisateur : 1. les photos se
+ * prennent, 2. l'IA les analyse (et écarte les mauvaises), 3. elle mesure,
+ * 4. la 3D se construit. Ne lève jamais : écrit `fait` ou `echec`.
  * `indice` : le point touché par l'artisan, pour retrouver la maison.
  */
 export async function lireLaMaison(cleabs: string, indice: [number, number] | null, appelant: Appelant): Promise<void> {
@@ -204,43 +210,58 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
   try {
     const cle = Deno.env.get('ANTHROPIC_API_KEY')
     if (!cle) throw new Error('vision_indisponible')
+    const client = new Anthropic({ apiKey: cle })
+    const appelModele = async (p: { system: string; tools: unknown; messages: unknown }) => {
+      try {
+        return (await client.messages.create({
+          model: modeleVision(),
+          max_tokens: 6000,
+          system: p.system,
+          tools: p.tools as Anthropic.Tool[],
+          messages: p.messages as Anthropic.MessageParam[],
+        })) as unknown as Reponse
+      } catch (e) {
+        if (e instanceof Anthropic.RateLimitError) throw new Error('vision_occupee')
+        if (e instanceof Anthropic.APIError) throw new Error(`vision_en_panne_${e.status}`)
+        throw e
+      }
+    }
 
-    // 1. Le relevé LiDAR.
-    const releve = await etape(cleabs, suivi, 'releve', 'Points LiDAR de l’IGN', async () => {
+    // ───── 1. LA PRISE DES PHOTOS ─────
+    const releve = await etape(cleabs, suivi, 'releve', async () => {
       const gardee = await releveGarde(cleabs)
       if (gardee && releveUtilisable(gardee)) return gardee
       const fait = await releverEtGarder(cleabs, indice, { reporter: false })
       if (!fait.releve || !releveUtilisable(fait.releve)) throw new Error(`releve_${fait.statut}`)
       return fait.releve
     })
-
-    // 2. Les niveaux du terrain.
-    const niveaux = await etape(cleabs, suivi, 'niveaux', 'Niveaux du terrain', async () => {
-      const nuage = await nuageGarde(cleabs)
-      if (!nuage) throw new Error('nuage_absent')
-      return { nuage, niveaux: niveauxDuTerrain(nuage, releve) }
-    })
-
-    // 3. Les deux images.
     const resolution = releve.ortho5cm === true ? 5 : 20
     const cadre = cadreDeLaMaison(releve, resolution)
-    const images = await etape(cleabs, suivi, 'images', 'Photo aérienne et carte des hauteurs', async () => {
-      let photo: Uint8Array | null = null
-      for (let i = 0; i < 3 && !photo; i++) {
-        const r = await fetch(urlOrtho(cadre.bbox, cadre.largeur, cadre.hauteur, resolution <= 10), { signal: AbortSignal.timeout(20000) }).catch(() => null)
-        if (r?.ok && (r.headers.get('content-type') ?? '').startsWith('image/')) photo = new Uint8Array(await r.arrayBuffer())
-        else {
-          await r?.body?.cancel()
-          await new Promise((ok) => setTimeout(ok, 800 * (i + 1)))
-        }
-      }
-      if (!photo) throw new Error('photo_ign_indisponible')
-      return { photo, carte: await carteDesHauteurs(niveaux.nuage, releve, niveaux.niveaux, cadre) }
+
+    const vues = await etape(cleabs, suivi, 'images', async () => {
+      const nuage = await nuageGarde(cleabs)
+      if (!nuage) throw new Error('nuage_absent')
+      const niveaux = niveauxDuTerrain(nuage, releve)
+      const ortho = await chargerOrtho(cadre, resolution <= 10)
+      const relief = reliefDe(nuage, cadre)
+      // Le fond du tracé : le relief du laser, dans le repère exact des points. La photo n'est qu'une vue de plus.
+      const laser = imageLaser(relief, ortho.largeur, ortho.hauteur)
+      const png = new Map<string, Uint8Array>()
+      png.set('dessus', await vueDessus(laser))
+      png.set('photo', await vueDessus(ortho))
+      png.set('hauteurs', await carteDesHauteurs(nuage, releve, niveaux, cadre))
+      for (const v of ['nord', 'sud', 'est', 'ouest'] as const) png.set(v, await vueOblique(relief, ortho, v))
+      return { nuage, niveaux, ortho, relief, laser, png }
     })
 
-    // 4. L'IA lit la scène.
-    const lecture = await etape(cleabs, suivi, 'scene', 'L’IA lit la scène', async () => {
-      const client = new Anthropic({ apiKey: cle })
+    const rue = await etape(cleabs, suivi, 'rue', () => chercherPhotosRue(cleabs, appelant))
+
+    // ───── 2. L'ANALYSE DES PHOTOS ─────
+    const tri: TriPhotos = await etape(cleabs, suivi, 'tri', () =>
+      trierPhotos(releve, rue.photos, appelant.token === 'banc' ? null : async (id) => await appelFacade(cleabs, appelant, { action: 'lire', id }).catch((e) => ({ ok: false, error: String(e), lecture: undefined }))),
+    )
+
+    const lecture = await etape(cleabs, suivi, 'scene', async () => {
       const requete = {
         model: modeleVision(),
         max_tokens: 8000,
@@ -251,9 +272,9 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
           {
             role: 'user',
             content: [
-              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64(images.photo) } },
-              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64(images.carte) } },
-              { type: 'text', text: consigneScene(releve, niveaux.niveaux, null, resolution) },
+              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64(vues.png.get('photo')!) } },
+              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64(vues.png.get('hauteurs')!) } },
+              { type: 'text', text: consigneScene(releve, vues.niveaux, null, resolution) },
             ],
           },
         ],
@@ -278,53 +299,39 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
       return { scene, modele: reponse.model, usage: reponse.usage }
     })
 
-    // 4 bis. L'IA TRACE la maison sur la photo, le laser mesure dans ses tracés.
-    const tracage = await etape(cleabs, suivi, 'traces', 'L’IA trace la maison', async () => {
-      const client = new Anthropic({ apiKey: cle })
-      const ortho = await chargerOrtho(cadre, resolution <= 10)
-      const relief = reliefDe(niveaux.nuage, cadre)
-      // Le fond du tracé : le relief du laser, dans le repère exact des points. La photo n'est qu'une vue de plus.
-      const laser = imageLaser(relief, ortho.largeur, ortho.hauteur)
-      const cache = new Map<Vue, Uint8Array>()
-      const vue = async (v: Vue | 'hauteurs'): Promise<Uint8Array | null> => {
-        if (v === 'hauteurs') return images.carte
-        const connue = cache.get(v)
-        if (connue) return connue
-        const png = v === 'dessus' ? await vueDessus(laser) : v === 'photo' ? await vueDessus(ortho) : await vueOblique(relief, ortho, v)
-        cache.set(v, png)
-        return png
-      }
+    // ───── 3. LES MESURES ─────
+    const tracage = await etape(cleabs, suivi, 'traces', async () => {
+      const facades = Object.keys(tri.retenues)
+      const cache = new Map<string, Uint8Array>()
       return await metreur({
-        ctx: { nuage: niveaux.nuage, cadre, relief },
-        ortho: laser,
-        image: (v) => vue(v),
-        creer: async (p) => {
-          try {
-            return (await client.messages.create({
-              model: modeleVision(),
-              max_tokens: 6000,
-              system: p.system,
-              tools: p.tools as unknown as Anthropic.Tool[],
-              messages: p.messages as unknown as Anthropic.MessageParam[],
-            })) as unknown as Reponse
-          } catch (e) {
-            if (e instanceof Anthropic.RateLimitError) throw new Error('vision_occupee')
-            if (e instanceof Anthropic.APIError) throw new Error(`vision_en_panne_${e.status}`)
-            throw e
+        ctx: { nuage: vues.nuage, cadre, relief: vues.relief },
+        ortho: vues.laser,
+        // Les vues : les images déjà prises, et la photo de la rue retenue pour chaque façade.
+        image: async (v) => {
+          const connue = vues.png.get(v) ?? cache.get(v)
+          if (connue) return connue
+          if (v.startsWith('facade_')) {
+            const choisie = tri.retenues[v.slice(7)]
+            const octets = choisie ? await octetsPhoto(choisie.chemin) : null
+            if (octets) cache.set(v, octets)
+            return octets
           }
+          return null
         },
+        vuesSupplementaires: facades.map((o) => `facade_${o}`),
+        creer: appelModele,
         // Le programme propose ses pans, ses terrasses et son contour : l'IA les corrige, elle ne repart pas de zéro.
         depart: tracesDepuisReleve(releve, cadre),
-        maxTours: 10,
+        maxTours: 6,
         apresTour: async ({ traces }) => {
           await ecrire(cleabs, { traces })
         },
       })
     })
 
-    // 4 ter. Les mesures tirées des tracés : le relevé refait avec les pans de l'IA. Il n'est retenu
+    // Les mesures tirées des tracés : le relevé refait avec les pans de l'IA. Il n'est retenu
     // que s'il explique les points du laser au moins aussi bien que le relevé automatique.
-    const retenu = await etape(cleabs, suivi, 'releve_ia', 'Mesures tirées des tracés', async () => {
+    const retenu = await etape(cleabs, suivi, 'releve_ia', async () => {
       const entree = await entreeGardee(cleabs)
       const imposes = tracage.traces
         .filter((t) => t.genre === 'pan' || t.genre === 'terrasse')
@@ -332,7 +339,7 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
       if (!entree || !imposes.some((p) => !p.terrasse)) return { choix: 'auto' as const, motif: 'aucun pan tracé' }
       const emprise = tracage.traces.find((t) => t.genre === 'emprise')
       const faite = releverBatiment({
-        nuage: niveaux.nuage,
+        nuage: vues.nuage,
         zone: entree.zone,
         contour: emprise ? enLambert(emprise, cadre).map(([x, y]) => depuisLambert93(x, y)) : releve.murs,
         voisins: entree.voisins.map((v) => v.contour),
@@ -342,7 +349,13 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
       })
       const qIA = faite.qualitePlans ?? 0, qAuto = releve.qualitePlans ?? 0
       const bon = releveUtilisable(faite) && qIA >= qAuto - 0.005
-      return { choix: bon ? ('ia' as const) : ('auto' as const), faite: { ...faite, ortho5cm: releve.ortho5cm }, qIA, qAuto, motif: bon ? null : `les pans de l'IA expliquent ${Math.round(qIA * 100)} % des points du laser, le relevé automatique ${Math.round(qAuto * 100)} %` }
+      return {
+        choix: bon ? ('ia' as const) : ('auto' as const),
+        faite: { ...faite, ortho5cm: releve.ortho5cm },
+        qIA,
+        qAuto,
+        motif: bon ? null : `les pans de l'IA expliquent ${Math.round(qIA * 100)} % des points du laser, le relevé automatique ${Math.round(qAuto * 100)} %`,
+      }
     })
     if (retenu.choix === 'ia' && retenu.faite) {
       const r = retenu.faite
@@ -368,49 +381,50 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
         ? `Pans corrigés par l'IA retenus : ils expliquent ${Math.round((retenu.qIA ?? 0) * 100)} % des points du laser (relevé automatique : ${Math.round((retenu.qAuto ?? 0) * 100)} %).`
         : `Pans automatiques conservés : ${retenu.motif}.`
 
-    // 5. Le contrôle des mesures.
-    const { scene, verif } = await etape(cleabs, suivi, 'controle', 'Contrôle par les mesures', async () => validerScene(lecture.scene, releve, niveaux.niveaux))
-
-    // 6. Les façades, une photo de rue par mur.
-    const facades = await etape(cleabs, suivi, 'facades', 'Fenêtres et portes des façades', () => lireFacades(cleabs, releve, appelant))
-    if (facades.sans_photo.length) verif.a_verifier.push(`Pas de photo de rue pour la façade ${facades.sans_photo.join(', ')} : fenêtres non lues.`)
-    for (const e of facades.erreurs) verif.a_verifier.push(`Façade non lue — ${e}.`)
+    // ───── 4. LA 3D ─────
+    const { scene, verif } = await etape(cleabs, suivi, 'controle', async () => validerScene(lecture.scene, releve, vues.niveaux))
+    if (tri.sans_photo.length) verif.a_verifier.push(`Pas de photo de rue pour la façade ${tri.sans_photo.join(', ')} : fenêtres non lues.`)
+    for (const e of tri.erreurs) verif.a_verifier.push(`Photo de rue non lue — ${e}.`)
 
     // La grille d'étiquettes (volumineuse) ne se garde pas : elle ne sert qu'à dessiner la carte.
-    const sansGrille = { niveaux: niveaux.niveaux.niveaux, transitions: niveaux.niveaux.transitions, auPied: niveaux.niveaux.auPied }
-    await ecrire(cleabs, {
-      statut: 'fait',
-      etape: null,
-      etapes: suivi.etapes,
-      scene,
-      traces: tracage.traces,
-      mesures: tracage.mesures,
-      niveaux: sansGrille,
-      releve: retenu.choix === 'ia' ? retenu.faite : null,
-      verif: { ...verif, a_verifier: [...verif.a_verifier, ...tracage.doutes, ...tracage.alertes], releve_ia: noteReleve },
-      modele: lecture.modele,
-      cout: {
-        entree: lecture.usage.input_tokens + tracage.usage.entree,
-        sortie: lecture.usage.output_tokens + tracage.usage.sortie,
-        tours_traces: tracage.tours,
-        entree_traces: tracage.usage.entree,
-        sortie_traces: tracage.usage.sortie,
-        resume_traces: tracage.resume,
-        pans_de: retenu.choix,
-        qualite_ia: retenu.qIA ?? null,
-        qualite_auto: retenu.qAuto ?? null,
-        duree_ms: Math.round(performance.now() - suivi.t0),
-        facades_lues: facades.lues,
-      },
-      motif: null,
-      fait_le: new Date().toISOString(),
+    const sansGrille = { niveaux: vues.niveaux.niveaux, transitions: vues.niveaux.transitions, auPied: vues.niveaux.auPied }
+    await etape(cleabs, suivi, 'modele', async () => {
+      await ecrire(cleabs, {
+        statut: 'fait',
+        etape: null,
+        scene,
+        traces: tracage.traces,
+        mesures: tracage.mesures,
+        niveaux: sansGrille,
+        releve: retenu.choix === 'ia' ? retenu.faite : null,
+        verif: { ...verif, a_verifier: [...verif.a_verifier, ...tracage.doutes, ...tracage.alertes], releve_ia: noteReleve, photos_ecartees: tri.ecartees },
+        modele: lecture.modele,
+        cout: {
+          entree: lecture.usage.input_tokens + tracage.usage.entree,
+          sortie: lecture.usage.output_tokens + tracage.usage.sortie,
+          tours_traces: tracage.tours,
+          entree_traces: tracage.usage.entree,
+          sortie_traces: tracage.usage.sortie,
+          resume_traces: tracage.resume,
+          pans_de: retenu.choix,
+          qualite_ia: retenu.qIA ?? null,
+          qualite_auto: retenu.qAuto ?? null,
+          duree_ms: Math.round(performance.now() - suivi.t0),
+          facades_lues: tri.lues,
+          photos_retenues: Object.keys(tri.retenues).length,
+          photos_ecartees: tri.ecartees.length,
+        },
+        motif: null,
+        fait_le: new Date().toISOString(),
+      })
     })
+    await ecrire(cleabs, { etapes: suivi.etapes })
   } catch (e) {
     console.error('metre-ia', cleabs, e)
     await ecrire(cleabs, {
       statut: 'echec',
       etape: null,
-      etapes: suivi.etapes,
+      etapes: suivi.etapes.map((x) => ({ ...x, en_cours: undefined })),
       motif: String(e instanceof Error ? e.message : e).slice(0, 200),
       fait_le: new Date().toISOString(),
     }).catch(() => undefined)

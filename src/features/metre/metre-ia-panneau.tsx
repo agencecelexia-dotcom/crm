@@ -1,9 +1,10 @@
 import { lazy, Suspense } from 'react'
-import { AlertTriangle, Check, Loader2, Sparkles } from 'lucide-react'
+import { AlertTriangle, Check, Circle, Loader2, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Point } from './geometrie'
+import { ETAPES_PREVUES, PHASES_IA } from './phases-ia'
 import { LIBELLES_VOLUME } from './scene-ia'
 import type { ReponseMetreIA } from './use-metre-ia'
 
@@ -21,6 +22,60 @@ const MOTIFS: Record<string, string> = {
   releve_hors_couverture: 'L’IGN n’a pas encore survolé cette commune en LiDAR : pas de lecture possible ici.',
 }
 const motif = (m?: string | null) => (m ? (MOTIFS[m] ?? (m.startsWith('releve_') ? 'Le relevé LiDAR de cette maison n’a pas abouti.' : 'La lecture n’a pas abouti.')) : 'La lecture n’a pas abouti.')
+
+/**
+ * Le déroulé, en quatre phases : les photos se prennent, l'IA les analyse (et
+ * écarte les mauvaises), elle mesure, la 3D se construit. Chaque étape montre où
+ * elle en est : faite, en cours, ou à venir.
+ */
+function Progression({ etapes }: { etapes: ReponseMetreIA['etapes'] }) {
+  const faites = new Map((etapes ?? []).map((e) => [e.cle, e]))
+  // La phase en cours : celle de la première étape qui n'est pas finie.
+  const prochaine = ETAPES_PREVUES.find((e) => !faites.get(e.cle) || faites.get(e.cle)!.en_cours)
+  const phaseCourante = prochaine?.phase ?? 4
+  return (
+    <ol className="space-y-3">
+      {PHASES_IA.map((ph) => {
+        const etapesPhase = ETAPES_PREVUES.filter((e) => e.phase === ph.numero)
+        const finie = ph.numero < phaseCourante || etapesPhase.every((e) => faites.get(e.cle) && !faites.get(e.cle)!.en_cours)
+        const courante = ph.numero === phaseCourante && !finie
+        return (
+          <li key={ph.numero} className={cn('space-y-1', !finie && !courante && 'opacity-50')}>
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <span
+                className={cn(
+                  'grid size-5 shrink-0 place-items-center rounded-full text-[11px]',
+                  finie ? 'bg-[#16A34A] text-white' : courante ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                )}
+              >
+                {finie ? <Check className="size-3" /> : ph.numero}
+              </span>
+              {ph.titre}
+              {courante && <Loader2 className="size-3.5 animate-spin text-primary" />}
+            </p>
+            {courante && <p className="pl-7 text-xs text-muted-foreground">{ph.attente}</p>}
+            {(courante || finie) && (
+              <ul className="space-y-0.5 pl-7">
+                {etapesPhase.map((e) => {
+                  const f = faites.get(e.cle)
+                  const enCours = !!f?.en_cours
+                  return (
+                    <li key={e.cle} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      {f && !enCours ? <Check className="size-3 text-[#16A34A]" /> : enCours ? <Loader2 className="size-3 animate-spin" /> : <Circle className="size-3" />}
+                      {e.libelle}
+                      {f && !enCours && <span className="text-[11px]">{(f.ms / 1000).toFixed(f.ms < 10_000 ? 1 : 0).replace('.', ',')} s</span>}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </li>
+        )
+      })}
+      <li className="pl-7 text-[11px] text-muted-foreground">Une à deux minutes la première fois. Vous pouvez quitter l’écran : la lecture est gardée et la 3D apparaît à la fin.</li>
+    </ol>
+  )
+}
 
 /**
  * « Mesurer avec l'IA » : la maison à confirmer, puis la lecture — ses étapes, ce
@@ -85,24 +140,7 @@ export function PanneauMetreIA({
         </div>
       )}
 
-      {enCours && (
-        <div className="space-y-1.5">
-          <ul className="space-y-1 text-sm">
-            {(etat?.etapes ?? []).map((e) => (
-              <li key={e.cle} className="flex items-center gap-2 text-muted-foreground">
-                <Check className="size-3.5 text-[#16A34A]" />
-                {e.libelle}
-                <span className="text-[11px]">{(e.ms / 1000).toFixed(e.ms < 10_000 ? 1 : 0).replace('.', ',')} s</span>
-              </li>
-            ))}
-            <li className="flex items-center gap-2">
-              <Loader2 className="size-3.5 animate-spin text-primary" />
-              {etat?.etape ?? 'Démarrage'}…
-            </li>
-          </ul>
-          <p className="text-[11px] text-muted-foreground">Une à deux minutes la première fois. Vous pouvez quitter l’écran : la lecture est gardée.</p>
-        </div>
-      )}
+      {enCours && <Progression etapes={etat?.etapes ?? []} />}
 
       {fait && etat.scene && (
         <div className="space-y-3">
@@ -120,6 +158,12 @@ export function PanneauMetreIA({
             ))}
           </ul>
           {etat.verif?.releve_ia && <p className="text-xs text-muted-foreground">{etat.verif.releve_ia}</p>}
+          {etat.verif?.photos_ecartees && etat.verif.photos_ecartees.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {etat.verif.photos_ecartees.length} photo{etat.verif.photos_ecartees.length > 1 ? 's' : ''} de la rue écartée{etat.verif.photos_ecartees.length > 1 ? 's' : ''} :{' '}
+              {etat.verif.photos_ecartees.map((p) => `façade ${p.orientation} (${p.raison})`).join(' ; ')}.
+            </p>
+          )}
           {etat.verif && etat.verif.a_verifier.length > 0 && (
             <div className="space-y-1 rounded-xl bg-[#F59E0B]/10 p-2.5">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-[#B45309]">

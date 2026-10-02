@@ -8,7 +8,11 @@ import type { SceneIA, VerifScene } from './scene-ia'
 export interface EtapeIA {
   cle: string
   libelle: string
+  /** 1 photos, 2 analyse, 3 mesures, 4 la 3D. */
+  phase?: number
   ms: number
+  /** Vrai tant que l'étape tourne. */
+  en_cours?: boolean
 }
 
 export interface ReponseMetreIA {
@@ -23,7 +27,7 @@ export interface ReponseMetreIA {
   verif?: VerifScene | null
   modele?: string | null
   motif?: string | null
-  cout?: { duree_ms?: number; facades_lues?: number } | null
+  cout?: { duree_ms?: number; facades_lues?: number; photos_retenues?: number; photos_ecartees?: number } | null
 }
 
 /** La lecture prend une à trois minutes : on redemande toutes les 3 s, six minutes au plus. */

@@ -16,7 +16,7 @@
 import { EST_LIGNE, GENRES_TRACE, accrocher, mesurerTrace, toitNonCouvert, verifierTraces, type Contexte, type MesureTrace, type Trace } from './_traces.ts'
 import { vueAvecTraces, type Ortho, type UV } from './_vues-ia.ts'
 
-export type VueDemandee = 'dessus' | 'photo' | 'hauteurs' | 'nord' | 'sud' | 'est' | 'ouest'
+export type VueDemandee = string
 
 export const OUTILS = [
   {
@@ -81,6 +81,15 @@ export const OUTILS = [
   },
 ]
 
+/** Les outils, avec en plus les vues de rue disponibles pour cette maison. */
+export function outilsAvec(vues: string[] = []): typeof OUTILS {
+  return OUTILS.map((o) =>
+    o.name === 'voir'
+      ? { ...o, input_schema: { ...o.input_schema, properties: { vue: { type: 'string', enum: [...(o.input_schema.properties as { vue: { enum: string[] } }).vue.enum, ...vues] } } } }
+      : o,
+  ) as typeof OUTILS
+}
+
 export const SYSTEME = [
   "Tu es métreur pour un artisan du bâtiment. Tu traces une maison sur sa photo aérienne, comme au stylet ; un laser (LiDAR) mesure ce que tu as tracé et te rend les chiffres.",
   '',
@@ -93,6 +102,8 @@ export const SYSTEME = [
   '- terrasse : une dalle plate, sans toit, à un niveau différent du jardin.',
   '- escalier : le polygone de la volée de marches entre deux niveaux.',
   '- mur_soutenement, barriere : des lignes (au moins 2 points).',
+  '',
+  'LES PHOTOS DE LA RUE : si le message en liste, la vue « facade_<orientation> » (par exemple facade_sud) est la photo prise depuis la rue de ce mur. Elle dit ce que le laser ne dit pas : les fenêtres, les portes, un garage, un perron, le nombre de niveaux, le matériau. Le programme a déjà écarté les photos qui ne montrent pas la maison.',
   '',
   'COMMENT TRAVAILLER :',
   "0. Si des tracés « proposés par le programme » existent déjà (le premier message les liste, avec leurs mesures), pars d'eux : ils viennent d'un algorithme qui lit les points du laser, souvent juste, parfois faux (deux pans réunis, une terrasse prise pour un toit, un pan oublié, une annexe prise pour la maison). Vérifie-les sur la vue et les obliques, corrige ou supprime ce qui est faux, ajoute ce qui manque : terrasses, escaliers, barrières, annexes. Ne retrace pas ce qui est juste : une mesure sans alerte et qui colle à la vue reste telle quelle.",
@@ -113,6 +124,8 @@ export const SYSTEME = [
 export interface Deps {
   /** L'appel au modèle (Anthropic `messages.create`). */
   creer: (p: { system: string; tools: typeof OUTILS; messages: Message[] }) => Promise<Reponse>
+  /** Des vues en plus : la photo de la rue retenue pour chaque façade (`facade_nord`…). */
+  vuesSupplementaires?: string[]
   /** Les images des vues : PNG, ou null si elle n'existe pas. */
   image: (v: VueDemandee) => Promise<Uint8Array | null>
   ctx: Contexte
@@ -160,7 +173,11 @@ const base64 = (octets: Uint8Array) => {
   for (let i = 0; i < octets.length; i += 0x8000) b += String.fromCharCode(...octets.subarray(i, i + 0x8000))
   return btoa(b)
 }
-const image = (png: Uint8Array): Bloc => ({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64(png) } })
+/** Un bloc image : PNG (nos vues) ou JPEG (les photos de la rue), reconnu à ses premiers octets. */
+const image = (octets: Uint8Array): Bloc => ({
+  type: 'image',
+  source: { type: 'base64', media_type: octets[0] === 0xff && octets[1] === 0xd8 ? ('image/jpeg' as 'image/png') : 'image/png', data: base64(octets) },
+})
 
 /** Ce que l'IA lit d'un tour de `tracer` : chaque objet, ce que le laser en dit, et les alertes du contrôle d'ensemble. */
 export function compteRendu(mesures: MesureTrace[], alertesEnsemble: string[]): string {
@@ -282,6 +299,7 @@ export async function metreur(deps: Deps): Promise<ResultatMetreur> {
           text:
             `Voici le relief laser de la maison à mesurer, vu de dessus (${ortho.resolutionCm} cm par pixel). Il couvre ${largeurM.toFixed(0)} m d'est en ouest et ${hauteurM.toFixed(0)} m du nord au sud : 100 unités de la grille valent environ ${(largeurM / 10).toFixed(1)} m en x et ${(hauteurM / 10).toFixed(1)} m en y. ` +
             (traces.length ? `Des tracés existent déjà (${traces.some((t) => t.note.startsWith('proposé')) ? 'proposés par le programme' : 'faits par l’artisan'}) : ${traces.map((t) => `${t.genre} ${t.id}`).join(', ')}. ` : '') +
+            (deps.vuesSupplementaires?.length ? `Photos de la rue disponibles : ${deps.vuesSupplementaires.join(', ')}. ` : '') +
             'La maison à mesurer est au centre. Commence.' + enDepart,
         },
       ],
@@ -291,7 +309,7 @@ export async function metreur(deps: Deps): Promise<ResultatMetreur> {
   let tours = 0
   for (; tours < maxTours && !terminee; tours++) {
     elaguer(messages)
-    const rep = await deps.creer({ system: SYSTEME, tools: OUTILS, messages })
+    const rep = await deps.creer({ system: SYSTEME, tools: outilsAvec(deps.vuesSupplementaires), messages })
     modele = rep.model ?? modele
     usage.entree += rep.usage?.input_tokens ?? 0
     usage.sortie += rep.usage?.output_tokens ?? 0
