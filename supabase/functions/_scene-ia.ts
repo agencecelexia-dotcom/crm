@@ -199,6 +199,10 @@ export interface VerifScene {
   corrections: string[]
   /** Ce que l'artisan doit vérifier : les doutes de l'IA et ce que les mesures contredisent. */
   a_verifier: string[]
+  /** Quels pans ont été retenus (ceux de l'IA ou ceux de l'algorithme), et pourquoi. */
+  releve_ia?: string
+  /** Les photos de la rue écartées par l'IA, avec la raison. */
+  photos_ecartees?: { orientation: string; raison: string }[]
 }
 
 /**

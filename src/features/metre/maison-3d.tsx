@@ -53,9 +53,21 @@ export function Maison3D({
   // Les façades lues par l'IA sont en base quand sa lecture finit : les photos se relisent alors.
   const statutIA = ia.statut
   const relirePhotos = ia.refaire
+  // La 3D n'apparaît qu'une fois la lecture par l'IA finie (ou si l'on demande l'aperçu sans l'IA) ; à la fin, l'écran y descend.
+  const [apercu, setApercu] = useState(false)
+  const zone3d = useRef<HTMLDivElement>(null)
+  const etaitEnCours = useRef(false)
   useEffect(() => {
-    if (statutIA === 'fait') relirePhotos()
+    if (statutIA === 'en_cours') etaitEnCours.current = true
+    if (statutIA === 'fait') {
+      relirePhotos()
+      if (etaitEnCours.current) {
+        etaitEnCours.current = false
+        setTimeout(() => zone3d.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+      }
+    }
   }, [statutIA, relirePhotos])
+  const montrer3d = statutIA === 'fait' || apercu
   const donneesIA = ia.etat.data
   const lectureIA = useMemo(
     () => (donneesIA?.statut === 'fait' && donneesIA.scene && donneesIA.niveaux ? { scene: donneesIA.scene, niveaux: donneesIA.niveaux } : null),
@@ -104,7 +116,17 @@ export function Maison3D({
         adresse={adresse}
       />
 
-      {!releve ? (
+      <div ref={zone3d} />
+      {!montrer3d ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm text-muted-foreground">
+          <span>La maison apparaîtra en 3D dès que l’IA aura fini sa lecture.</span>
+          {releve && (
+            <button type="button" className="text-xs underline underline-offset-2 hover:text-foreground" onClick={() => setApercu(true)}>
+              Voir l’aperçu sans l’IA
+            </button>
+          )}
+        </div>
+      ) : !releve ? (
         <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
           {enCours ? (
             <>

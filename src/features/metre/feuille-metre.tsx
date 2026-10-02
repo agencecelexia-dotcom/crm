@@ -229,8 +229,17 @@ export function FeuilleMetre({
   // « Mesurer avec l'IA » : ce que l'IA a compris de la maison choisie (terrasses, escaliers…).
   const ia = useMetreIA(token, choisi?.cleabs ?? null, choisi?.centre ?? null)
   const relirePhotosIA = ia.refaire
+  // À la fin de la lecture par l'IA, la maison s'affiche en 3D d'elle-même.
+  const iaEtaitEnCours = useRef(false)
   useEffect(() => {
-    if (ia.statut === 'fait') relirePhotosIA()
+    if (ia.statut === 'en_cours') iaEtaitEnCours.current = true
+    if (ia.statut === 'fait') {
+      relirePhotosIA()
+      if (iaEtaitEnCours.current) {
+        iaEtaitEnCours.current = false
+        setVue3d(true)
+      }
+    }
   }, [ia.statut, relirePhotosIA])
   const donneesIA = ia.etat.data
   const lectureIA = useMemo(
