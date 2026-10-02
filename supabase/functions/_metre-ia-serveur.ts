@@ -18,9 +18,13 @@ import { modeleVision } from './_modeles.ts'
 import { niveauxDuTerrain, type Niveaux } from './_niveaux.ts'
 import { decoderNuage } from './_nuage.ts'
 import { cadreDeLaMaison, carteDesHauteurs } from './_preuves.ts'
-import { VERSION_RELEVE, type Releve } from './_releve.ts'
+import { metreur, type Reponse, type ResultatMetreur } from './_metreur-ia.ts'
+import { chargerOrtho, imageLaser, reliefDe, vueDessus, vueOblique, type Vue } from './_vues-ia.ts'
+import { releverBatiment, VERSION_RELEVE, type Releve } from './_releve.ts'
 import { releveUtilisable } from './_releve-retenu.ts'
-import { releverEtGarder, releveGarde } from './_releve-serveur.ts'
+import { releverEtGarder, releveGarde, rpcService } from './_releve-serveur.ts'
+import { depuisLambert93 } from './_calcul-toit.ts'
+import { enLambert, tracesDepuisReleve } from './_traces.ts'
 import { consigneScene, SCHEMA_SCENE, validerScene, type SceneIA, type VerifScene } from './_scene-ia.ts'
 
 /** À changer quand la lecture change : les lectures plus anciennes se refont à la demande. */
@@ -55,6 +59,9 @@ export interface LectureIA {
   etape: string | null
   etapes: Etape[]
   scene: SceneIA | null
+  /** Ce que l'IA a tracé (emprise, pans, terrasse…), et ce que le laser en a mesuré. */
+  traces: ResultatMetreur['traces'] | null
+  mesures: ResultatMetreur['mesures'] | null
   niveaux: Omit<Niveaux, 'grille'> | null
   verif: VerifScene | null
   modele: string | null
@@ -103,6 +110,14 @@ export async function reserver(cleabs: string, acteur: string): Promise<boolean>
 
 async function ecrire(cleabs: string, champs: Record<string, unknown>) {
   await rest(`metre_ia?cleabs=eq.${encodeURIComponent(cleabs)}`, { method: 'PATCH', headers: { prefer: 'return=minimal' }, body: JSON.stringify(champs) })
+}
+
+/** Ce qui a servi au relevé de la maison (zone, voisins, routes) : gardé avec ses points. */
+async function entreeGardee(cleabs: string): Promise<{ zone: { minX: number; minY: number; maxX: number; maxY: number }; voisins: { contour: [number, number][] }[]; routes: [number, number][][] } | null> {
+  const r = await fetch(`${URL_BASE()}/storage/v1/object/releves/${cleabs}/v${VERSION_RELEVE}/entree.json`, { headers: entetes() })
+  if (!r.ok) return null
+  const j = (await r.json()) as { zone?: never; voisins?: never; routes?: never }
+  return j.zone ? (j as never) : null
 }
 
 /** Le nuage de points gardé avec le relevé (l'IGN met 20 à 75 s à le servir : on ne le relit pas). */
@@ -263,6 +278,96 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
       return { scene, modele: reponse.model, usage: reponse.usage }
     })
 
+    // 4 bis. L'IA TRACE la maison sur la photo, le laser mesure dans ses tracés.
+    const tracage = await etape(cleabs, suivi, 'traces', 'L’IA trace la maison', async () => {
+      const client = new Anthropic({ apiKey: cle })
+      const ortho = await chargerOrtho(cadre, resolution <= 10)
+      const relief = reliefDe(niveaux.nuage, cadre)
+      // Le fond du tracé : le relief du laser, dans le repère exact des points. La photo n'est qu'une vue de plus.
+      const laser = imageLaser(relief, ortho.largeur, ortho.hauteur)
+      const cache = new Map<Vue, Uint8Array>()
+      const vue = async (v: Vue | 'hauteurs'): Promise<Uint8Array | null> => {
+        if (v === 'hauteurs') return images.carte
+        const connue = cache.get(v)
+        if (connue) return connue
+        const png = v === 'dessus' ? await vueDessus(laser) : v === 'photo' ? await vueDessus(ortho) : await vueOblique(relief, ortho, v)
+        cache.set(v, png)
+        return png
+      }
+      return await metreur({
+        ctx: { nuage: niveaux.nuage, cadre, relief },
+        ortho: laser,
+        image: (v) => vue(v),
+        creer: async (p) => {
+          try {
+            return (await client.messages.create({
+              model: modeleVision(),
+              max_tokens: 6000,
+              system: p.system,
+              tools: p.tools as unknown as Anthropic.Tool[],
+              messages: p.messages as unknown as Anthropic.MessageParam[],
+            })) as unknown as Reponse
+          } catch (e) {
+            if (e instanceof Anthropic.RateLimitError) throw new Error('vision_occupee')
+            if (e instanceof Anthropic.APIError) throw new Error(`vision_en_panne_${e.status}`)
+            throw e
+          }
+        },
+        // Le programme propose ses pans, ses terrasses et son contour : l'IA les corrige, elle ne repart pas de zéro.
+        depart: tracesDepuisReleve(releve, cadre),
+        maxTours: 10,
+        apresTour: async ({ traces }) => {
+          await ecrire(cleabs, { traces })
+        },
+      })
+    })
+
+    // 4 ter. Les mesures tirées des tracés : le relevé refait avec les pans de l'IA. Il n'est retenu
+    // que s'il explique les points du laser au moins aussi bien que le relevé automatique.
+    const retenu = await etape(cleabs, suivi, 'releve_ia', 'Mesures tirées des tracés', async () => {
+      const entree = await entreeGardee(cleabs)
+      const imposes = tracage.traces
+        .filter((t) => t.genre === 'pan' || t.genre === 'terrasse')
+        .map((t) => ({ polygone: enLambert(t, cadre), terrasse: t.genre === 'terrasse' }))
+      if (!entree || !imposes.some((p) => !p.terrasse)) return { choix: 'auto' as const, motif: 'aucun pan tracé' }
+      const emprise = tracage.traces.find((t) => t.genre === 'emprise')
+      const faite = releverBatiment({
+        nuage: niveaux.nuage,
+        zone: entree.zone,
+        contour: emprise ? enLambert(emprise, cadre).map(([x, y]) => depuisLambert93(x, y)) : releve.murs,
+        voisins: entree.voisins.map((v) => v.contour),
+        routes: entree.routes,
+        vol: releve.vol,
+        imposes,
+      })
+      const qIA = faite.qualitePlans ?? 0, qAuto = releve.qualitePlans ?? 0
+      const bon = releveUtilisable(faite) && qIA >= qAuto - 0.005
+      return { choix: bon ? ('ia' as const) : ('auto' as const), faite: { ...faite, ortho5cm: releve.ortho5cm }, qIA, qAuto, motif: bon ? null : `les pans de l'IA expliquent ${Math.round(qIA * 100)} % des points du laser, le relevé automatique ${Math.round(qAuto * 100)} %` }
+    })
+    if (retenu.choix === 'ia' && retenu.faite) {
+      const r = retenu.faite
+      // Le relevé gardé pour la maison devient celui-ci : l'écran, le PDF, le dossier de métrés lisent les mêmes chiffres.
+      await rpcService('enregistrer_releve', {
+        p_cleabs: cleabs,
+        p_version: VERSION_RELEVE,
+        p_statut: 'fait',
+        p_motif: r.motif,
+        p_confiance: r.confiance,
+        p_releve: r,
+        p_toit_vrai: r.surfaces.toitVrai,
+        p_toit_plan: r.surfaces.toitPlan,
+        p_recalage: Math.round(Math.hypot(r.recalage.dx, r.recalage.dy) * 100) / 100,
+        p_vol: r.vol,
+        p_octets: null,
+        p_duree_ms: null,
+        p_extrait: true,
+      }).catch((e) => console.error('metre-ia: relevé IA non gardé', e))
+    }
+    const noteReleve =
+      retenu.choix === 'ia'
+        ? `Pans corrigés par l'IA retenus : ils expliquent ${Math.round((retenu.qIA ?? 0) * 100)} % des points du laser (relevé automatique : ${Math.round((retenu.qAuto ?? 0) * 100)} %).`
+        : `Pans automatiques conservés : ${retenu.motif}.`
+
     // 5. Le contrôle des mesures.
     const { scene, verif } = await etape(cleabs, suivi, 'controle', 'Contrôle par les mesures', async () => validerScene(lecture.scene, releve, niveaux.niveaux))
 
@@ -278,12 +383,22 @@ export async function lireLaMaison(cleabs: string, indice: [number, number] | nu
       etape: null,
       etapes: suivi.etapes,
       scene,
+      traces: tracage.traces,
+      mesures: tracage.mesures,
       niveaux: sansGrille,
-      verif,
+      releve: retenu.choix === 'ia' ? retenu.faite : null,
+      verif: { ...verif, a_verifier: [...verif.a_verifier, ...tracage.doutes, ...tracage.alertes], releve_ia: noteReleve },
       modele: lecture.modele,
       cout: {
-        entree: lecture.usage.input_tokens,
-        sortie: lecture.usage.output_tokens,
+        entree: lecture.usage.input_tokens + tracage.usage.entree,
+        sortie: lecture.usage.output_tokens + tracage.usage.sortie,
+        tours_traces: tracage.tours,
+        entree_traces: tracage.usage.entree,
+        sortie_traces: tracage.usage.sortie,
+        resume_traces: tracage.resume,
+        pans_de: retenu.choix,
+        qualite_ia: retenu.qIA ?? null,
+        qualite_auto: retenu.qAuto ?? null,
         duree_ms: Math.round(performance.now() - suivi.t0),
         facades_lues: facades.lues,
       },

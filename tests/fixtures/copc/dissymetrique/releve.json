@@ -1,5 +1,7 @@
 {
- "version": 6,
+ "version": 7,
+ "pansDe": "auto",
+ "qualitePlans": 0.978,
  "origine": [
   937733.07,
   6543380.16

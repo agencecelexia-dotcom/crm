@@ -54,6 +54,8 @@ export interface PanToit {
    * au droit d'un pan) : le lisser changerait des chiffres du métré.
    */
   dessin: Pt[]
+  /** Ce pan a été TRACÉ comme une terrasse (ou comme un pan de toit) : le relevé le suit, sans le deviner. */
+  terrasseImposee?: boolean
 }
 
 /**
@@ -98,6 +100,12 @@ export interface LecturePans {
   /** Surfaces totales (m²). */
   airePlan: number
   aireVraie: number
+  /**
+   * La part des points de toit que le plan de leur pan explique à 12 cm près :
+   * 1 = tout le toit tient dans les pans lus. La mesure qui dit si une
+   * segmentation (automatique ou tracée) est juste, sans rien connaître d'autre.
+   */
+  explique: number
 }
 
 const CARDINAUX = ['nord', 'nord-est', 'est', 'sud-est', 'sud', 'sud-ouest', 'ouest', 'nord-ouest']
@@ -156,6 +164,12 @@ function angle(p: { a: number; b: number }, q: { a: number; b: number }): number
   return (Math.acos(Math.min(1, cos)) * 180) / Math.PI
 }
 
+/** Un pan TRACÉ (par l'IA ou l'artisan) : son contour en Lambert-93, et s'il est une terrasse. */
+export interface PanImpose {
+  polygone: Pt[]
+  terrasse?: boolean
+}
+
 const RAYON_NORMALE = 0.6
 const RAYON_VOISIN = 0.5
 const DISTANCE_PLAN = 0.12
@@ -168,7 +182,7 @@ const PAS = 0.25
 /**
  * Les pans du toit dont `toit` est le contour (débord compris, en Lambert-93).
  */
-export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boolean[] = []): LecturePans {
+export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boolean[] = [], imposes: PanImpose[] = []): LecturePans {
   const [x0, y0] = toit[0]
   // Les points de toit dans le contour, à 15 cm près (le bord lui-même).
   const ids: number[] = []
@@ -186,52 +200,85 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boole
   const tous = new Uint32Array(m).map((_, k) => k)
   const grille = new Grille2D(X, Y, tous, RAYON_VOISIN)
 
-  // 1. Normales locales.
-  const A = new Float64Array(m), B = new Float64Array(m), E = new Float64Array(m).fill(Infinity)
-  for (let k = 0; k < m; k++) {
-    const p = ajuster(grille.autour(X[k], Y[k], RAYON_NORMALE), X, Y, Z)
-    if (!p) continue
-    A[k] = p.a
-    B[k] = p.b
-    E[k] = p.ecart
-  }
-
-  // 2. Croissance de régions, des points les plus plans aux moins plans.
   const etiquette = new Int32Array(m).fill(-1)
-  const graines = [...tous].filter((k) => E[k] < ECART_GRAINE).sort((p, q) => E[p] - E[q])
   let regions: { ids: number[]; plan: Plan }[] = []
-  for (const g of graines) {
-    if (etiquette[g] >= 0) continue
-    const r = regions.length
-    let plan: Plan = { a: A[g], b: B[g], c: Z[g] - A[g] * X[g] - B[g] * Y[g], ecart: E[g] }
-    const membres = [g]
-    etiquette[g] = r
-    let prochainAjustement = 12
-    for (let q = 0; q < membres.length; q++) {
-      const k = membres[q]
-      for (const j of grille.autour(X[k], Y[k], RAYON_VOISIN)) {
-        if (etiquette[j] !== -1) continue
-        if (Math.abs(Z[j] - (plan.a * X[j] + plan.b * Y[j] + plan.c)) > DISTANCE_PLAN) continue
-        if (E[j] < ECART_GRAINE && angle({ a: A[j], b: B[j] }, plan) > ANGLE_MAX) continue
-        etiquette[j] = r
-        membres.push(j)
-        if (membres.length >= prochainAjustement) {
-          plan = ajuster(membres, X, Y, Z) ?? plan
-          prochainAjustement = Math.ceil(membres.length * 1.5)
+  // Le pan TRACÉ auquel correspond chaque région (quand les pans sont imposés).
+  const imposeDe: number[] = []
+  if (imposes.length) {
+    // PANS IMPOSÉS : chaque polygone tracé prend les points de toit qu'il contient ; le plan
+    // est ajusté dessus (les cheminées, lucarnes et branchages écartés). Pas de croissance
+    // de régions : c'est le tracé, pas l'algorithme, qui dit où sont les pans.
+    imposes.forEach((im, q) => {
+      const P = im.polygone.map(([x, y]) => [x - x0, y - y0] as Pt)
+      const membres: number[] = []
+      for (let k = 0; k < m; k++) {
+        if (etiquette[k] >= 0 || !dansPolygone(X[k], Y[k], P) || distanceAuContour([X[k], Y[k]], P) < 0.1) continue
+        membres.push(k)
+      }
+      let plan: Plan | null = ajuster(membres, X, Y, Z)
+      let bons = membres
+      // Deux passes : le plan ajusté écarte ce qui s'en éloigne (cheminées, lucarnes, branchages), puis se réajuste.
+      for (let tour = 0; tour < 3 && plan; tour++) {
+        const courant: Plan = plan
+        const seuil = Math.max(0.12, 2.2 * courant.ecart)
+        const gardes = membres.filter((k) => Math.abs(Z[k] - (courant.a * X[k] + courant.b * Y[k] + courant.c)) <= seuil)
+        if (gardes.length < POINTS_MIN) break
+        bons = gardes
+        plan = ajuster(gardes, X, Y, Z) ?? courant
+      }
+      if (!plan || bons.length < POINTS_MIN) return
+      const r = regions.length
+      for (const k of bons) etiquette[k] = r
+      regions.push({ ids: bons, plan })
+      imposeDe.push(q)
+    })
+  } else {
+    // 1. Normales locales.
+    const A = new Float64Array(m), B = new Float64Array(m), E = new Float64Array(m).fill(Infinity)
+    for (let k = 0; k < m; k++) {
+      const p = ajuster(grille.autour(X[k], Y[k], RAYON_NORMALE), X, Y, Z)
+      if (!p) continue
+      A[k] = p.a
+      B[k] = p.b
+      E[k] = p.ecart
+    }
+
+    // 2. Croissance de régions, des points les plus plans aux moins plans.
+    const graines = [...tous].filter((k) => E[k] < ECART_GRAINE).sort((p, q) => E[p] - E[q])
+    for (const g of graines) {
+      if (etiquette[g] >= 0) continue
+      const r = regions.length
+      let plan: Plan = { a: A[g], b: B[g], c: Z[g] - A[g] * X[g] - B[g] * Y[g], ecart: E[g] }
+      const membres = [g]
+      etiquette[g] = r
+      let prochainAjustement = 12
+      for (let q = 0; q < membres.length; q++) {
+        const k = membres[q]
+        for (const j of grille.autour(X[k], Y[k], RAYON_VOISIN)) {
+          if (etiquette[j] !== -1) continue
+          if (Math.abs(Z[j] - (plan.a * X[j] + plan.b * Y[j] + plan.c)) > DISTANCE_PLAN) continue
+          if (E[j] < ECART_GRAINE && angle({ a: A[j], b: B[j] }, plan) > ANGLE_MAX) continue
+          etiquette[j] = r
+          membres.push(j)
+          if (membres.length >= prochainAjustement) {
+            plan = ajuster(membres, X, Y, Z) ?? plan
+            prochainAjustement = Math.ceil(membres.length * 1.5)
+          }
         }
       }
+      if (membres.length < POINTS_MIN) {
+        // Trop petit pour un pan : ses points restent libres (mais ne resservent pas de graine).
+        for (const k of membres) etiquette[k] = -2
+        continue
+      }
+      regions.push({ ids: membres, plan: ajuster(membres, X, Y, Z) ?? plan })
     }
-    if (membres.length < POINTS_MIN) {
-      // Trop petit pour un pan : ses points restent libres (mais ne resservent pas de graine).
-      for (const k of membres) etiquette[k] = -2
-      continue
-    }
-    regions.push({ ids: membres, plan: ajuster(membres, X, Y, Z) ?? plan })
-  }
-  for (let k = 0; k < m; k++) if (etiquette[k] === -2) etiquette[k] = -1
+    for (let k = 0; k < m; k++) if (etiquette[k] === -2) etiquette[k] = -1
 
-  // 3. Fusionner les régions voisines portées par le même plan.
-  regions = fusionner(regions, etiquette, grille, X, Y, Z)
+    // 3. Fusionner les régions voisines portées par le même plan.
+    regions = fusionner(regions, etiquette, grille, X, Y, Z)
+
+  }
 
   // 4. Les points libres (et ceux des arêtes) rejoignent le pan voisin le plus proche.
   for (let passe = 0; passe < 2; passe++) {
@@ -285,6 +332,7 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boole
       partReconstituee: cases ? decoupe.reconstituees[i] / cases : 0,
       contour: decoupe.contours[i].map(([x, y]) => [x + x0, y + y0] as Pt),
       dessin: decoupe.dessins[i].map(([x, y]) => [x + x0, y + y0] as Pt),
+      ...(imposes.length ? { terrasseImposee: imposes[imposeDe[i]]?.terrasse === true } : {}),
     }
     regionDe.set(pan, i)
     pans.push(pan)
@@ -327,7 +375,21 @@ export function lirePans(nu: Nuage, h: Float32Array, toit: Pt[], mitoyens: boole
     contourToit: decoupe.contourToit.map(([x, y]) => [x + x0, y + y0] as Pt),
     airePlan: Math.round(pans.reduce((s, p) => s + p.airePlan, 0) * 10) / 10,
     aireVraie: Math.round(pans.reduce((s, p) => s + p.aireVraie, 0) * 10) / 10,
+    explique: expliques(regions, etiquette, X, Y, Z),
   }
+}
+
+/** La part des points rattachés à un pan qui sont à moins de 12 cm de son plan, sur tous les points de toit. */
+function expliques(regions: { plan: Plan }[], etiquette: Int32Array, X: Float64Array, Y: Float64Array, Z: Float64Array): number {
+  if (!etiquette.length) return 0
+  let bons = 0
+  for (let k = 0; k < etiquette.length; k++) {
+    const r = etiquette[k]
+    if (r < 0 || !regions[r]) continue
+    const p = regions[r].plan
+    if (Math.abs(Z[k] - (p.a * X[k] + p.b * Y[k] + p.c)) <= 0.12) bons++
+  }
+  return Math.round((1000 * bons) / etiquette.length) / 1000
 }
 
 function distanceAuContour(p: Pt, P: Pt[]): number {

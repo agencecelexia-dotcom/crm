@@ -105,10 +105,16 @@ export function cadreDuToit(r: Releve, resolution_cm: number) {
 }
 
 /** L'adresse de l'extrait (WMS raster de l'IGN, Lambert-93). */
-export function urlOrtho(bbox: [number, number, number, number], largeur: number, hauteur: number, tresFine: boolean): string {
+export function urlOrtho(
+  bbox: [number, number, number, number],
+  largeur: number,
+  hauteur: number,
+  tresFine: boolean,
+  format: 'image/jpeg' | 'image/png' = 'image/jpeg',
+): string {
   const couche = tresFine ? 'THR.ORTHOIMAGERY.ORTHOPHOTOS' : 'HR.ORTHOIMAGERY.ORTHOPHOTOS'
   return (
-    'https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&STYLES=&FORMAT=image/jpeg&CRS=EPSG:2154' +
+    `https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&STYLES=&FORMAT=${format}&CRS=EPSG:2154` +
     `&LAYERS=${couche}&BBOX=${bbox.map((v) => v.toFixed(2)).join(',')}&WIDTH=${largeur}&HEIGHT=${hauteur}`
   )
 }

@@ -19,7 +19,7 @@ import type { Nuage, Zone } from './_copc.ts'
 import { depuisLambert93, versLambert93 } from './_calcul-toit.ts'
 import { cardinal, murs as mursDe, type Point } from './_geometrie.ts'
 import { Grille2D, solLocal } from './_nuage.ts'
-import { lirePans, type TypeLigne } from './_pans.ts'
+import { lirePans, type PanImpose, type TypeLigne } from './_pans.ts'
 import {
   aireL93,
   decaler,
@@ -48,8 +48,10 @@ import {
  *     la longueur (plus la médiane des murs) et existe sur tout toit ; les
  *     décrochés du contour ont leur profil (`decroches`), pour un anneau de
  *     murs fermé en 3D.
+ * 7 : la justesse des pans (`qualitePlans`) et leur origine (`pansDe`) : de quoi
+ *     retenir les pans corrigés par l'IA seulement s'ils expliquent mieux le laser.
  */
-export const VERSION_RELEVE = 6
+export const VERSION_RELEVE = 7
 
 /**
  * Du dessus du toit au dessous de la couverture, au droit du mur : tuiles,
@@ -164,6 +166,13 @@ export interface Releve {
   raisons: string[]
   points: { total: number; toit: number; densite: number }
   recalage: Recalage
+  /**
+   * D'où viennent les pans : lus par l'algorithme (`auto`) ou tracés par l'IA
+   * ou l'artisan (`trace`). Absent sur les relevés anciens (= auto).
+   */
+  pansDe?: 'auto' | 'trace'
+  /** La part des points de toit que les pans expliquent à 12 cm près (1 = tout) : la justesse de la segmentation. */
+  qualitePlans?: number
   /** Le contour des murs, recalé. */
   murs: Point[]
   /** Le contour du toit, débord compris. */
@@ -208,6 +217,13 @@ export interface EntreeReleve {
   /** Les routes alentour (BD TOPO), pour dire quel côté donne sur la rue. */
   routes?: Point[][]
   vol: string | null
+  /**
+   * Les pans TRACÉS (par l'IA ou l'artisan), en Lambert-93 : ils remplacent la
+   * segmentation automatique du toit. Les points qu'aucun tracé ne contient
+   * rejoignent le pan dont ils suivent le plan : un pan trop petit ne perd pas
+   * de surface.
+   */
+  imposes?: PanImpose[]
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100
@@ -249,6 +265,7 @@ export function releverBatiment(e: EntreeReleve): Releve {
     h,
     toit,
     bords.map((b) => b.etat === 'accole'),
+    e.imposes ?? [],
   )
   let pointsToit = 0
   for (const p of lecture.pans) pointsToit += p.points
@@ -344,6 +361,8 @@ export function releverBatiment(e: EntreeReleve): Releve {
 
   return {
     version: VERSION_RELEVE,
+    pansDe: (e.imposes?.length ? 'trace' : 'auto') as 'auto' | 'trace',
+    qualitePlans: lecture.explique,
     origine: [r2(toit[0][0]), r2(toit[0][1])],
     zSol: r2(solCentre),
     vol: e.vol,
@@ -382,7 +401,8 @@ export function releverBatiment(e: EntreeReleve): Releve {
       points: p.points,
       ecart: p.ecart,
       partReconstituee: p.partReconstituee,
-      terrasse: estTerrasse(p),
+      // Un pan tracé comme terrasse (ou comme toit) l'est ; sinon, la règle des égouts.
+      terrasse: p.terrasseImposee ?? estTerrasse(p),
       // L'origine du relevé est le premier sommet du contour du toit, arrondi
       // au centimètre : le plan est ramené à ce point arrondi.
       plan: [

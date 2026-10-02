@@ -119,6 +119,7 @@ export function PanneauMetreIA({
               </li>
             ))}
           </ul>
+          {etat.verif?.releve_ia && <p className="text-xs text-muted-foreground">{etat.verif.releve_ia}</p>}
           {etat.verif && etat.verif.a_verifier.length > 0 && (
             <div className="space-y-1 rounded-xl bg-[#F59E0B]/10 p-2.5">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-[#B45309]">

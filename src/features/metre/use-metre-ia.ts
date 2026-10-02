@@ -57,5 +57,10 @@ export function useMetreIA(token: string | undefined, cleabs: string | null, poi
   })
   // Les façades lues par l'IA arrivent en base : la vue 3D relit les photos quand la lecture se termine.
   const statut = etat.data?.statut
-  return { etat, lancer, statut, enCours: statut === 'en_cours' || lancer.isPending, refaire: () => qc.invalidateQueries({ queryKey: ['photos-facade', cleabs] }) }
+  return { etat, lancer, statut, enCours: statut === 'en_cours' || lancer.isPending, refaire: () => {
+      qc.invalidateQueries({ queryKey: ['photos-facade', cleabs] })
+      // L'IA a pu remplacer le relevé gardé de la maison par ses pans corrigés.
+      qc.invalidateQueries({ queryKey: ['releve', cleabs] })
+    },
+  }
 }

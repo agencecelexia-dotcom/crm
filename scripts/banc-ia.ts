@@ -8,7 +8,7 @@
 // Il faut `.env.secrets.local` (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Écrit
 // un rapport Markdown sur la sortie standard (à rediriger dans un fichier).
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { toitRetenu, pansParDefaut } from '../supabase/functions/_releve-retenu.ts'
 import type { Releve } from '../supabase/functions/_releve.ts'
 import type { SceneIA, VerifScene } from '../supabase/functions/_scene-ia.ts'
@@ -55,8 +55,22 @@ function pointDe(nom: string): [number, number] | null {
   return [contour.reduce((s, p) => s + p[0], 0) / contour.length, contour.reduce((s, p) => s + p[1], 0) / contour.length]
 }
 
+/** Un fetch qui réessaie : la connexion se coupe parfois en plein banc (un banc dure dix minutes). */
+async function avecReessais(url: string, init: RequestInit, essais = 5): Promise<Response> {
+  let derniere: unknown
+  for (let i = 0; i < essais; i++) {
+    try {
+      return await fetch(url, init)
+    } catch (e) {
+      derniere = e
+      await new Promise((ok) => setTimeout(ok, 3000 * (i + 1)))
+    }
+  }
+  throw derniere
+}
+
 async function fonction(corps: Record<string, unknown>) {
-  const r = await fetch(`${URL_BASE}/functions/v1/metre-ia`, {
+  const r = await avecReessais(`${URL_BASE}/functions/v1/metre-ia`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${CLE}` },
     body: JSON.stringify({ token: 'banc', ...corps }),
@@ -64,8 +78,19 @@ async function fonction(corps: Record<string, unknown>) {
   return (await r.json()) as { ok?: boolean; error?: string; statut?: string; scene?: SceneIA; verif?: VerifScene; motif?: string; cout?: Record<string, number>; modele?: string; etapes?: { cle: string; ms: number }[] }
 }
 
+/** La ligne gardée par maison : scène, tracés, mesures, coût. Écrite en JSON si `BANC_DIR` est posé. */
+async function ligneDe(nom: string, cleabs: string) {
+  const r = await avecReessais(`${URL_BASE}/rest/v1/metre_ia?cleabs=eq.${cleabs}&select=*`, { headers: { apikey: CLE, authorization: `Bearer ${CLE}` } })
+  const [l] = (await r.json()) as Record<string, unknown>[]
+  if (l && process.env.BANC_DIR) {
+    mkdirSync(process.env.BANC_DIR, { recursive: true })
+    writeFileSync(`${process.env.BANC_DIR}/${nom}.json`, JSON.stringify(l, null, 1))
+  }
+  return l as { traces?: { id: number; genre: string; note: string }[]; mesures?: { id: number; genre: string; mesure: Record<string, unknown>; alertes: string[] }[]; cout?: Record<string, unknown> } | undefined
+}
+
 async function releveDe(cleabs: string): Promise<Releve | null> {
-  const r = await fetch(`${URL_BASE}/rest/v1/releve_batiment?cleabs=eq.${cleabs}&select=releve`, { headers: { apikey: CLE, authorization: `Bearer ${CLE}` } })
+  const r = await avecReessais(`${URL_BASE}/rest/v1/releve_batiment?cleabs=eq.${cleabs}&select=releve`, { headers: { apikey: CLE, authorization: `Bearer ${CLE}` } })
   const [l] = (await r.json()) as { releve: Releve | null }[]
   return l?.releve ?? null
 }
@@ -90,6 +115,19 @@ for (const ref of choisies) {
   console.log(
     `| ${ref.nom} | ${etat.statut ?? etat.error} ${etat.motif ?? ''} | ${etat.cout?.duree_ms ? Math.round(etat.cout.duree_ms / 1000) + ' s' : '—'} | ${etat.cout ? `${etat.cout.entree}/${etat.cout.sortie}` : '—'} | ${m(g)} ${g != null ? (dans ? '✅' : '❌') : ''} | ${ref.gouttiere.map(m).join(' – ')} | ${m(r?.hauteurs.faitage)} | ${ecart(r?.hauteurs.faitage, ref.faitage)} | ${t ? t.penteDesPans + ' %' : '—'} | ${t ? ecart(t.penteDesPans, ref.pente) : '—'} |`,
   )
+  const ligne = etat.statut === 'fait' ? await ligneDe(ref.nom, ref.cleabs) : undefined
+  if (ligne?.traces) {
+    details.push(`## Tracés de l'IA — ${ref.nom}\n`)
+    const somme = (ligne.mesures ?? []).filter((m) => m.genre === 'pan').reduce((s, m) => s + (typeof m.mesure.aire_vraie_m2 === 'number' ? m.mesure.aire_vraie_m2 : 0), 0)
+    const auto = (await releveDe(ref.cleabs))?.surfaces.toitVrai
+    details.push(`Somme des pans tracés : ${somme.toFixed(1)} m² (relevé automatique : ${auto ?? '—'} m², terrasses comprises)\n`)
+    details.push(`Tours : ${ligne.cout?.tours_traces ?? '?'} · jetons (tracés) ${ligne.cout?.entree_traces ?? '?'}/${ligne.cout?.sortie_traces ?? '?'} · ${ligne.cout?.resume_traces ?? ''}\n`)
+    for (const m of ligne.mesures ?? []) {
+      const n = ligne.traces.find((t) => t.id === m.id)?.note ?? ''
+      details.push(`- **${m.genre} ${m.id}** ${Object.entries(m.mesure).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${v}`).join(', ')}${m.alertes.length ? ` ⚠ ${m.alertes.join(' | ')}` : ''} — ${n}`)
+    }
+    details.push('')
+  }
   if (etat.scene) {
     details.push(`## ${ref.nom} — ${ref.adresse}\n`)
     details.push(`Modèle ${etat.modele} · emprise « ${etat.scene.emprise} » · mitoyenne ${etat.scene.mitoyenne ? 'oui' : 'non'} · confiance ${etat.scene.confiance}\n`)
