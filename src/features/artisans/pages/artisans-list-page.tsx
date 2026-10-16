@@ -12,6 +12,7 @@ import {
   ShieldOff,
   MapPinned,
   Star,
+  FolderInput,
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
@@ -34,9 +35,11 @@ import { formatTel } from '@/lib/format'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { useArtisans } from '../hooks/use-artisans'
 import { useStatsArtisans } from '../hooks/use-stats-artisans'
+import { useDossiersEnvoyes } from '../hooks/use-dossiers-envoyes'
 import { LienInscriptionButton } from '../components/lien-inscription-button'
 
 type Vue = 'artisans' | 'partenaires'
+type Tri = 'nom' | 'envoyes'
 
 // Liste des artisans, en deux populations :
 //  - « Artisans » : le statut général, sollicité ponctuellement ;
@@ -47,6 +50,7 @@ export function ArtisansListPage() {
   const { data: artisans, isLoading } = useArtisans()
   const { data: signes } = useArtisansSignes()
   const { data: stats } = useStatsArtisans()
+  const { data: envoyes } = useDossiersEnvoyes()
   // Masquer plutôt que laisser échouer : la RLS refuse déjà l'insertion, mais
   // seulement après que la personne a rempli tout le formulaire.
   const { peutCreerArtisan } = useDroits()
@@ -64,6 +68,19 @@ export function ArtisansListPage() {
         const next = new URLSearchParams(prev)
         if (v === 'partenaires') next.set('vue', v)
         else next.delete('vue')
+        return next
+      },
+      { replace: true },
+    )
+  }
+  // Le tri vit aussi dans l'URL : il survit au retour depuis une fiche.
+  const tri: Tri = params.get('tri') === 'envoyes' ? 'envoyes' : 'nom'
+  function setTri(t: string) {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (t === 'envoyes') next.set('tri', t)
+        else next.delete('tri')
         return next
       },
       { replace: true },
@@ -111,7 +128,16 @@ export function ArtisansListPage() {
 
   const partenaires = useMemo(() => filtres.filter((a) => a.partenaire_at != null), [filtres])
   const classiques = useMemo(() => filtres.filter((a) => a.partenaire_at == null), [filtres])
-  const resultats = vue === 'partenaires' ? partenaires : classiques
+  const parVue = vue === 'partenaires' ? partenaires : classiques
+  // Du plus au moins de dossiers envoyés ; à égalité, l'ordre par nom de la liste
+  // est gardé (le tri de JavaScript est stable).
+  const resultats = useMemo(
+    () =>
+      tri === 'envoyes'
+        ? [...parVue].sort((a, b) => (envoyes?.get(b.id) ?? 0) - (envoyes?.get(a.id) ?? 0))
+        : parVue,
+    [parVue, tri, envoyes],
+  )
 
   const labelSource = (s: string) =>
     s === 'agence'
@@ -177,7 +203,17 @@ export function ArtisansListPage() {
             onChange={(e) => setRecherche(e.target.value)}
           />
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <Select value={tri} onValueChange={setTri}>
+            <SelectTrigger className="h-11 w-full" aria-label="Trier les artisans">
+              <SelectValue placeholder="Trier par" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nom">Trier : par nom</SelectItem>
+              <SelectItem value="envoyes">Trier : dossiers envoyés (du + au −)</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={metier} onValueChange={setMetier}>
             <SelectTrigger className="h-11 w-full">
               <SelectValue placeholder="Métier" />
@@ -261,6 +297,12 @@ export function ArtisansListPage() {
                           {enCours.has(a.id) && ` · ${enCours.get(a.id)} en cours`}
                         </Badge>
                       )}
+                      <Badge variant="secondary" className="gap-1 text-xs">
+                        <FolderInput className="size-3.5" />
+                        {envoyes ? (envoyes.get(a.id) ?? 0) : '…'} dossier
+                        {(envoyes?.get(a.id) ?? 0) > 1 ? 's' : ''} envoyé
+                        {(envoyes?.get(a.id) ?? 0) > 1 ? 's' : ''}
+                      </Badge>
                       {signes?.has(a.id) && (
                         <Badge
                           variant="secondary"
