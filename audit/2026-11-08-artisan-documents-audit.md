@@ -104,9 +104,9 @@ Les six régressions initiales sont corrigées. La suite a été élargie à **1
 ### Limites restant explicites
 
 - Les appels Gmail/n8n, les uploads de production et la qualité d’une réponse IA réelle n’ont pas été exercés ; tous les scénarios UI sont simulés. La lecture des migrations n’est plus la seule preuve SQL, mais l’environnement PostgreSQL local ne remplace pas la vérification de déploiement cible.
-- Le rendu visuel des PDF très longs (coordonnées démesurées, une seule désignation dépassant une page), les miniatures de chaque format média et l’extraction automatique d’un vrai scan ne sont pas couverts par cette nouvelle suite UI. Les tests de calcul/HTML existants restent nécessaires.
+- Le rendu des PDF longs est désormais couvert par la reprise décrite ci-dessous. Les miniatures de chaque format média et l’extraction automatique d’un vrai scan restent hors de cette suite ; l’extraction d’un PDF natif et le rejet d’un PDF corrompu sont couverts par DOC-21. Les tests de calcul/HTML existants restent nécessaires.
 - Les dépôts suivis d’un refus de rattachement peuvent laisser des fichiers orphelins. Aucun nettoyage automatique du stockage n’a été ajouté : supprimer sans vérifier toutes les références serait destructeur.
-- L’aperçu reste un téléchargement PDF ; son échec est désormais géré. Une prévisualisation intégrée distincte du téléchargement reste une amélioration ergonomique.
+- L’aperçu intégré distinct du téléchargement est livré dans la reprise ci-dessous. Le téléchargement de l’aperçu reste un document local : il ne réserve pas de numéro et ne remplace pas l’enregistrement.
 - Une intervention agence est encore nécessaire pour réconcilier une tentative d’envoi ambiguë. Aucun écran d’administration de cette réconciliation n’est ajouté ici ; ne pas lever automatiquement ce verrou sur simple expiration.
 - Contrat/signature et logo sont audités/testés dans le lot racine séparé. Les prix des suggestions IA sont sécurisés dans le lot racine, avec leurs tests catalogue et SQL ; cette suite teste l’entretien et la conservation d’un prix inconnu, pas la génération distante réelle.
 
@@ -117,3 +117,39 @@ Le nouveau formulaire vérifie désormais **avant toute création** la RPC de le
 Cette protection est nécessaire tant qu’un ancien backend peut être utilisé : l’ancienne fonction `creer_devis_by_token` ignore les nouveaux champs `devis_id` et `idempotency_key`, puis crée un autre numéro avant que le frontend constate l’absence de révision. Avec le garde-fou, fonction de capacités absente (404), version ancienne et vérification indisponible (503) produisent un message de maintenance, conservent la saisie et déclenchent **zéro appel de création**. Trois scénarios DOC-20 ont été reproduits en échec avant correctif ; ils complètent la suite initiale et sont exécutés sur desktop/mobile. Le SQL contrôle également les capacités pour jetons inconnus, artisans écartés, contrats absents et assurances non validées.
 
 Validation finale de ce garde-fou : **44/44 cas UI réussis** (22 scénarios × desktop/mobile), **188 migrations et 6 suites SQL réussies**, TypeScript, ESLint ciblé et `git diff --check` réussis. Preuves : `test-results/audit-documents-compatibilite/`. La suite confirme aussi que le backend moderne conserve les sauvegardes et reprises déjà testées.
+
+## Reprise après PR 83 : aperçu PDF intégré et devis longs
+
+Le bouton **Aperçu** ouvre maintenant un lecteur dans le formulaire. Il affiche le véritable PDF généré par jsPDF, rendu par PDF.js 6.2.108, sans appel de création, stockage ni envoi. Le brouillon reste monté avec toutes ses saisies ; **Revenir au devis** et Échap referment seulement le lecteur et restituent le focus au bouton Aperçu. Une nouvelle ouverture reflète les dernières modifications. Les actions **Enregistrer** et **Au client** conservent leur comportement antérieur et les protections de révision existantes.
+
+Le lecteur propose pages précédente/suivante, sélection d’une page, zoom et retour à la largeur. **Télécharger** est une action distincte portant exactement sur le Blob affiché, sans seconde génération. Le numéro d’un nouveau devis est explicitement réservé à l’enregistrement ; un brouillon repris garde son numéro. La vue **Afficher le texte** donne accès au texte extrait du même PDF, également disponible aux lecteurs d’écran. Le dialogue garde le focus, les cibles de navigation font 44 px et la page s’adapte à la largeur mobile. Un seul canvas et un seul worker sont utilisés par lecteur, quelle que soit la longueur du document.
+
+La préparation et les pannes sont visibles. En cas d’échec de lecture, le PDF déjà produit reste téléchargeable et le retour au formulaire reste possible. Le test réseau a trouvé un second défaut : le repli global de PDF.js mémorisait un échec de worker, rendant **Réessayer** inefficace même après retour du réseau. Chaque aperçu utilise désormais son propre worker, avec attente bornée et destruction explicite. La fermeture révoque le Blob URL, interrompt le rendu et détruit worker/document ; une génération terminée après fermeture ne rouvre pas le lecteur. Le chargement d’un logo ne peut plus bloquer la génération indéfiniment (8 secondes maximum).
+
+### Défauts de pagination corrigés
+
+- Les coordonnées d’entreprise et client sont maintenant renvoyées à la ligne dans leur largeur ; un bloc client trop haut se poursuit sur la page suivante.
+- Objet, mentions et conditions vérifient la place disponible pour chaque ligne. Une seule désignation dépassant une page est répartie sur plusieurs pages avec en-tête de tableau répété, et quantité/prix/montant imprimés une seule fois pour la prestation.
+- La place des totaux tient compte du nombre de taux de TVA. Le calcul, les mentions comptables, les CGV et la signature après les CGV sont conservés.
+- Un logo vertical est borné en hauteur ; une raison sociale longue ne fait plus déborder le pied de page ni chevaucher la pagination. Seul le rappel de pied est abrégé, l’identité complète reste dans l’en-tête.
+
+### Preuves de la reprise
+
+Compétence PDF lue et annoncée. Poppler n’étant pas présent dans cet environnement, les PDF réels ont été rendus en PNG avec le moteur PDF.js utilisé par le lecteur, puis inspectés visuellement. Un devis court et un devis fictif de **12 pages** sont conservés dans les résultats, avec les 12 rendus pleine page du document long. L’inspection couvre l’en-tête et les coordonnées longs, la continuation de la prestation, le tableau de 46 lignes, les totaux, les conditions longues, les CGV et le cadre de signature. Aucun texte hors page ou chevauchement n’a été relevé. Le PDF long conserve **1 000,00 € HT + 144,00 € TVA = 1 144,00 € TTC**, avec un unique total TTC et tous les marqueurs de fin de texte attendus.
+
+`tests/artisan-devis-apercu-audit.spec.ts` ajoute quatre scénarios, exécutés sur ordinateur et mobile :
+
+1. Aperçu sans téléchargement ni mutation, pixels PDF réellement rendus, zoom, vue texte, téléchargement explicite, fermeture clavier/focus, révocation URL et nouvelle génération après correction du prix.
+2. Reprise d’un brouillon long, navigation, rendu de toutes les pages, contrôle des coordonnées du texte par le parseur réel, intégrité des derniers mots, montants et signature, puis retour aux 46 lignes intactes.
+3. Worker indisponible, message explicite, téléchargement de repli, rétablissement du réseau et nouvelle tentative réussie, sans perdre le formulaire.
+4. Fermeture pendant chargement du logo, maintien des saisies, réouverture saine et un seul worker lancé pour le lecteur conservé.
+
+**54/54 cas UI devis/documents passent**, dont les **8 nouveaux cas d’aperçu** (ordinateur et mobile, 1 min 12 s). **50/50 tests unitaires devis/documents**, TypeScript, ESLint ciblé et `git diff --check` passent également. Les tests utilisent uniquement les API fictives : aucun email réel, upload de production, signature ni migration. Les preuves initiales sont sous `test-results/audit-devis-apercu/`; le rejeu complet et les PDF/PNG finaux sont sous `test-results/audit-documents-apercu-final/`.
+
+Limites : les polices PDF restent celles du générateur existant ; les alphabets hors de leur couverture et les PDF scannés/OCR ne sont pas validés ici. Le texte accessible est celui de la page sélectionnée ; le PDF téléchargé n’est pas rendu conforme PDF/UA par ce changement. Le numéro définitif d’un nouveau devis est toujours attribué côté serveur lors de l’enregistrement.
+
+### Stabilisation du serveur de test partagé
+
+La validation globale a signalé un échec de DOC-17 mobile, après les 54 cas ciblés verts. La trace établit une **recharge complète de la page**, pas un échec métier du retry : le 8 novembre à 11:19:02, un événement `beforeunload` précède une nouvelle requête document sur la même URL et une reconnexion Vite. Le formulaire avait reçu les deux réponses 503 attendues ; il a disparu avant que le clic Enregistrer soit exécuté. Des rapports Markdown étaient sauvegardés simultanément sur le serveur de développement partagé.
+
+Le helper commun `installerBackendArtisan` neutralise désormais uniquement le WebSocket HMR local `ws://127.0.0.1:5180/**`, comme le faisaient déjà les suites suivi et métrés. Les requêtes applicatives, les erreurs et toutes les assertions restent inchangées ; aucun code produit n’a été modifié pour cet incident. Rejeu DOC-17 après correction : **5/5 répétitions mobiles et 3/3 desktop réussies**, ESLint du helper et contrôle du diff réussis. Preuves : `test-results/audit-doc17-hmr/` et `test-results/audit-doc17-hmr-desktop/`.

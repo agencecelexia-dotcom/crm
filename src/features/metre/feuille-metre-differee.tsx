@@ -22,14 +22,24 @@ export function FeuilleMetreDifferee(props: {
   // L'historique est posé dès l'appui, même si le module de carte n'est pas
   // encore téléchargé. Retour ferme aussi l'état de chargement.
   const fermer = useRef(props.onClose)
+  const verifierFermeture = useRef<() => boolean>(() => true)
+  const fermetureAutorisee = useRef(false)
   useEffect(() => { fermer.current = props.onClose })
   useEffect(() => {
     window.history.pushState({ ...window.history.state, feuilleMetre: true }, '')
-    const retour = () => fermer.current()
+    const retour = () => {
+      if (!fermetureAutorisee.current && !verifierFermeture.current()) {
+        window.history.pushState({ ...window.history.state, feuilleMetre: true }, '')
+        return
+      }
+      fermer.current()
+    }
     window.addEventListener('popstate', retour)
     return () => window.removeEventListener('popstate', retour)
   }, [])
   function fermerFeuille() {
+    if (!verifierFermeture.current()) return
+    fermetureAutorisee.current = true
     if (window.history.state?.feuilleMetre) window.history.back()
     else props.onClose()
   }
@@ -53,7 +63,7 @@ export function FeuilleMetreDifferee(props: {
         </SheetContent>
       </Sheet>
     }>
-      <Feuille {...props} onClose={fermerFeuille} />
+      <Feuille {...props} verifierFermeture={verifierFermeture} onClose={fermerFeuille} />
     </Suspense>
     </ErrorBoundary>
   )

@@ -27,7 +27,8 @@ import { uploaderDevisGenere } from '@/lib/storage'
 import type { ArtisanEspace } from '@/types/database'
 import { useEtatChiffrage } from '@/features/assurances/use-assurances'
 import { calculerTotaux, estQuantiteParDefaut, uniteCommune } from './calculs'
-import { telechargerDevis, devisEnBlob, type DevisData } from './devis-pdf'
+import { devisEnBlob, type DevisData } from './devis-pdf'
+import { ApercuDevis } from './apercu-devis'
 import { devisEnHtml, objetCourriel } from './devis-html'
 import {
   useCreerDevis,
@@ -112,6 +113,8 @@ export function DevisBuilder({
   const setPdf = useSetDevisPdf(token)
   const envoyer = useEnvoyerDevis(token)
   const [busy, setBusy] = useState(false)
+  const [apercuData, setApercuData] = useState<DevisData | null>(null)
+  const boutonApercu = useRef<HTMLButtonElement>(null)
   // `busy` ne protège que l'affichage : entre deux appuis rapprochés, l'état
   // React n'a pas eu le temps de se propager et l'enregistrement partait deux
   // fois — deux devis, deux numéros. Le verrou doit être synchrone.
@@ -415,13 +418,9 @@ export function DevisBuilder({
     return true
   }
 
-  async function apercu() {
+  function apercu() {
     if (enCours.current || !valider()) return
-    enCours.current = true
-    setBusy(true)
-    try { await telechargerDevis(construireData(sauvegarde.current?.numero ?? 'APERÇU')) }
-    catch { toast.error('Le PDF n’a pas pu être généré. Vos saisies sont conservées.') }
-    finally { enCours.current = false; setBusy(false) }
+    setApercuData(construireData(sauvegarde.current?.numero ?? 'APERÇU'))
   }
 
   /**
@@ -1005,7 +1004,7 @@ export function DevisBuilder({
               occupait exactement la place de « Reprendre ces lignes » dans
               l'entretien, et un second appui envoyait le devis par email. */}
           <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={apercu} disabled={busy}>
+          <Button ref={boutonApercu} variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={apercu} disabled={busy}>
             <Eye className="hidden size-4 sm:block" aria-hidden />
             Aperçu
           </Button>
@@ -1037,6 +1036,7 @@ export function DevisBuilder({
             }}
           />
         )}
+        {apercuData && <ApercuDevis data={apercuData} onClose={() => setApercuData(null)} retourFocus={() => boutonApercu.current?.focus()} />}
       </SheetContent>
     </Sheet>
   )

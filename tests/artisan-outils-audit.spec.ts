@@ -27,10 +27,10 @@ const metre: Metre = {
   geometrie: contour, surface_m2: 120, perimetre_m: 44, longueur_m: null, hauteur_m: null,
   pente_pct: null, surface_reelle_m2: null, ouvertures_m2: null, azimut: null,
   pente_source: null, debord_m: null, part_toiture: null, versant: null, hauteur_source: null,
-  source: 'dessin', created_at: '2026-11-07T10:00:00Z',
+  source: 'dessin', modifiable_trace: true, created_at: '2026-11-07T10:00:00Z',
 }
 
-async function installerOutils(page: Page, options: { contexteErreur?: boolean; contexteRefuse?: boolean; avecMaison?: boolean; iaFinie?: boolean; avecReleve?: boolean; parcoursIA?: boolean; photos?: boolean; avecPosition?: boolean; lotRefuse?: boolean; iaBloquee?: boolean; releveBloque?: boolean } = {}) {
+async function installerOutils(page: Page, options: { contexteErreur?: boolean; contexteRefuse?: boolean; avecMaison?: boolean; iaFinie?: boolean; avecReleve?: boolean; parcoursIA?: boolean; photos?: boolean; avecPosition?: boolean; lotRefuse?: boolean; iaBloquee?: boolean; releveBloque?: boolean; traceRefuse?: boolean; traceLongueur?: boolean; traceLectureSeule?: boolean } = {}) {
   const backend = await installerBackendArtisan(page)
   const appels: { nom: string; body: Record<string, unknown> }[] = []
   const inconnues: string[] = []
@@ -45,7 +45,7 @@ async function installerOutils(page: Page, options: { contexteErreur?: boolean; 
     ok: !options.contexteRefuse, error: options.contexteRefuse ? 'chantier_retire' : undefined,
     projet_id: 'chantier-demo-1', affectation_id: 'affectation-demo-1', client_ville: 'Ville de démonstration',
     client_adresse: '12 rue des Ateliers', client_code_postal: '00000', latitude: 48.85605,
-    longitude: 2.350075, metier: 'Couverture', metiers: ['Couverture'], metres: [metre],
+    longitude: 2.350075, metier: 'Couverture', metiers: ['Couverture'], metres: [{ ...metre, modifiable_trace: !options.traceLectureSeule, ...(options.traceLongueur ? { type: 'longueur' as const, geometrie: contour.slice(0, 2), surface_m2: null, longueur_m: 11 } : {}) }],
   }
   const maison: MaisonChantier = {
     ok: true, confiance: options.avecMaison ? 'confirmee' : 'aucune', methode: options.avecMaison ? 'confirmee' : null,
@@ -64,12 +64,23 @@ async function installerOutils(page: Page, options: { contexteErreur?: boolean; 
       appels.push({ nom: 'upload-photo', body: {} })
       return json({ Key: 'facades/demo/photo.jpg' })
     }
-    const couvertes = ['metre_contexte_by_token', 'supprimer_metre_by_token', 'enregistrer_metre_by_token', 'corriger_metrage_by_token', 'corriger_metrages_by_token', 'batiment-chantier', 'releve-lidar', 'toiture-lidar', 'fiche-maison', 'metre-ia', 'metrage_by_token', 'facade-photo']
+    const couvertes = ['metre_contexte_by_token', 'supprimer_metre_by_token', 'modifier_trace_by_token', 'enregistrer_metre_by_token', 'corriger_metrage_by_token', 'corriger_metrages_by_token', 'batiment-chantier', 'releve-lidar', 'toiture-lidar', 'fiche-maison', 'metre-ia', 'metrage_by_token', 'facade-photo']
     if (!couvertes.includes(nom)) return route.fallback()
     appels.push({ nom, body })
     switch (nom) {
       case 'metre_contexte_by_token': return options.contexteErreur ? json({ code: 'DEMO_PANNE', message: 'Panne simulée' }, 503) : json(ctx)
       case 'supprimer_metre_by_token': return json({ ok: false, error: 'token_invalide' })
+      case 'modifier_trace_by_token': {
+        if (options.traceRefuse) return json({ ok: false, error: 'trace_modifie' })
+        const index = ctx.metres.findIndex((m) => m.id === body.p_id)
+        if (index < 0) return json({ ok: false, error: 'trace_introuvable' })
+        const ancien = ctx.metres[index]
+        if (ancien.nom !== body.p_nom_initial || JSON.stringify(ancien.geometrie) !== JSON.stringify(body.p_geometrie_initiale)) return json({ ok: false, error: 'trace_modifie' })
+        const geometrie = body.p_geometrie as Point[]
+        const modifie: Metre = { ...ancien, nom: String(body.p_nom), geometrie, surface_m2: ancien.type === 'surface' ? aire(geometrie) : null, perimetre_m: ancien.type === 'surface' ? longueur(geometrie, true) : null, longueur_m: ancien.type === 'longueur' ? longueur(geometrie, false) : null }
+        ctx.metres[index] = modifie
+        return json({ ok: true, metre: modifie })
+      }
       case 'enregistrer_metre_by_token': {
         const geometrie = body.p_geometrie as Point[]
         const type = body.p_type as Metre['type']
@@ -433,4 +444,119 @@ test('le délai LiDAR cesse le spinner et permet de récupérer le relevé termi
   await expect(feuille.getByText('Pans du toit', { exact: true })).toBeVisible()
   expect(backend.erreursPage).toEqual([])
   expect(backend.inconnues).toEqual([])
+})
+
+for (const type of ['surface', 'longueur'] as const) {
+  test(`retrouver et modifier le nom et un point d’une ${type} sans dupliquer la mesure`, async ({ page }, testInfo) => {
+    const backend = await installerOutils(page, { avecPosition: true, traceLongueur: type === 'longueur' })
+    const feuille = await ouvrirMetre(page)
+    await feuille.getByText('Déjà enregistré (1)', { exact: true }).click()
+    await feuille.getByRole('button', { name: 'Voir sur la carte : Terrasse de démonstration', exact: true }).click()
+    const carnet = feuille.getByRole('region', { name: 'Tracé du carnet' })
+    await expect(carnet).toBeVisible()
+    const carte = feuille.locator('.leaflet-container').first()
+    const rect = await carte.boundingBox()
+    // En consultation, un appui sur la carte ne modifie pas le tracé.
+    await carte.click({ position: { x: rect!.width * 0.45, y: rect!.height * 0.5 } })
+    await expect(carnet.getByRole('button', { name: 'Modifier le tracé' })).toBeVisible()
+    await carnet.getByRole('button', { name: 'Modifier le tracé' }).click()
+    await carnet.getByRole('textbox', { name: 'Nom du tracé' }).fill(`Tracé ${type} corrigé`)
+    await carnet.getByRole('combobox', { name: 'Action sur la carte' }).selectOption('0')
+    const nouvelleCarte = await carte.boundingBox()
+    await carte.click({ position: { x: nouvelleCarte!.width * 0.45, y: nouvelleCarte!.height * 0.55 } })
+    await expect(carnet.getByRole('combobox')).toHaveValue('')
+    if (type === 'surface') {
+      await page.screenshot({ path: `test-results/artisan-review/carnet-trace-${testInfo.project.name}.png`, fullPage: false })
+    }
+    await carnet.getByRole('button', { name: 'Enregistrer les modifications', exact: true }).click()
+    await expect(page.getByText('Tracé modifié', { exact: true })).toBeVisible()
+    await expect(carnet.getByRole('heading', { name: `Tracé ${type} corrigé` })).toBeVisible()
+    const editions = backend.appelsOutils.filter((a) => a.nom === 'modifier_trace_by_token')
+    expect(editions).toHaveLength(1)
+    expect(editions[0].body.p_id).toBe(metre.id)
+    expect(editions[0].body.p_nom_initial).toBe(metre.nom)
+    expect((editions[0].body.p_geometrie as Point[]).length).toBe(type === 'surface' ? 4 : 2)
+    expect(editions[0].body.p_geometrie).not.toEqual(editions[0].body.p_geometrie_initiale)
+    expect(backend.appelsOutils.filter((a) => a.nom === 'enregistrer_metre_by_token')).toHaveLength(0)
+    expect(backend.appelsOutils.filter((a) => a.nom === 'metre-ia' && a.body.action === 'lire')).toHaveLength(0)
+    await carnet.getByRole('button', { name: 'Fermer le tracé' }).click()
+    await expect(feuille.getByText('Déjà enregistré (1)', { exact: true })).toBeVisible()
+    await feuille.getByRole('button', { name: `Voir sur la carte : Tracé ${type} corrigé` }).click()
+    await expect(carnet.getByRole('heading', { name: `Tracé ${type} corrigé` })).toBeVisible()
+    expect(backend.inconnues).toEqual([])
+    expect(backend.erreursPage).toEqual([])
+  })
+}
+
+test('le carnet garde la saisie après conflit et permet une annulation sans écriture', async ({ page }) => {
+  const backend = await installerOutils(page, { avecPosition: true, traceRefuse: true })
+  const feuille = await ouvrirMetre(page)
+  await feuille.getByText('Déjà enregistré (1)', { exact: true }).click()
+  await feuille.getByRole('button', { name: 'Voir sur la carte : Terrasse de démonstration', exact: true }).click()
+  const carnet = feuille.getByRole('region', { name: 'Tracé du carnet' })
+  await carnet.getByRole('button', { name: 'Modifier le tracé' }).click()
+  await carnet.getByRole('textbox', { name: 'Nom du tracé' }).fill('Saisie à conserver')
+  await carnet.getByRole('button', { name: 'Enregistrer les modifications' }).click()
+  await expect(carnet.getByRole('alert')).toContainText('Ce tracé a changé')
+  await expect(carnet.getByRole('textbox', { name: 'Nom du tracé' })).toHaveValue('Saisie à conserver')
+  await expect(page.getByText('Tracé modifié', { exact: true })).toHaveCount(0)
+  await carnet.getByRole('button', { name: 'Annuler les modifications' }).click()
+  await expect(carnet.getByRole('heading', { name: metre.nom })).toBeVisible()
+  await carnet.getByRole('button', { name: 'Modifier le tracé' }).click()
+  await expect(carnet.getByRole('textbox', { name: 'Nom du tracé' })).toHaveValue(metre.nom)
+  expect(backend.appelsOutils.filter((a) => a.nom === 'modifier_trace_by_token')).toHaveLength(1)
+  expect(backend.erreursPage).toEqual([])
+})
+
+test('le retour protège le tracé modifié et les commandes restent lisibles à320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 650 })
+  const backend = await installerOutils(page, { avecPosition: true })
+  const feuille = await ouvrirMetre(page)
+  await feuille.getByText('Déjà enregistré (1)', { exact: true }).click()
+  await feuille.getByRole('button', { name: 'Voir sur la carte : Terrasse de démonstration', exact: true }).click()
+  const carnet = feuille.getByRole('region', { name: 'Tracé du carnet' })
+  await carnet.getByRole('button', { name: 'Modifier le tracé' }).click()
+  await carnet.getByRole('textbox', { name: 'Nom du tracé' }).fill('Modification non enregistrée')
+  await expect.poll(() => carnet.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  const commandes = carnet.getByRole('button')
+  for (const bouton of await commandes.all()) expect(await bouton.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.goBack()
+  await expect(carnet.getByRole('textbox', { name: 'Nom du tracé' })).toHaveValue('Modification non enregistrée')
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.goBack()
+  await expect(feuille).toBeHidden()
+  await expect(page).toHaveURL(/vue=metres/)
+  expect(backend.appelsOutils.filter((a) => a.nom === 'modifier_trace_by_token' || a.nom === 'enregistrer_metre_by_token')).toHaveLength(0)
+  expect(backend.erreursPage).toEqual([])
+})
+
+test('un tracé consultable sans capacité serveur ne propose pas de modification', async ({ page }) => {
+  const backend = await installerOutils(page, { avecPosition: true, traceLectureSeule: true })
+  const feuille = await ouvrirMetre(page)
+  await feuille.getByText('Déjà enregistré (1)', { exact: true }).click()
+  await feuille.getByRole('button', { name: 'Voir sur la carte : Terrasse de démonstration', exact: true }).click()
+  const carnet = feuille.getByRole('region', { name: 'Tracé du carnet' })
+  await expect(carnet.getByText('Ce tracé est consultable.', { exact: false })).toBeVisible()
+  await expect(carnet.getByRole('button', { name: 'Modifier le tracé' })).toHaveCount(0)
+  expect(backend.appelsOutils.filter((a) => a.nom === 'modifier_trace_by_token')).toHaveLength(0)
+})
+
+test('redessiner une surface garde son type et annuler restaure tous les points', async ({ page }) => {
+  const backend = await installerOutils(page, { avecPosition: true })
+  const feuille = await ouvrirMetre(page)
+  await feuille.getByText('Déjà enregistré (1)', { exact: true }).click()
+  await feuille.getByRole('button', { name: 'Voir sur la carte : Terrasse de démonstration', exact: true }).click()
+  const carnet = feuille.getByRole('region', { name: 'Tracé du carnet' })
+  await carnet.getByRole('button', { name: 'Modifier le tracé' }).click()
+  page.once('dialog', (dialog) => dialog.accept())
+  await carnet.getByRole('button', { name: 'Redessiner', exact: true }).click()
+  await expect(carnet.getByText('Tracé incomplet', { exact: false })).toBeVisible()
+  await expect(carnet.getByRole('button', { name: 'Enregistrer les modifications' })).toBeDisabled()
+  await carnet.getByRole('button', { name: 'Placer le point au centre' }).click()
+  await expect(carnet.getByText('1 point · estimation à distance')).toBeVisible()
+  await expect(carnet.getByRole('button', { name: 'Enregistrer les modifications' })).toBeDisabled()
+  await carnet.getByRole('button', { name: 'Annuler les modifications' }).click()
+  await expect(carnet.getByText('4 points · estimation à distance')).toBeVisible()
+  expect(backend.appelsOutils.filter((a) => a.nom === 'modifier_trace_by_token')).toHaveLength(0)
 })

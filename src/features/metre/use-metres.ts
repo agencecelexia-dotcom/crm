@@ -22,6 +22,8 @@ export interface Metre {
   versant: string | null
   hauteur_source: 'bati' | 'saisie' | 'lidar' | null
   source: 'bati' | 'dessin'
+  releve_id?: string | null
+  modifiable_trace?: boolean
   created_at: string
 }
 
@@ -90,6 +92,11 @@ const MESSAGES: Record<string, string> = {
   releve_introuvable: 'Le relevé LiDAR de cette maison a changé : rouvrez la maison et réessayez.',
   aucun_pan: 'Gardez au moins un pan du toit pour enregistrer.',
   facade_introuvable: 'Cette façade n’a pas de partie à traiter (mur mitoyen) : choisissez-en une autre.',
+  trace_introuvable: 'Ce tracé n’est plus disponible. Rouvrez le carnet de métrés.',
+  trace_non_modifiable: 'Ce relevé calculé ne peut pas être modifié comme un dessin manuel.',
+  trace_modifie: 'Ce tracé a changé depuis son ouverture. Rechargez-le avant de poursuivre.',
+  nom_invalide: 'Donnez un nom au tracé, de 120 caractères maximum.',
+  geometrie_invalide: 'Le tracé contient un point invalide. Replacez-le sur la carte.',
 }
 
 export function messageMetre(code?: string | null): string {
@@ -172,6 +179,24 @@ export function useSupprimerMetre(token: string | undefined) {
       if (!data?.ok) throw new Error(messageMetre(data?.error))
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['metre-contexte'] }),
+  })
+}
+
+/** Mise à jour en place : le serveur recalcule les dimensions et vérifie la version ouverte. */
+export function useModifierTrace(token: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (p: { affectationToken: string; initial: Metre; nom: string; geometrie: Point[] }) => {
+      const { data, error } = await supabase.rpc('modifier_trace_by_token', {
+        p_token: token, p_affectation_token: p.affectationToken, p_id: p.initial.id,
+        p_nom: p.nom.trim(), p_geometrie: p.geometrie,
+        p_nom_initial: p.initial.nom, p_geometrie_initiale: p.initial.geometrie,
+      })
+      if (error) throw new Error('La sauvegarde n’a pas pu être confirmée. Vos modifications restent affichées ; réessayez avant de quitter.')
+      if (!data?.ok || !data.metre) throw new Error(messageMetre(data?.error))
+      return data.metre as Metre
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['metre-contexte', token] }),
   })
 }
 

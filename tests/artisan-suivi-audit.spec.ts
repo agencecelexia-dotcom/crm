@@ -7,9 +7,12 @@ type Payload = Record<string, unknown>
 const RPC = 'https://crm-test.supabase.co/rest/v1/rpc/'
 const DATE = '2026-11-08T10:00:00Z'
 
-test.beforeEach(({ page }, info) => {
+test.beforeEach(async ({ page }, info) => {
   test.skip(info.config.metadata.isolatedInterface !== true, 'API simulées uniquement : tests/interface.config.ts')
   page.setDefaultTimeout(5_000)
+  // Les autres lots partagent Vite : leurs sauvegardes ne doivent pas fermer
+  // un drawer pendant un scénario. Seul le canal HMR local est neutralisé.
+  await page.routeWebSocket('ws://127.0.0.1:5180/**', (ws) => { ws.onMessage(() => undefined) })
 })
 
 async function intercepter(page: Page, nom: string, repondre: (payload: Payload, route: Route) => Promise<void>) {
@@ -171,7 +174,8 @@ for (const [libelle, resultat] of [['Pas de réponse', 'pas_de_reponse'], ["Je l
     await expect(page.getByText("Impossible d'enregistrer l'appel", { exact: true })).toBeVisible()
     await panneau.getByRole('button', { name: libelle, exact: true }).click()
     await expect.poll(() => appels.length).toBe(2)
-    expect(appels[1]).toEqual({ p_token: projet.token, p_resultat: resultat })
+    expect(appels[1]).toEqual({ p_token: projet.token, p_resultat: resultat, p_message: null, p_cle: appels[0].p_cle })
+    expect(appels[0].p_cle).toMatch(/^[a-f0-9-]{36}$/)
     verifierIsolation(backend)
   })
 }
@@ -228,9 +232,13 @@ test('la perte exige une raison, l’erreur la conserve et Annuler ne réécrit 
   await expect(confirmer).toBeDisabled()
   const raison = panneau.getByRole('textbox', { name: 'Raison de la perte du chantier' })
   await raison.fill('Le client a choisi un concurrent')
+  await expect(confirmer).toBeDisabled()
+  await panneau.getByRole('combobox', { name: 'Motif de perte du chantier' }).click()
+  await page.getByRole('option', { name: 'A signé chez un concurrent', exact: true }).click()
   await confirmer.click()
   await expect(page.getByText('Précisez la raison de la perte du chantier.', { exact: true })).toBeVisible()
   await expect(raison).toHaveValue('Le client a choisi un concurrent')
+  await expect(panneau.getByRole('combobox', { name: 'Motif de perte du chantier' })).toContainText('A signé chez un concurrent')
   await panneau.getByRole('button', { name: 'Annuler', exact: true }).click()
   expect(appels).toBe(1)
   verifierIsolation(backend)
@@ -244,6 +252,8 @@ test('SUIVI-06 — un refus métier de perte explique de contacter Celexia', asy
   const panneau = await ouvrir(page, unChantier(backend, { statut: 'devis_signe', etape: 'devis_signe', issue: 'gagne', commission_encaissee: true }))
   await panneau.getByRole('button', { name: 'Pas de suite / Perdu', exact: true }).click()
   await panneau.getByRole('textbox', { name: 'Raison de la perte du chantier' }).fill('Déclaré signé par erreur')
+  await panneau.getByRole('combobox', { name: 'Motif de perte du chantier' }).click()
+  await page.getByRole('option', { name: 'Autre', exact: true }).click()
   await panneau.getByRole('button', { name: 'Confirmer « perdu »' }).click()
   await expect(page.getByText(/Contactez Celexia|Passez par Celexia/i)).toBeVisible()
 })
@@ -418,5 +428,107 @@ test('un devis signé déposé interdit le recul sans requête et explique la d�
   await panneau.getByRole('group', { name: 'Avancement du chantier' }).getByRole('button', { name: /Devis envoyé/ }).click()
   await expect(page.getByText('Un devis signé est déjà déposé. Contactez Celexia pour corriger ce chantier.', { exact: true })).toBeVisible()
   expect(backend.mutations).toEqual([])
+  verifierIsolation(backend)
+})
+
+test('une note dont la réponse est perdue conserve sa clé après rechargement puis autorise une nouvelle intention', async ({ page }) => {
+  const requetes: Payload[] = []
+  const enregistrees = new Set<string>()
+  await intercepter(page, 'add_suivi_by_token', async (payload, route) => {
+    requetes.push(payload)
+    enregistrees.add(String(payload.p_cle)) // transaction validée avant la perte de réponse
+    if (requetes.length === 1) return route.abort('failed')
+    await json(route, { ok: true })
+  })
+  const backend = await installerBackendArtisan(page)
+  const projet = unChantier(backend)
+  let panneau = await ouvrir(page, projet)
+  const texte = 'Le client rappelle demain, détail fictif confidentiel.'
+  await panneau.getByRole('textbox', { name: 'Note de suivi' }).fill(texte)
+  await panneau.getByRole('button', { name: 'Envoyer la note' }).click()
+  await expect(page.getByText("Impossible d'enregistrer", { exact: true })).toBeVisible()
+  const stocke = await page.evaluate(() => JSON.stringify(Object.entries(sessionStorage).filter(([cle]) => cle.startsWith('crm:suivi:'))))
+  expect(stocke).not.toContain(texte)
+  expect(stocke).not.toContain(projet.token)
+  expect(requetes[0].p_cle).toMatch(/^[a-f0-9-]{36}$/)
+
+  panneau = await ouvrir(page, projet) // navigation complète : mémoire JS remplacée
+  await panneau.getByRole('textbox', { name: 'Note de suivi' }).fill(texte)
+  await panneau.getByRole('button', { name: 'Envoyer la note' }).click()
+  await expect(panneau.getByRole('textbox', { name: 'Note de suivi' })).toHaveValue('')
+  expect(requetes[1].p_cle).toBe(requetes[0].p_cle)
+  expect(enregistrees.size).toBe(1)
+  await panneau.getByRole('textbox', { name: 'Note de suivi' }).fill(texte)
+  await panneau.getByRole('button', { name: 'Envoyer la note' }).click()
+  await expect.poll(() => requetes.length).toBe(3)
+  expect(requetes[2].p_cle).not.toBe(requetes[0].p_cle)
+  expect(enregistrees.size).toBe(2)
+  verifierIsolation(backend)
+})
+
+test('un appel dont la réponse est perdue garde sa clé à la réouverture du chantier', async ({ page }) => {
+  const requetes: Payload[] = []
+  const enregistres = new Set<string>()
+  await intercepter(page, 'log_appel_by_token', async (payload, route) => {
+    requetes.push(payload)
+    enregistres.add(String(payload.p_cle))
+    if (requetes.length === 1) return route.abort('failed')
+    await json(route, { ok: true })
+  })
+  const backend = await installerBackendArtisan(page)
+  const projet = unChantier(backend)
+  let panneau = await ouvrir(page, projet)
+  await panneau.getByRole('button', { name: 'Pas de réponse', exact: true }).click()
+  await expect(page.getByText("Impossible d'enregistrer l'appel", { exact: true })).toBeVisible()
+  panneau = await ouvrir(page, projet)
+  await panneau.getByRole('button', { name: 'Pas de réponse', exact: true }).click()
+  await expect(page.getByText('Appel enregistré. Merci !', { exact: true })).toBeVisible()
+  expect(requetes[1].p_cle).toBe(requetes[0].p_cle)
+  expect(enregistres.size).toBe(1)
+  await panneau.getByRole('button', { name: 'Pas de réponse', exact: true }).click()
+  await expect.poll(() => requetes.length).toBe(3)
+  expect(requetes[2].p_cle).not.toBe(requetes[0].p_cle)
+  expect(enregistres.size).toBe(2)
+  verifierIsolation(backend)
+})
+
+test('la perte propose les motifs client et envoie une qualification distincte du retrait artisan', async ({ page }) => {
+  const requetes: Payload[] = []
+  await intercepter(page, 'add_suivi_by_token', async (payload, route) => { requetes.push(payload); await json(route, { ok: true }) })
+  const backend = await installerBackendArtisan(page)
+  const panneau = await ouvrir(page, unChantier(backend))
+  await panneau.getByRole('button', { name: 'Pas de suite / Perdu', exact: true }).click()
+  const confirmer = panneau.getByRole('button', { name: 'Confirmer « perdu »', exact: true })
+  await panneau.getByRole('combobox', { name: 'Motif de perte du chantier' }).click()
+  await expect(page.getByRole('option', { name: 'Trop loin / hors de ma zone', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: 'Délai incompatible avec mon planning', exact: true })).toHaveCount(0)
+  await page.getByRole('option', { name: 'Prix trop élevé', exact: true }).click()
+  const raison = panneau.getByRole('textbox', { name: 'Raison de la perte du chantier' })
+  await raison.fill('Non')
+  await expect(confirmer).toBeDisabled()
+  await raison.fill('Le client a refusé le prix proposé.')
+  await confirmer.click()
+  await expect(raison).toHaveCount(0)
+  expect(requetes).toEqual([{
+    p_token: 'affectation-demo-1', p_statut: 'perdu', p_message: 'Le client a refusé le prix proposé.',
+    p_date_rdv: null, p_motif: 'prix_trop_eleve', p_cle: expect.stringMatching(/^[a-f0-9-]{36}$/),
+  }])
+  verifierIsolation(backend)
+})
+
+test('un serveur sans la nouvelle surcharge refuse sans repli vers une écriture non protégée', async ({ page }) => {
+  const requetes: Payload[] = []
+  await intercepter(page, 'add_suivi_by_token', async (payload, route) => {
+    requetes.push(payload)
+    await json(route, { code: 'PGRST202', message: 'Fonction simulée absente du cache' }, 404)
+  })
+  const backend = await installerBackendArtisan(page)
+  const panneau = await ouvrir(page, unChantier(backend))
+  await panneau.getByRole('textbox', { name: 'Note de suivi' }).fill('Note conservée en attendant le serveur')
+  await panneau.getByRole('button', { name: 'Envoyer la note' }).click()
+  await expect(page.getByText(/Le suivi est temporairement indisponible/)).toBeVisible()
+  await expect(panneau.getByRole('textbox', { name: 'Note de suivi' })).toHaveValue('Note conservée en attendant le serveur')
+  expect(requetes).toHaveLength(1)
+  expect(requetes[0].p_cle).toMatch(/^[a-f0-9-]{36}$/)
   verifierIsolation(backend)
 })

@@ -48,7 +48,7 @@ export function TableauDeBordArtisan({ stats, projets, onFiltrer }: {
   ] : [
     { nombre: stats.rappels_echus, libelle: `rappel${stats.rappels_echus > 1 ? 's' : ''} à passer` },
     { nombre: stats.jamais_contactes_48h, libelle: `chantier${stats.jamais_contactes_48h > 1 ? 's' : ''} sans contact depuis 48 h` },
-    { nombre: stats.devis_sans_reponse_15j, libelle: 'devis sans réponse depuis 15 jours' },
+    { nombre: stats.devis_sans_reponse_15j, libelle: 'devis sans mise à jour depuis 15 jours' },
   ]).filter((l) => l.nombre > 0)
   const urgences = lignesUrgentes.reduce((total, ligne) => total + ligne.nombre, 0)
 

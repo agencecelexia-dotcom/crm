@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react'
 import { MapContainer, Polygon, Polyline, CircleMarker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import type { LatLngExpression } from 'leaflet'
 
 import { cn } from '@/lib/utils'
 import { couleurPan, LIGNES } from './affichage-releve'
@@ -28,7 +27,7 @@ const ATTRIB_IGN =
 export type FondCarte = 'ortho' | 'plan' | 'relief'
 export type ModeCarte = 'apercu' | 'surface' | 'longueur'
 
-const versLeaflet = (p: Point): LatLngExpression => [p[1], p[0]]
+const versLeaflet = (p: Point): [number, number] => [p[1], p[0]]
 
 /** Recadre la carte quand le chantier change, sans l'arracher à l'artisan. */
 function Recadrer({ centre, zoom }: { centre: Point | null; zoom?: number }) {
@@ -43,6 +42,15 @@ function Recadrer({ centre, zoom }: { centre: Point | null; zoom?: number }) {
       map.setView([lat, lon], zoom ?? map.getZoom(), { animate: true })
     }
   }, [lon, lat, zoom, map])
+  return null
+}
+
+/** Seule l'ouverture d'un tracé recadre : ses points restent stables pendant l'édition. */
+function RecadrerTrace({ trace }: { trace?: Point[] | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (trace?.length) map.fitBounds(trace.map(versLeaflet), { padding: [24, 24], maxZoom: 20, animate: false })
+  }, [map, trace])
   return null
 }
 
@@ -64,12 +72,18 @@ function SuivreTaille() {
 
 /** Remonte le centre de la carte : c'est lui qui corrige la position du chantier. */
 function SuivreCentre({ onBouger }: { onBouger?: (p: Point) => void }) {
-  useMapEvents({
+  const map = useMapEvents({
     moveend(e) {
       const c = e.target.getCenter()
       onBouger?.([c.lng, c.lat])
     },
   })
+  // Le cadrage initial peut précéder l'abonnement moveend. Le bouton de
+  // placement au centre doit fonctionner avant le premier déplacement.
+  useEffect(() => {
+    const c = map.getCenter()
+    onBouger?.([c.lng, c.lat])
+  }, [map, onBouger])
   return null
 }
 
@@ -101,6 +115,9 @@ export function CarteMetre({
   onBasculerCote,
   releve,
   pansEcartes,
+  traceCadre,
+  traceLectureSeule = false,
+  sommetChoisi,
 }: {
   centre: Point | null
   zoom?: number
@@ -122,6 +139,9 @@ export function CarteMetre({
   releve?: Releve | null
   /** Les pans que l'artisan a écartés : ils s'éteignent. */
   pansEcartes?: Set<number>
+  traceCadre?: Point[] | null
+  traceLectureSeule?: boolean
+  sommetChoisi?: number | null
 }) {
   const dessine = mode !== 'apercu'
   // Les pans sans les marches de leurs cases de 25 cm : calés sur les lignes du toit.
@@ -135,7 +155,7 @@ export function CarteMetre({
       // et aux boutons, qui ne se déclenchent pas par accident en dessinant.
       scrollWheelZoom
       maxZoom={21}
-      className={cn('size-full', dessine && 'cursor-crosshair')}
+      className={cn('size-full', dessine && !traceLectureSeule && 'cursor-crosshair')}
     >
       {fond === 'relief' ? (
         // LE RELIEF LiDAR : l'ombrage du modèle de surface de l'IGN. Il est
@@ -200,9 +220,10 @@ export function CarteMetre({
       )}
 
       <Recadrer centre={centre} zoom={centre ? zoom : undefined} />
+      <RecadrerTrace trace={traceCadre} />
       <SuivreTaille />
       <SuivreCentre onBouger={onBouger} />
-      <PoserSommet actif={dessine} onPoser={onPoserSommet} />
+      <PoserSommet actif={dessine && !traceLectureSeule} onPoser={onPoserSommet} />
 
       {/* Le bâti déjà tracé : c'est lui qui évite de dessiner. */}
       {!dessine &&
@@ -329,11 +350,11 @@ export function CarteMetre({
           <CircleMarker
             key={i}
             center={versLeaflet(p)}
-            radius={i === trace.length - 1 ? 7 : 5}
+            radius={i === sommetChoisi ? 9 : i === trace.length - 1 ? 7 : 5}
             pathOptions={{
               color: '#FFFFFF',
               weight: 2,
-              fillColor: '#7C3AED',
+              fillColor: i === sommetChoisi ? '#EA580C' : '#7C3AED',
               fillOpacity: 1,
             }}
           />

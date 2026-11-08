@@ -83,9 +83,17 @@ const qte = (n: number) =>
 function chargerImage(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image()
+    // Un serveur d’image silencieux ne doit pas bloquer indéfiniment le devis.
+    const timeout = window.setTimeout(() => terminer(null), 8_000)
+    function terminer(image: HTMLImageElement | null) {
+      window.clearTimeout(timeout)
+      img.onload = null
+      img.onerror = null
+      resolve(image)
+    }
     img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
+    img.onload = () => terminer(img)
+    img.onerror = () => terminer(null)
     img.src = url
   })
 }
@@ -99,10 +107,11 @@ export async function construireDevis(data: DevisData) {
   const pageH = doc.internal.pageSize.getHeight()
   const margin = 15
   const largeur = pageW - margin * 2
+  const bas = pageH - margin
   let y = margin
 
   const ensure = (h: number) => {
-    if (y + h > pageH - margin) {
+    if (y + h > bas) {
       doc.addPage()
       y = margin
     }
@@ -115,8 +124,9 @@ export async function construireDevis(data: DevisData) {
   // d'un artisan serait pire que n'en imprimer aucun.
   const logo = data.vendeur.logoUrl ? await chargerImage(data.vendeur.logoUrl) : null
   if (logo) {
-    const w = 45
-    const h = (logo.height / logo.width) * w
+    const ratio = Math.min(45 / logo.width, 25 / logo.height)
+    const w = logo.width * ratio
+    const h = logo.height * ratio
     try {
       doc.addImage(logo, 'PNG', margin, y, w, h)
     } catch {
@@ -128,7 +138,12 @@ export async function construireDevis(data: DevisData) {
   doc.setFontSize(13)
   doc.setFont(F, 'bold')
   setColor(NAVY)
-  doc.text(v.nom, pageW - margin, y + 4, { align: 'right' })
+  y += 4
+  for (const ligne of doc.splitTextToSize(v.nom, 110)) {
+    ensure(5)
+    doc.text(ligne, pageW - margin, y, { align: 'right' })
+    y += 5
+  }
   doc.setFont(F, 'normal')
   doc.setFontSize(9)
   setColor(GRIS)
@@ -146,12 +161,15 @@ export async function construireDevis(data: DevisData) {
     v.tel,
     v.email,
   ].filter(Boolean) as string[]
-  let yy = y + 9
   for (const ln of infos) {
-    doc.text(ln, pageW - margin, yy, { align: 'right' })
-    yy += 4
+    for (const ligne of doc.splitTextToSize(ln, 110)) {
+      ensure(4)
+      doc.text(ligne, pageW - margin, y, { align: 'right' })
+      y += 4
+    }
   }
-  y = Math.max(y + 30, yy + 2)
+  y = Math.max(margin + 30, y + 2)
+  ensure(35)
 
   // Filet orange
   doc.setDrawColor(ORANGE[0], ORANGE[1], ORANGE[2])
@@ -192,25 +210,35 @@ export async function construireDevis(data: DevisData) {
   ].filter(Boolean) as string[]
   doc.setDrawColor(BORD[0], BORD[1], BORD[2])
   doc.setLineWidth(0.2)
-  const boxH = 8 + clientLignes.length * 4.5
-  doc.roundedRect(margin, y, 95, boxH, 1.5, 1.5)
-  doc.setFont(F, 'bold')
-  doc.setFontSize(8.5)
-  setColor(GRIS_CLAIR)
-  doc.text('CLIENT', margin + 3, y + 5)
-  doc.setFont(F, 'normal')
   doc.setFontSize(10)
-  setColor(GRIS)
-  let cy = y + 10
-  clientLignes.forEach((ln, i) => {
+  const clientTexte = clientLignes.flatMap((ln, i) => {
     doc.setFont(F, i === 0 ? 'bold' : 'normal')
-    doc.text(ln, margin + 3, cy)
-    cy += 4.5
+    return (doc.splitTextToSize(ln, 89) as string[]).map((texte) => ({ texte, gras: i === 0 }))
   })
-  y += boxH + 8
+  let clientIndex = 0
+  do {
+    ensure(17)
+    const capacite = Math.max(1, Math.floor((bas - y - 12) / 4.5))
+    const partie = clientTexte.slice(clientIndex, clientIndex + capacite)
+    const boxH = 12 + partie.length * 4.5
+    doc.roundedRect(margin, y, 95, boxH, 1.5, 1.5)
+    doc.setFont(F, 'bold')
+    doc.setFontSize(8.5)
+    setColor(GRIS_CLAIR)
+    doc.text(clientIndex ? 'CLIENT (suite)' : 'CLIENT', margin + 3, y + 5)
+    doc.setFontSize(10)
+    setColor(GRIS)
+    for (let i = 0; i < partie.length; i++) {
+      doc.setFont(F, partie[i].gras ? 'bold' : 'normal')
+      doc.text(partie[i].texte, margin + 3, y + 10 + i * 4.5)
+    }
+    clientIndex += partie.length
+    y += boxH + 8
+  } while (clientIndex < clientTexte.length)
 
   // Objet
   if (data.objet) {
+    ensure(10)
     doc.setFont(F, 'bold')
     doc.setFontSize(10)
     setColor(NAVY)
@@ -219,6 +247,7 @@ export async function construireDevis(data: DevisData) {
     doc.setFont(F, 'normal')
     setColor(GRIS)
     for (const ln of doc.splitTextToSize(data.objet, largeur - w)) {
+      ensure(5)
       doc.text(ln, margin + w, y)
       y += 5
     }
@@ -251,42 +280,43 @@ export async function construireDevis(data: DevisData) {
   ensure(20)
   drawHead()
 
-  doc.setFontSize?.(9.5)
   for (const l of data.lignes) {
-    const desigLines = doc.splitTextToSize(l.designation || '—', cols[0].w - 4)
-    const rowH = Math.max(7, desigLines.length * 4.4 + 2.6)
-    if (y + rowH > pageH - margin) {
-      doc.addPage()
-      y = margin
-      drawHead()
-    }
-    // Arrondie comme dans les totaux : la colonne doit sommer au « Total HT ».
-    const ligneTotal = arrondi((Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0))
     doc.setFont(F, 'normal')
     doc.setFontSize(9.5)
-    setColor(GRIS)
-    // designation (multi-ligne)
-    let dy = y + 4.6
-    for (const dl of desigLines) {
-      doc.text(dl, xOf(0) + 2, dy)
-      dy += 4.4
+    const desigLines: string[] = doc.splitTextToSize(l.designation || '—', cols[0].w - 4)
+    const uniteLines: string[] = doc.splitTextToSize(l.unite || '', cols[2].w - 4)
+    const nombreLignes = Math.max(desigLines.length, uniteLines.length)
+    const hauteur = Math.max(7, nombreLignes * 4.4 + 2.6)
+    // Garde une prestation ordinaire ensemble ; une prestation dépassant
+    // une page est découpée, avec en-tête répété et montants imprimés une fois.
+    if (y + hauteur > bas && hauteur <= bas - margin - 8) { doc.addPage(); y = margin; drawHead() }
+    // Arrondie comme dans les totaux : la colonne doit sommer au « Total HT ».
+    const ligneTotal = arrondi((Number(l.quantite) || 0) * (Number(l.prix_unitaire) || 0))
+    let index = 0
+    while (index < nombreLignes) {
+      if (y + 7 > bas) { doc.addPage(); y = margin; drawHead() }
+      const n = Math.min(nombreLignes - index, Math.max(1, Math.floor((bas - y - 2.6) / 4.4)))
+      const rowH = Math.max(7, n * 4.4 + 2.6)
+      doc.setFont(F, 'normal')
+      doc.setFontSize(9.5)
+      setColor(GRIS)
+      for (let i = 0; i < n; i++) {
+        if (desigLines[index + i]) doc.text(desigLines[index + i], xOf(0) + 2, y + 4.6 + i * 4.4)
+        if (uniteLines[index + i]) doc.text(uniteLines[index + i], xOf(2) + 2, y + 4.6 + i * 4.4)
+      }
+      if (index === 0) {
+        const midY = y + 4.6
+        doc.text(l.quantite != null ? qte(Number(l.quantite)) : '', xOf(1) + cols[1].w - 2, midY, { align: 'right' })
+        doc.text(eur(Number(l.prix_unitaire) || 0), xOf(3) + cols[3].w - 2, midY, { align: 'right' })
+        doc.setFont(F, 'bold')
+        doc.text(eur(ligneTotal), xOf(4) + cols[4].w - 2, midY, { align: 'right' })
+      }
+      doc.setDrawColor(BORD[0], BORD[1], BORD[2])
+      doc.setLineWidth(0.2)
+      doc.line(margin, y + rowH, pageW - margin, y + rowH)
+      y += rowH
+      index += n
     }
-    const midY = y + 4.6
-    doc.text(
-      l.quantite != null ? qte(Number(l.quantite)) : '',
-      xOf(1) + cols[1].w - 2,
-      midY,
-      { align: 'right' },
-    )
-    doc.text(l.unite || '', xOf(2) + 2, midY)
-    doc.text(eur(Number(l.prix_unitaire) || 0), xOf(3) + cols[3].w - 2, midY, { align: 'right' })
-    doc.setFont(F, 'bold')
-    doc.text(eur(ligneTotal), xOf(4) + cols[4].w - 2, midY, { align: 'right' })
-    // bordure bas
-    doc.setDrawColor(BORD[0], BORD[1], BORD[2])
-    doc.setLineWidth(0.2)
-    doc.line(margin, y + rowH, pageW - margin, y + rowH)
-    y += rowH
   }
   y += 6
 
@@ -295,13 +325,13 @@ export async function construireDevis(data: DevisData) {
   // Deux présentations : l'artisan en franchise porte la mention du CGI et un
   // seul total ; celui qui facture la TVA doit faire apparaître HT et TVA
   // séparément, faute de quoi le devis n'est pas opposable.
-  ensure(42)
   const boxW = 80
   const bx = pageW - margin - boxW
   const franchise = (data.tvaMode ?? 'franchise') === 'franchise'
   // Les totaux imprimés sortent du MÊME calcul que l'écran, et s'additionnent :
   // lignes arrondies, TVA arrondie par taux, TTC = HT + TVA imprimées.
   const vt = ventiler(data.lignes, !franchise)
+  ensure(35 + vt.parTaux.length * 5)
   doc.setFont(F, 'normal')
   doc.setFontSize(9)
 
@@ -346,6 +376,7 @@ export async function construireDevis(data: DevisData) {
   y += 16
 
   if (data.acomptePct && data.acomptePct > 0) {
+    ensure(7)
     const ac = arrondi((vt.ttc * data.acomptePct) / 100)
     doc.setFont(F, 'normal')
     doc.setFontSize(9.5)
@@ -404,6 +435,7 @@ export async function construireDevis(data: DevisData) {
   setColor(GRIS_CLAIR)
   for (const m of mentions) {
     for (const ligne of doc.splitTextToSize(m, largeur)) {
+      ensure(3.4)
       doc.text(ligne, margin, y)
       y += 3.4
     }
@@ -504,7 +536,21 @@ export async function construireDevis(data: DevisData) {
     ]
       .filter(Boolean)
       .join(' — ')
-    doc.text(pied, pageW / 2, pageH - 8, { align: 'center', maxWidth: largeur })
+    // Pied sur une seule ligne, distinct de la pagination, même pour une
+    // raison sociale longue. L’identité complète reste dans l’en-tête.
+    const piedMax = largeur - 20
+    let piedCourt = pied
+    if (doc.getTextWidth(pied) > piedMax) {
+      let debut = 0
+      let fin = pied.length
+      while (debut < fin) {
+        const milieu = Math.ceil((debut + fin) / 2)
+        if (doc.getTextWidth(`${pied.slice(0, milieu)}...`) <= piedMax) debut = milieu
+        else fin = milieu - 1
+      }
+      piedCourt = `${pied.slice(0, debut)}...`
+    }
+    doc.text(piedCourt, margin, pageH - 8)
     // Une page détachée d'un devis de trois pages doit pouvoir s'y raccrocher.
     if (total > 1) doc.text(`${p} / ${total}`, pageW - margin, pageH - 8, { align: 'right' })
   }

@@ -72,7 +72,7 @@ Les captures sont conservées localement dans `test-results/artisan-review/` ; e
 
 Les essais simulés ne prouvent ni la délivrabilité Gmail, ni la qualité des mesures IGN sur chaque bâtiment, ni l’exactitude des sorties IA. Aucun contrat réel n’a été signé et aucune API payante n’a été déclenchée pour l’audit. L’export PDF a été généré et son contenu vérifié ; une inspection exhaustive de chaque mise en page et de tous les cas de texte très long reste distincte de ces tests.
 
-Le carnet de tracés ne propose pas encore une réédition complète ni un transfert automatique de toutes les quantités dans les lignes de devis. La qualification des pertes reste à unifier entre certains parcours. Les notes/appels sont protégés contre les soumissions concurrentes dans l’interface, mais ne possèdent pas encore de clé idempotente persistante en cas de réponse réseau perdue. Les envois incertains nécessitent une réconciliation par l’agence ; aucun déblocage automatique ne doit provoquer un second email.
+À la première publication, le carnet de tracés, la qualification des pertes et le rejeu des notes/appels restaient à compléter. La reprise ci-dessous traite ces trois points. Le transfert automatique de toutes les quantités dans les lignes de devis reste distinct. Les envois incertains nécessitent une réconciliation par l’agence ; aucun déblocage automatique ne doit provoquer un second email.
 
 ## Publication
 
@@ -83,3 +83,20 @@ La cible a été recoupée avec le bundle du site public `crm-ci7k.vercel.app` :
 Les quatre fonctions `devis-envoyer`, `document-signe`, `devis-suggerer` et `facade-photo` sont déployées. Les secrets du relais ont été configurés et le workflow n8n dédié est **activé** ; le workflow générique précédent est conservé. Vingt contrôles distants ont vérifié les CORS, refus de jetons fictifs, callback authentifié sur une clé inexistante, six lectures du portail réel, protocole devis 2, permissions SQL et comptages. Le webhook actif refuse une requête non authentifiée et n’accuse pas un PDF invalide. Aucun email réel n’a été envoyé.
 
 L’interface et les rapports sont versionnés dans la [PR 83](https://github.com/agencecelexia-dotcom/crm/pull/83), avec les contrôles GitHub et les déploiements Vercel associés. Les anciens onglets doivent être rechargés après publication : les appels PDF et d’envoi utilisent désormais le nouveau protocole serveur.
+
+## Reprise du 8 novembre — finition des parcours
+
+La reprise part du commit publié `3a32cc5`. Elle conserve l’identité visuelle validée et le logo violet.
+
+- **Notes et appels** : une même tentative garde sa clé après une réponse réseau perdue, y compris après rechargement du même onglet. Le serveur conserve l’accusé dans la transaction de l’écriture. Un réessai identique relit cet accusé ; une nouvelle action volontaire possède une nouvelle clé. Le navigateur ne conserve dans ce mécanisme que des empreintes SHA-256 et des UUID, jamais le texte ni le jeton en clair. Les anciennes signatures RPC restent compatibles.
+- **Perte côté client** : motif normalisé et explication d’au moins cinq caractères. Le retrait décidé par l’artisan reste un parcours distinct. Aucun dossier historique n’est requalifié.
+- **Alertes** : « Devis à suivre » précise l’absence de mise à jour du dossier. Le logiciel ne prétend plus mesurer une réponse du client à partir d’une modification administrative.
+- **Devis** : aperçu intégré du PDF réellement généré, navigation entre pages, zoom, vue texte et téléchargement explicite. Revenir au devis conserve les saisies. Les descriptions et blocs longs bénéficient d’une pagination adaptée.
+- **Carnet de métrés** : réaffichage sur la carte, renommage et édition des points des dessins manuels de surface et de longueur, annulation, protection de fermeture et détection d’une modification concurrente. La sauvegarde conserve le même identifiant ; les quantités confirmées sur place restent distinctes.
+- **Aide** : explication des alertes, du contrôle avant envoi, de la reprise des dessins et de la distinction perte/retrait.
+
+Les migrations additionnelles `0189` et `0190` sont séparées des migrations déjà publiées. Elles ajoutent la protection du rejeu et l’édition des dessins sans recalcul global des données historiques. Elles ont été appliquées ensemble sur le projet existant le 8 novembre, après sauvegarde des 183 définitions de fonctions et des colonnes concernées. Les trois nouvelles signatures RPC refusent les jetons fictifs ; le journal et le helper de reçus restent privés. Les comptages artisans, projets, affectations, devis, suivis et métrés sont inchangés. Aucun dossier réel n’a servi à un essai d’écriture.
+
+Validation globale du code : **642 tests unitaires réussis, 1 ignoré**, **190 migrations chargées et 8 suites SQL réussies** ; TypeScript, ESLint et build réussis. Le contrôle visuel couvre le carnet sur ordinateur/mobile, le lecteur PDF et les 12 pages d’un devis long fictif.
+
+La première passe navigateur globale a réussi **207 scénarios sur 208**. Le dernier a été interrompu par un rechargement Vite déclenché pendant une modification de rapport Markdown : la trace montre le départ de l’onglet, une nouvelle requête de document et la reconnexion du serveur de développement. Le helper commun neutralise désormais ce seul WebSocket HMR ; aucune assertion ni règle applicative n’a été changée pour cet incident. Le scénario a ensuite réussi **huit rejeux ciblés** (cinq mobiles, trois ordinateurs). La CI rejoue la suite complète sur un serveur dédié au commit publié.
