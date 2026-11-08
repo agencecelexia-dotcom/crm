@@ -10,9 +10,11 @@ import { supabase } from '@/lib/supabase/client'
  * compteurs et `affectations` pour d'autres — d'où deux chiffres différents sur
  * le même écran, et 92 750 € d'écart sur le chiffre d'affaires.
  *
- * Chaque taux porte son dénominateur dans son nom : `sur_transmis` compte sur
- * tout ce qui est parti chez un artisan, `sur_devis` seulement sur les dossiers
- * arrivés au chiffrage. Les deux sont utiles ; les confondre était l'erreur.
+ * Les bornes filtrent la date de création de l'AFFECTATION, donc la transmission
+ * à l'artisan, et non la création du projet ou la signature. Les taux d'ouverture
+ * et de devis portent sur toutes les transmissions. Le taux de signature porte
+ * sur les devis avec une issue connue ; la conversion sur les dossiers clos ou
+ * rendus (les dossiers encore en cours sont exclus de ces deux dénominateurs).
  */
 export interface KpiAgence {
   // Volume
@@ -76,7 +78,7 @@ export interface KpiArtisan {
   delai_signature_j: number | null
 }
 
-/** Indicateurs agrégés. Sans bornes de dates, porte sur tout l'historique. */
+/** Indicateurs par période de transmission. Sans bornes : tout l'historique. */
 export function useKpiAgence(debut?: string, fin?: string) {
   return useQuery({
     queryKey: ['kpi-agence', debut ?? null, fin ?? null],
@@ -108,8 +110,9 @@ export function useKpiParArtisan(debut?: string, fin?: string) {
 
 /**
  * Chiffre d'affaires signé et commission, rangés au mois de la SIGNATURE
- * (`ca_signe_par_mois`, migration 0165) — même définition que `kpi_agence`,
- * dont le total retombe exactement.
+ * (`ca_signe_par_mois`, migration 0165). Le périmètre temporel diffère de
+ * `kpi_agence` : un chantier transmis en juin et signé en août est rangé en
+ * juin dans la cohorte de transmission, en août dans ce graphique.
  *
  * Le graphique lisait `projets.date_signature`, renseignée sur 3 dossiers
  * signés sur 15 : la courbe tombait à zéro en juillet, août et septembre, alors

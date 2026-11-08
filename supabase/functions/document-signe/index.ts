@@ -39,11 +39,24 @@ Deno.serve(async (req) => {
     // pour que le filtre porte sur la ligne qui prouve le lien artisan/chantier.
     const { data: affectation, error: ae } = await admin
       .from('affectations')
-      .select('projet_id')
+      .select('projet_id, artisan_id')
       .eq('token', token)
       .is('retire_at', null)
+      .is('masque_at', null)
       .maybeSingle()
     if (ae || !affectation) return json({ ok: false, error: 'accès refusé' }, 403)
+    const { data: artisan, error: artisanErreur } = await admin.from('artisans')
+      .select('id, contrat_externe').eq('id', affectation.artisan_id).is('ecarte_at', null).maybeSingle()
+    if (artisanErreur || !artisan) return json({ ok: false, error: 'accès refusé' }, 403)
+    const { data: projet } = await admin.from('projets').select('id')
+      .eq('id', affectation.projet_id).is('deleted_at', null).neq('statut', 'mort').maybeSingle()
+    if (!projet) return json({ ok: false, error: 'accès refusé' }, 403)
+    if (!artisan.contrat_externe) {
+      const { data: contrats, error: contratErreur } = await admin.from('contrats').select('id')
+        .eq('artisan_id', artisan.id).eq('statut', 'signe').limit(1)
+      if (contratErreur || !contrats?.length) return json({ ok: false, error: 'accès refusé' }, 403)
+    }
+
 
     const { data: doc, error: de } = await admin
       .from('projet_documents')

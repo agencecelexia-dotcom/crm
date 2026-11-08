@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { LogOut, Loader2, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -55,19 +55,21 @@ export function RetraitChantierDialog({
   const [motif, setMotif] = useState<MotifPerte | ''>('')
   const [recontacterLe, setRecontacterLe] = useState('')
   const [envoi, setEnvoi] = useState(false)
+  const envoiEnCours = useRef(false)
 
   const def = motifDef(motif)
   const raisonValide = raison.trim().length >= RAISON_MIN && motif !== ''
 
   async function confirmer() {
-    if (!raisonValide || envoi) return
+    if (!raisonValide || envoiEnCours.current) return
+    envoiEnCours.current = true
     setEnvoi(true)
     try {
       const { data, error } = await supabase.rpc('retirer_chantier_by_token', {
         p_token: token,
         p_raison: raison.trim(),
         p_motif: motif,
-        p_recontacter_le: recontacterLe || null,
+        p_recontacter_le: def?.relancable ? recontacterLe || null : null,
       })
       const r = data as { ok?: boolean; error?: string } | null
       if (error || !r?.ok) {
@@ -102,6 +104,7 @@ export function RetraitChantierDialog({
         description: e instanceof Error ? e.message : 'Réessayez ou contactez Celexia.',
       })
     } finally {
+      envoiEnCours.current = false
       setEnvoi(false)
     }
   }
@@ -113,7 +116,7 @@ export function RetraitChantierDialog({
         variant="ghost"
         size="sm"
         onClick={() => setOuvert(true)}
-        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        className="min-h-11 whitespace-normal text-muted-foreground hover:bg-destructive/5 hover:text-destructive"
       >
         <LogOut className="size-4" />
         Me retirer de ce chantier
@@ -128,21 +131,21 @@ export function RetraitChantierDialog({
           if (!o) { setRaison(''); setMotif(''); setRecontacterLe('') }
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[10px]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertDialogTitle className="flex items-start gap-3 text-left">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-destructive/5 text-destructive">
                 <AlertTriangle className="size-5" />
               </span>
               Vous retirer de ce chantier ?
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-left text-sm leading-relaxed">
                 <p>
-                  Ce chantier disparaîtra de votre espace et vous n'aurez plus accès aux
-                  coordonnées du client. Celexia sera prévenu et le réattribuera.
+                  Ce chantier quittera votre liste active. Celexia sera prévenu de votre retrait
+                  et pourra le proposer à un autre artisan.
                 </p>
-                <p className="font-medium text-foreground">Cette action est définitive.</p>
+                <p className="font-medium text-foreground">Vous le retrouverez dans vos chantiers perdus. Sa reprise restera possible tant qu’il n’aura pas été confié à un autre artisan ou clôturé.</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -151,8 +154,8 @@ export function RetraitChantierDialog({
             <Label htmlFor="motif-retrait">
               Pourquoi ce chantier est-il perdu ? <span className="text-destructive">*</span>
             </Label>
-            <Select value={motif} onValueChange={(v) => setMotif(v as MotifPerte)}>
-              <SelectTrigger id="motif-retrait" className="h-11">
+            <Select value={motif} onValueChange={(v) => { setMotif(v as MotifPerte); if (!motifDef(v)?.relancable) setRecontacterLe('') }}>
+              <SelectTrigger id="motif-retrait" className="h-11 w-full">
                 <SelectValue placeholder="Choisir un motif" />
               </SelectTrigger>
               <SelectContent>
@@ -184,7 +187,7 @@ export function RetraitChantierDialog({
                 onChange={(e) => setRecontacterLe(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Le chantier vous sera resignalé à cette date.
+                Celexia recevra une notification à cette date pour réexaminer le dossier.
               </p>
             </div>
           )}
@@ -212,12 +215,13 @@ export function RetraitChantierDialog({
           </div>
 
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={envoi}>Annuler</AlertDialogCancel>
+            <AlertDialogCancel className="min-h-11" disabled={envoi}>Annuler</AlertDialogCancel>
             {/* Bouton simple (pas AlertDialogAction) : celui-ci ferme la fenêtre
                 automatiquement au clic, ce qui masquerait une erreur serveur. */}
             <Button
               type="button"
               variant="destructive"
+              className="min-h-11"
               disabled={!raisonValide || envoi}
               onClick={() => void confirmer()}
             >

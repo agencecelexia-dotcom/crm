@@ -1,0 +1,191 @@
+{
+  "name": "Celexia — devis avec confirmation serveur (à configurer)",
+  "active": false,
+  "nodes": [
+    {
+      "id": "devis-webhook",
+      "name": "Recevoir le devis",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "celexia-devis-confirme-v1",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "ce38aebd-c3ec-46af-aee8-24a275cd00f2"
+    },
+    {
+      "id": "devis-validation",
+      "name": "Valider le devis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const p = $input.first().json.body;\nif (!p || p.event !== 'envoyer_devis_client' || typeof p.idempotency_key !== 'string' || !/^[0-9a-f-]{36}$/i.test(p.idempotency_key)) throw new Error('Requête invalide');\nif (typeof p.email !== 'string' || !/^[^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]+$/.test(p.email)) throw new Error('Destinataire invalide');\nif (typeof p.pdf_base64 !== 'string' || p.pdf_base64.length > 14000000) throw new Error('PDF absent ou trop volumineux');\nif (typeof p.html !== 'string' || p.html.length > 1000000 || typeof p.subject !== 'string' || p.subject.length > 500) throw new Error('Contenu invalide');\nconst pdf = Buffer.from(p.pdf_base64, 'base64');\nif (pdf.length > 10000000 || pdf.subarray(0,5).toString() !== '%PDF-') throw new Error('PDF invalide');\nreturn [{ json: { email: p.email, subject: p.subject, html: p.html, idempotency_key: p.idempotency_key }, binary: { pdf: { data: p.pdf_base64, mimeType: 'application/pdf', fileName: String(p.filename || 'devis.pdf').replace(/[^a-z0-9._-]/gi, '_') } } }];"
+      }
+    },
+    {
+      "id": "devis-claim",
+      "name": "Réserver la remise unique",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        490,
+        0
+      ],
+      "retryOnFail": false,
+      "onError": "stopWorkflow",
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUPABASE_PROJECT_REF.supabase.co/functions/v1/devis-envoyer",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'prendre_envoi', idempotency_key: $json.idempotency_key } }}",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "devis-claim-valide",
+      "name": "Vérifier la remise unique",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        730,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\nif (r.ok !== true) throw new Error('Envoi refusé : clé déjà utilisée, inconnue ou état à vérifier. Aucun email supplémentaire ne doit partir.');\nconst original = $('Valider le devis').first();\nreturn [{ json: original.json, binary: original.binary }];"
+      }
+    },
+    {
+      "id": "devis-smtp",
+      "name": "Remettre à Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        970,
+        0
+      ],
+      "retryOnFail": false,
+      "onError": "stopWorkflow",
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false,
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "pdf"
+              }
+            ]
+          }
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CONFIGURER_CREDENTIAL_GMAIL",
+          "name": "Compte Gmail Celexia"
+        }
+      }
+    },
+    {
+      "id": "devis-confirmation",
+      "name": "Confirmer la prise en charge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1210,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: !!$json.id, accepted: !!$json.id, idempotency_key: $('Valider le devis').first().json.idempotency_key } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recevoir le devis": {
+      "main": [
+        [
+          {
+            "node": "Valider le devis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valider le devis": {
+      "main": [
+        [
+          {
+            "node": "Réserver la remise unique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remettre à Gmail": {
+      "main": [
+        [
+          {
+            "node": "Confirmer la prise en charge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Réserver la remise unique": {
+      "main": [
+        [
+          {
+            "node": "Vérifier la remise unique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier la remise unique": {
+      "main": [
+        [
+          {
+            "node": "Remettre à Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "executionTimeout": 40
+  },
+  "pinData": {},
+  "tags": []
+}

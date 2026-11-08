@@ -50,8 +50,8 @@ export function DemarrageDevis({
 }) {
   const [force, setForce] = useState(false)
   const ouvert = force || !replie
-  const { data: modeles } = useModelesDevis(token, metier)
-  const { data: devis } = useListeDevis(token)
+  const { data: modeles, isError: modelesErreur, refetch: rechargerModeles } = useModelesDevis(token, metier)
+  const { data: devis, isError: devisErreur, refetch: rechargerDevis } = useListeDevis(token)
   const dupliquer = useDupliquerDevis(token)
   const [choixDevis, setChoixDevis] = useState(false)
 
@@ -63,6 +63,7 @@ export function DemarrageDevis({
     toast.success(`${m.nom} — ${m.nb_lignes} ligne${m.nb_lignes > 1 ? 's' : ''} ajoutée${m.nb_lignes > 1 ? 's' : ''}`)
   }
 
+  if (modelesErreur || devisErreur) return <div role="alert" className="rounded-lg border border-border p-3 text-xs"><p>Les modèles ou les devis à copier sont indisponibles.</p><Button variant="outline" size="sm" className="mt-2" onClick={() => { void rechargerModeles(); void rechargerDevis() }}>Réessayer les modèles</Button></div>
   if (!modeles?.length && !reprises.length) return null
 
   if (replie && !ouvert)
@@ -123,7 +124,7 @@ export function DemarrageDevis({
             className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
           >
             <Copy className="size-3.5 text-muted-foreground" />
-            Reprendre un devis
+            Copier les lignes d’un devis
           </button>
         )}
       </div>
@@ -182,7 +183,7 @@ export function BibliothequePrix({
   token: string
   onAjouter: (p: PrixArtisan) => void
 }) {
-  const { data: prix } = usePrixArtisan(token)
+  const { data: prix, isError, refetch } = usePrixArtisan(token)
   const [q, setQ] = useState('')
 
   const resultats = useMemo(() => {
@@ -191,6 +192,7 @@ export function BibliothequePrix({
     return (prix ?? []).filter((p) => p.designation.toLowerCase().includes(t)).slice(0, 20)
   }, [prix, q])
 
+  if (isError) return <div role="alert" className="rounded-lg border border-border p-3 text-xs"><p>Votre bibliothèque de prix est indisponible.</p><Button variant="outline" size="sm" className="mt-2" onClick={() => void refetch()}>Réessayer les prix</Button></div>
   if (!prix?.length) return null
 
   return (
@@ -331,7 +333,8 @@ export function EnregistrerModele({
                     variant="ghost"
                     className="size-7 shrink-0 text-muted-foreground"
                     aria-label={`Supprimer ${m.nom}`}
-                    onClick={() => supprimer.mutate(m.id!)}
+                    disabled={supprimer.isPending}
+                    onClick={() => { if (window.confirm(`Supprimer le modèle « ${m.nom} » ?`)) supprimer.mutate(m.id!, { onError: () => toast.error('Le modèle n’a pas pu être supprimé'), onSuccess: () => toast.success('Modèle supprimé') }) }}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>

@@ -2,16 +2,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import { N8N_WEBHOOK_URL } from '@/lib/constants'
 import type { Devis } from '@/types/database'
+import type { DevisData } from './devis-pdf'
+
+type DevisListe = Devis & { revision?: number; envoi_etat?: string | null }
 
 /** Liste des devis de l'artisan (token d'espace). */
 export function useListeDevis(token: string | undefined) {
   return useQuery({
     queryKey: ['devis', token],
     enabled: !!token,
-    queryFn: async (): Promise<Devis[]> => {
+    queryFn: async (): Promise<DevisListe[]> => {
       const { data, error } = await supabase.rpc('list_devis_by_token', { p_token: token })
       if (error) throw error
-      return (data as Devis[]) ?? []
+      return (data as DevisListe[]) ?? []
     },
   })
 }
@@ -120,6 +123,12 @@ export function useSuggestionsDevis(token: string | undefined) {
 }
 
 export interface DevisPayload {
+  devis_id?: string
+  expected_revision?: number
+  idempotency_key?: string
+  document_data?: DevisData
+  email_html?: string
+  email_subject?: string
   affectation_token?: string
   client_nom?: string
   client_adresse?: string
@@ -148,16 +157,28 @@ export interface DevisPayload {
 
 /** Crée le devis en base (numéro attribué côté serveur). */
 export function useCreerDevis(token: string | undefined) {
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (payload: DevisPayload): Promise<{ id: string; numero: string }> => {
+    mutationFn: async (payload: DevisPayload): Promise<{ id: string; numero: string; revision: number }> => {
+      // Une ancienne RPC ignore devis_id/idempotency_key : découvrir son
+      // incompatibilité APRÈS l'appel aurait déjà réservé un autre numéro.
+      // Lecture à chaque tentative, sans cache positif pendant le déploiement.
+      const { data: capacites, error: erreurCapacites } = await supabase.rpc('capacites_devis_by_token', {
+        p_token: token,
+      })
+      const support = capacites as { ok?: boolean; version?: number; sauvegarde_idempotente?: boolean; revisions?: boolean; error?: string } | null
+      if (erreurCapacites || support?.ok !== true || support.version !== 2 || support.sauvegarde_idempotente !== true || support.revisions !== true) {
+        throw new Error(messageDevis(support?.error) ?? 'La sauvegarde des devis est temporairement indisponible pendant la mise à jour. Vos saisies sont conservées. Réessayez plus tard.')
+      }
       const { data, error } = await supabase.rpc('creer_devis_by_token', {
         p_token: token,
         p_payload: payload,
       })
-      const r = data as { ok?: boolean; id?: string; numero?: string } | null
-      if (error || !r?.ok) throw new Error('Création du devis impossible')
-      return { id: r.id!, numero: r.numero! }
+      const r = data as { ok?: boolean; id?: string; numero?: string; revision?: number; error?: string } | null
+      if (error || !r?.ok || !r.id || !r.numero || typeof r.revision !== 'number') throw new Error(messageDevis(r?.error) ?? error?.message ?? 'Sauvegarde du devis impossible')
+      return { id: r.id, numero: r.numero, revision: r.revision }
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['devis', token] }),
   })
 }
 
@@ -165,40 +186,68 @@ export function useCreerDevis(token: string | undefined) {
 export function useSetDevisPdf(token: string | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, url }: { id: string; url: string }) => {
-      const { error } = await supabase.rpc('set_devis_pdf_by_token', {
+    mutationFn: async ({ id, url, revision }: { id: string; url: string; revision: number }) => {
+      const { data, error } = await supabase.rpc('set_devis_pdf_by_token', {
         p_token: token,
         p_devis_id: id,
         p_url: url,
+        p_revision: revision,
       })
-      if (error) throw error
+      if (error || !(data as { ok?: boolean })?.ok) throw new Error(messageDevis((data as { error?: string })?.error) ?? error?.message ?? 'Le PDF n’a pas pu être rattaché au brouillon. Réessayez.')
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['devis', token] }),
   })
 }
 
-/** Marque le devis comme envoyé (+ répercussion CRM) et renvoie de quoi mailer. */
+/** L'endpoint vérifie les droits, réserve l'envoi puis attend un accusé serveur. */
 export function useEnvoyerDevis(token: string | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (
-      id: string,
-    ): Promise<{ client_email: string | null; numero: string; total: number; pdf_url: string | null }> => {
-      const { data, error } = await supabase.rpc('envoyer_devis_by_token', {
-        p_token: token,
-        p_devis_id: id,
-      })
-      const r = data as
-        | { ok?: boolean; client_email: string | null; numero: string; total: number; pdf_url: string | null }
-        | null
-      if (error || !r?.ok) throw new Error('Envoi impossible')
+    mutationFn: async ({ id, revision }: { id: string; revision: number }) => {
+      const { data, error } = await supabase.functions.invoke('devis-envoyer', { body: { token, devis_id: id, revision } })
+      const r = data as { ok?: boolean; error?: string; deja_envoye?: boolean } | null
+      if (error || !r?.ok) throw new Error(messageDevis(r?.error) ?? 'Envoi non confirmé. Le devis est conservé. Vérifiez son état avant de réessayer.')
       return r
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['devis', token] })
-      qc.invalidateQueries({ queryKey: ['espace', token] })
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['devis', token] })
+      void qc.invalidateQueries({ queryKey: ['espace', token] })
     },
   })
+}
+
+export type BrouillonDevis = DevisPayload & {
+  id: string; numero: string; revision: number; statut: string; envoi_etat?: string | null
+}
+
+export function useReprendreDevis(token: string) {
+  return useMutation({
+    mutationFn: async (id: string): Promise<BrouillonDevis> => {
+      const { data, error } = await supabase.rpc('devis_by_token', { p_token: token, p_devis_id: id })
+      const r = data as { ok?: boolean; error?: string; devis?: BrouillonDevis } | null
+      if (error || !r?.ok || !r.devis) throw new Error(messageDevis(r?.error) ?? 'Ce brouillon ne peut pas être ouvert. Réessayez.')
+      return r.devis
+    },
+  })
+}
+
+function messageDevis(code?: string): string | undefined {
+  const messages: Record<string, string> = {
+    revision_conflit: 'Ce brouillon a été modifié dans un autre onglet. Vos saisies restent affichées ; fermez puis reprenez la dernière version avant de continuer.',
+    devis_verrouille: 'Ce devis est déjà envoyé et ne peut plus être modifié.',
+    envoi_a_verifier: 'La prise en charge de cet envoi reste à vérifier auprès de Celexia. Aucun nouvel email n’a été envoyé.',
+    chiffrage_non_active: 'Vos assurances doivent être validées avant de créer un devis.',
+    valeurs_invalides: 'Vérifiez les quantités, prix, taux et acompte du devis.',
+    client_requis: 'Indiquez le nom du client.',
+    email_invalide: 'Vérifiez l’adresse email du client.',
+    pdf_requis: 'Enregistrez le PDF du devis avant de l’envoyer.',
+    service_non_configure: 'Le service d’envoi n’est pas disponible. Votre brouillon et son PDF restent enregistrés.',
+  }
+  return code ? messages[code] : undefined
+}
+
+function echapperHtml(texte: string) {
+  return texte.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -218,9 +267,9 @@ export async function envoyerDevisPdfEmail(p: {
   pdf: Blob
 }) {
   const pdf_base64 = await blobToBase64(p.pdf)
-  await fetch(N8N_WEBHOOK_URL, {
+  const response = await fetch(N8N_WEBHOOK_URL, {
     method: 'POST',
-    mode: 'no-cors',
+    mode: 'cors',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       event: 'envoyer_devis_pdf',
@@ -228,12 +277,13 @@ export async function envoyerDevisPdfEmail(p: {
       numero: p.numero,
       filename: `devis-${p.numero}.pdf`,
       subject: `Votre devis ${p.numero}${p.client_nom ? ' — ' + p.client_nom : ''}`,
-      html: `<p>Bonjour,</p><p>Voici votre devis <b>${p.numero}</b>${
-        p.client_nom ? ' pour <b>' + p.client_nom + '</b>' : ''
+      html: `<p>Bonjour,</p><p>Voici votre devis <b>${echapperHtml(p.numero)}</b>${
+        p.client_nom ? ' pour <b>' + echapperHtml(p.client_nom) + '</b>' : ''
       } en pièce jointe (PDF).</p><p>— Celexia</p>`,
       pdf_base64,
     }),
   })
+  if (!response.ok || response.type === 'opaque') throw new Error('Envoi non confirmé par le serveur')
 }
 
 /**
@@ -252,9 +302,9 @@ export async function envoyerDevisAuClient(p: {
   pdf: Blob
 }) {
   const pdf_base64 = await blobToBase64(p.pdf)
-  await fetch(N8N_WEBHOOK_URL, {
+  const response = await fetch(N8N_WEBHOOK_URL, {
     method: 'POST',
-    mode: 'no-cors',
+    mode: 'cors',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       event: 'envoyer_devis_client',
@@ -266,6 +316,7 @@ export async function envoyerDevisAuClient(p: {
       pdf_base64,
     }),
   })
+  if (!response.ok || response.type === 'opaque') throw new Error('Envoi non confirmé par le serveur')
 }
 
 /** Une ligne telle qu'elle vit dans un modèle ou dans un devis dupliqué. */
@@ -334,11 +385,11 @@ export function useSupprimerModele(token: string | undefined) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('supprimer_modele_by_token', {
+      const { data, error } = await supabase.rpc('supprimer_modele_by_token', {
         p_token: token,
         p_id: id,
       })
-      if (error) throw error
+      if (error || !(data as { ok?: boolean })?.ok) throw new Error('Suppression impossible')
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['devis-modeles', token] }),
   })

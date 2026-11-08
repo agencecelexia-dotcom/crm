@@ -1,411 +1,210 @@
-import { useCaParMois, useKpiAgence, useKpiParArtisan } from './use-kpi'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { isSameMonth, parseISO, format, startOfMonth } from 'date-fns'
+import { format, parseISO, startOfMonth, subDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { FolderKanban, Users, Euro, Wallet, PhoneCall, Trophy, Clock, FileText, XCircle } from 'lucide-react'
+import { ArrowUpRight, Plus } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
-import { SectionTitre } from '@/components/section-titre'
 import { StatutBadge } from '@/components/statut-badge'
-import { KpiTile } from '@/components/kpi-tile'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { CardTitre } from '@/components/card-titre'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { STATUTS, STATUTS_ORDRE, STATUTS_PERTE } from '@/lib/constants'
-import { formatEuros, formatDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { dansLePipeline, STATUTS, STATUTS_ORDRE, STATUTS_PERTE } from '@/lib/constants'
+import { formatEuros, formatDate, formatTel } from '@/lib/format'
+import { useDroits } from '@/lib/auth/use-droits'
 import { useProjets } from '@/features/projets/hooks/use-projets'
 import { useArtisans } from '@/features/artisans/hooks/use-artisans'
+import { useCaParMois, useKpiParArtisan } from './use-kpi'
 import { ActionDuJour } from './action-du-jour'
 import { ATraiter } from './a-traiter'
-
-// recharts pèse 361 kB : chargé à la demande, il ne ralentit plus l'ouverture
-// du CRM pour ceux qui ne consultent jamais ces graphiques.
-const GraphiqueStatuts = lazy(() =>
-  import('./graphiques').then((m) => ({ default: m.GraphiqueStatuts })),
-)
-const GraphiqueCa = lazy(() =>
-  import('./graphiques').then((m) => ({ default: m.GraphiqueCa })),
-)
-
-/** Réserve la hauteur du graphique pendant son chargement, pour éviter que la
- *  page ne saute au moment où il apparaît. */
-function GraphiqueEnAttente({ h }: { h: number }) {
-  return <Skeleton className="w-full rounded-xl" style={{ height: h }} />
-}
-import { PanneauKpi } from './panneau-kpi'
+import { DetailsKpi, PanneauKpi, ParcoursChantiers } from './panneau-kpi'
 import { QualiteLeads } from './qualite-leads'
+import { DashboardFeedback } from './dashboard-feedback'
+
+const GraphiqueCa = lazy(() => import('./graphiques').then((m) => ({ default: m.GraphiqueCa })))
+const PERIODES = [
+  { cle: 'mois', label: 'Ce mois-ci' },
+  { cle: '90', label: '90 jours' },
+  { cle: 'tout', label: 'Tout l’historique' },
+] as const
+
+type Periode = (typeof PERIODES)[number]['cle']
 
 export function DashboardPage() {
-  const { data: projets, isLoading } = useProjets()
-  const { data: artisans } = useArtisans()
-  const [periode, setPeriode] = useState<'mois' | 'total'>('mois')
+  const projetsQuery = useProjets()
+  const artisansQuery = useArtisans()
+  const { peutCreerLead } = useDroits()
+  const [periode, setPeriode] = useState<Periode>('mois')
+  const [vueProjets, setVueProjets] = useState<'recents' | 'rappels'>('recents')
+  const debutPeriode = periode === 'tout'
+    ? undefined
+    : format(periode === 'mois' ? startOfMonth(new Date()) : subDays(new Date(), 89), 'yyyy-MM-dd')
+  const kpiArtisansQuery = useKpiParArtisan(debutPeriode)
+  const caQuery = useCaParMois(6)
+  const projets = projetsQuery.data ?? []
 
-  // L'ARGENT NE SE CALCULE PLUS DANS LE NAVIGATEUR.
-  //
-  // Ces tuiles additionnaient `projets.montant_devis_signe` sans vérifier
-  // qu'une signature existe : un dossier « en attente » saisi à 60 000 € y
-  // comptait pour 60 000 € de ventes et 6 000 € de commission. Le même écran
-  // affichait ainsi jusqu'à trois valeurs pour un même indicateur (CA signé
-  // 78 858 € ici, 138 858 € là). Tout ce qui est argent vient désormais de
-  // `kpi_agence()`, qui ne compte que les affectations réellement gagnées —
-  // bornée au mois en cours ou à tout l'historique, selon l'onglet.
-  const debutPeriode = periode === 'mois' ? format(startOfMonth(new Date()), 'yyyy-MM-dd') : undefined
-  const { data: kpi } = useKpiAgence(debutPeriode)
-  const { data: kpiArtisans } = useKpiParArtisan(debutPeriode)
+  const topArtisans = useMemo(() => (kpiArtisansQuery.data ?? [])
+    .filter((a) => a.ca_signe > 0)
+    .sort((a, b) => b.ca_signe - a.ca_signe)
+    .slice(0, 5), [kpiArtisansQuery.data])
 
-  // Filtre période sur la date de création du projet.
-  const projetsPeriode = useMemo(() => {
-    if (!projets) return []
-    if (periode === 'total') return projets
-    const now = new Date()
-    return projets.filter((p) => isSameMonth(parseISO(p.created_at), now))
-  }, [projets, periode])
-
-  // Agrégats.
-  const stats = useMemo(() => {
-    const ca = kpi?.ca_signe ?? 0
-    const commission = kpi?.commission_acquise ?? 0
-    const encaissee = kpi?.commission_encaissee ?? 0
-
-    const enAttente = projetsPeriode.filter((p) => p.statut === 'en_attente')
-    const devisEnvoyes = projetsPeriode.filter((p) => p.statut === 'devis_envoye')
-    const devisEnvoyesMontant = devisEnvoyes.reduce((s, p) => s + (p.montant_devis ?? 0), 0)
-
-    const parStatut = STATUTS_ORDRE.map((s) => ({
-      statut: s,
-      label: STATUTS[s].label,
-      color: STATUTS[s].color,
-      count: projetsPeriode.filter((p) => p.statut === s).length,
-    }))
-
-    return {
-      nbProjets: projetsPeriode.length,
-      ca,
-      commission,
-      encaissee,
-      aEncaisser: kpi?.commission_a_encaisser ?? 0,
-      enAttenteCount: enAttente.length,
-      devisEnvoyesCount: devisEnvoyes.length,
-      devisEnvoyesMontant,
-      parStatut,
-    }
-  }, [projetsPeriode, kpi])
-
-  // Pertes, indépendant de la période : « perdu » (lâché par un artisan, le
-  // chantier reste réattribuable) + « mort » (client parti ailleurs, agence).
-  const perdus = useMemo(() => {
-    const items = (projets ?? []).filter((p) => STATUTS_PERTE.includes(p.statut))
-    const valeur = items.reduce((s, p) => s + (p.montant_devis ?? p.estimation_interne ?? 0), 0)
-    return { count: items.length, valeur }
-  }, [projets])
-
-  const derniers = (projets ?? []).slice(0, 5)
-
-  // Leads à traiter (à rappeler / en attente) — actionnable, indépendant de la période.
-  const aFaire = useMemo(
-    () => (projets ?? []).filter((p) => p.statut === 'a_rappeler' || p.statut === 'en_attente'),
-    [projets],
-  )
-
-  // CA + commissions par mois de SIGNATURE, sur les 6 derniers mois.
-  const { data: parMois } = useCaParMois(6)
-  const moisData = (parMois ?? []).map((m) => ({
-    key: m.mois,
-    label: format(parseISO(`${m.mois}-01`), 'MMM', { locale: fr }),
-    ca: Number(m.ca) || 0,
-    commission: Number(m.commission) || 0,
+  const moisData = (caQuery.data ?? []).map((m) => ({
+    label: format(parseISO(`${m.mois}-01`), 'MMM yy', { locale: fr }),
+    ca: Number(m.ca),
+    commission: Number(m.commission),
   }))
 
-  // Top artisans : chiffre d'affaires RÉELLEMENT signé sur la période. Le
-  // classement par commission lisait les projets, dossier fantôme compris.
-  const topArtisans = useMemo(
-    () =>
-      (kpiArtisans ?? [])
-        .filter((a) => (a.ca_signe ?? 0) > 0)
-        .sort((a, b) => b.ca_signe - a.ca_signe)
-        .slice(0, 5)
-        .map((a) => ({ name: a.artisan_nom, total: a.ca_signe })),
-    [kpiArtisans],
-  )
+  // Ces listes décrivent le portefeuille actuel, indépendamment de la période
+  // de transmission choisie pour les indicateurs d'activité.
+  const aRappeler = projets.filter((p) => p.statut === 'a_rappeler' || p.statut === 'en_attente')
+  const actifs = projets.filter((p) => dansLePipeline(p.statut) && !['perdu', 'mort', 'termine', 'devis_signe'].includes(p.statut))
+  const estimes = actifs.filter((p) => p.estimation_interne != null)
+  const potentiel = estimes.reduce((s, p) => s + (p.estimation_interne ?? 0), 0)
+  const commissionPotentielle = estimes.reduce((s, p) => s + (p.estimation_interne ?? 0) * (p.taux_commission ?? 0.1), 0)
+  const perdus = projets.filter((p) => STATUTS_PERTE.includes(p.statut))
+  const valeurPerdue = perdus.reduce((s, p) => s + (p.montant_devis ?? p.estimation_interne ?? 0), 0)
+  const devisEnAttente = projets.filter((p) => p.statut === 'devis_envoye')
+  const parStatut = STATUTS_ORDRE.map((statut) => ({ statut, count: projets.filter((p) => p.statut === statut).length }))
+    .filter((s) => s.count > 0)
 
-  // Potentiel du pipeline (estimation INTERNE, jamais visible des artisans) :
-  // somme des estimations des projets encore en cours.
-  const pipeline = useMemo(() => {
-    const actifs = (projets ?? []).filter(
-      (p) => !['perdu', 'mort', 'termine', 'devis_signe'].includes(p.statut),
-    )
-    const total = actifs.reduce((s, p) => s + (p.estimation_interne ?? 0), 0)
-    const nb = actifs.filter((p) => p.estimation_interne != null).length
-    return { total, commission: Math.round(total * 0.1), nb }
-  }, [projets])
-
-  // Répartition de la commission encaissée / à encaisser (barre proportionnelle).
-  const pctEncaissee = stats.commission > 0 ? Math.round((stats.encaissee / stats.commission) * 100) : 0
+  const projetsAffiches = (vueProjets === 'rappels' ? aRappeler : projets).slice(0, 5)
 
   return (
-    <div>
-      <PageHeader titre="Tableau de bord" />
+    <div className="space-y-6">
+      <PageHeader
+        titre="Tableau de bord"
+        sousTitre={format(new Date(), 'EEEE d MMMM yyyy', { locale: fr })}
+        action={peutCreerLead && <Button asChild><Link to="/projets/new"><Plus className="size-4" aria-hidden />Nouveau projet</Link></Button>}
+      />
 
-      {/* Ce qui appelle une action, en tête : le reste de la page est du bilan,
-          utile mais qui ne dit pas quoi faire ce matin. */}
-      <ATraiter />
-
-      <ActionDuJour />
-
-      {/* Indicateurs, source unique `kpi_agence()` (migration 0103).
-          Tout part de `affectations` : c'est le seul niveau qui sait quel
-          artisan a signé. L'ancienne vue mélangeait deux sources, d'où deux
-          chiffres différents sur le même écran. */}
-      <PanneauKpi />
-
-
-      <QualiteLeads />
-
-      {/* Filtre période */}
-      <Tabs
-        value={periode}
-        onValueChange={(v) => setPeriode(v as 'mois' | 'total')}
-        className="mb-4"
-      >
-        <TabsList className="w-full">
-          {/* Les indicateurs rangent par date d'arrivée du LEAD (cohorte) : ce
-              que sont devenus les chantiers reçus ce mois-ci. Le graphique, lui,
-              range par date de signature. */}
-          <TabsTrigger value="mois" className="flex-1">
-            Leads du mois
-          </TabsTrigger>
-          <TabsTrigger value="total" className="flex-1">
-            Total
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {isLoading ? (
-        <div className="grid grid-cols-2 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-2xl" />
-          ))}
+      <section aria-labelledby="resultats-titre" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="resultats-titre" className="text-sm font-medium">Performance de l’agence</h2>
+            <p className="mt-1 text-xs text-muted-foreground">{debutPeriode ? `Chantiers transmis depuis le ${formatDate(debutPeriode)}` : 'Toutes les transmissions aux artisans'} · résultats connus à ce jour</p>
+          </div>
+          <div role="group" aria-label="Période des chantiers transmis" className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-1">
+            {PERIODES.map((p) => (
+              <button key={p.cle} type="button" aria-pressed={periode === p.cle} onClick={() => setPeriode(p.cle)}
+                className={cn('min-h-11 rounded-md px-3 text-xs transition-colors md:min-h-8', periode === p.cle ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
-      ) : (
-        <>
-          {/* Vue d'ensemble */}
-          <SectionTitre className="mt-8 first:mt-0">Vue d'ensemble</SectionTitre>
-          <div className="grid grid-cols-2 gap-3">
-            <KpiTile icon={FolderKanban} label="Projets" valeur={String(stats.nbProjets)} />
-            <KpiTile icon={Users} label="Artisans" valeur={String(artisans?.length ?? 0)} />
-            <KpiTile icon={Euro} label="Ventes" sousLabel="CA généré" valeur={formatEuros(stats.ca)} />
-            <KpiTile icon={Wallet} label="Commission totale" valeur={formatEuros(stats.commission)} tone="brand" />
-          </div>
+        <PanneauKpi debutPeriode={debutPeriode} />
+      </section>
 
-          {/* Pipeline & argent en attente */}
-          <SectionTitre className="mt-8 first:mt-0">Pipeline &amp; argent en attente</SectionTitre>
-          <div className="grid grid-cols-2 gap-3">
-            <KpiTile icon={Clock} label="En attente" valeur={String(stats.enAttenteCount)} tone="warning" />
-            <KpiTile
-              icon={FileText}
-              label="Devis envoyés"
-              sousLabel="en attente de réponse"
-              valeur={String(stats.devisEnvoyesCount)}
-              tone="warning"
-            />
-            <div className="col-span-2">
-              <KpiTile
-                icon={Euro}
-                label="Montant en devis envoyés"
-                sousLabel={`sur ${stats.devisEnvoyesCount} devis en attente de signature`}
-                valeur={formatEuros(stats.devisEnvoyesMontant)}
-                tone="warning"
-              />
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <aside aria-labelledby="priorites-titre" className="min-w-0 overflow-hidden xl:order-2 rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-5 py-5">
+            <h2 id="priorites-titre" className="text-base font-medium">À traiter</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Situation actuelle · toutes périodes</p>
+          </div>
+          <ATraiter />
+          <ActionDuJour />
+        </aside>
+
+        <section aria-labelledby="signatures-titre" className="min-w-0 overflow-hidden xl:order-1 rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-start justify-between gap-2 px-5 pb-2 pt-5 sm:px-6 sm:pt-6">
+            <div>
+              <h2 id="signatures-titre" className="text-base font-medium">Évolution des signatures</h2>
+              <p className="mt-1 text-xs text-muted-foreground">CA signé et commissions · 6 derniers mois</p>
             </div>
+            <span className="text-xs text-muted-foreground">Par date de signature</span>
           </div>
+          <div className="px-3 pb-4 pt-4 sm:px-5">
+            {caQuery.isLoading ? <Skeleton className="h-80 w-full" /> : caQuery.isError ? (
+              <DashboardFeedback message="L’historique des signatures est indisponible" retry={() => void caQuery.refetch()} />
+            ) : moisData.length === 0 ? <p className="py-24 text-center text-sm text-muted-foreground">Aucun historique de signature disponible</p> : (
+              <Suspense fallback={<Skeleton className="h-80 w-full" />}><GraphiqueCa data={moisData} /></Suspense>
+            )}
+            <p className="mt-3 px-1 text-xs text-muted-foreground">Historique indépendant du filtre de transmission</p>
+          </div>
+          <ParcoursChantiers debutPeriode={debutPeriode} />
+        </section>
+      </div>
 
-          <Card className="mt-3 rounded-2xl border-primary/25 bg-primary/5 shadow-card">
-            <CardContent className="py-4">
-              <p className="text-sm font-medium">
-                Potentiel du pipeline{' '}
-                <span className="text-xs font-normal text-muted-foreground">
-                  (estimation interne · invisible artisans)
-                </span>
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-3">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section aria-labelledby="portefeuille-titre" className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
+            <h2 id="portefeuille-titre" className="text-base font-medium">Portefeuille</h2>
+            <Link to="/projets" className="flex min-h-8 items-center gap-1 text-xs text-muted-foreground hover:text-primary">Tous les projets<ArrowUpRight className="size-3.5" aria-hidden /></Link>
+          </div>
+          <div role="group" aria-label="Projets affichés dans le portefeuille" className="flex gap-5 border-b border-border px-5 sm:px-6">
+            <button type="button" aria-pressed={vueProjets === 'recents'} onClick={() => setVueProjets('recents')} className={cn('min-h-11 border-b-2 text-xs transition-colors', vueProjets === 'recents' ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>Derniers projets</button>
+            <button type="button" aria-pressed={vueProjets === 'rappels'} onClick={() => setVueProjets('rappels')} className={cn('min-h-11 border-b-2 text-xs transition-colors', vueProjets === 'rappels' ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground')}>À rappeler <span className="ml-1 tabular-nums text-muted-foreground">{projetsQuery.isLoading || projetsQuery.isError ? '—' : aRappeler.length}</span></button>
+          </div>
+          {projetsQuery.isLoading ? <div className="p-5"><Skeleton className="h-64 w-full" /></div> : projetsQuery.isError ? (
+            <div className="p-5"><DashboardFeedback message="Le portefeuille n’a pas pu être chargé" retry={() => void projetsQuery.refetch()} /></div>
+          ) : projetsAffiches.length === 0 ? <p className="px-6 py-10 text-sm text-muted-foreground">{vueProjets === 'rappels' ? 'Aucun client en attente de rappel' : 'Aucun projet pour le moment'}</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed text-left text-[13px]">
+                <caption className="sr-only">{vueProjets === 'rappels' ? 'Clients à rappeler' : 'Les cinq derniers projets créés'}</caption>
+                <thead><tr className="bg-muted/40 text-xs text-muted-foreground"><th scope="col" className="w-1/2 px-5 py-3 font-normal sm:w-[32%] sm:px-6">Client</th><th scope="col" className="hidden px-3 py-3 font-normal sm:table-cell">Travaux</th><th scope="col" className="px-3 py-3 font-normal">Statut</th><th scope="col" className="hidden px-5 py-3 text-right font-normal lg:table-cell">Créé le</th></tr></thead>
+                <tbody>{projetsAffiches.map((p) => (
+                  <tr key={p.id} className="border-t border-border transition-colors hover:bg-muted/40">
+                    <th scope="row" className="max-w-48 px-5 py-3 text-left font-normal sm:px-6"><Link to={`/projets/${p.id}`} className="block min-w-0 hover:text-primary"><span className="block truncate font-medium">{p.client_nom}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{vueProjets === 'rappels' ? formatTel(p.client_telephone) || 'Téléphone non renseigné' : p.client_ville || 'Ville à préciser'}</span></Link></th>
+                    <td className="hidden max-w-40 truncate px-3 py-3 text-xs text-muted-foreground sm:table-cell">{p.metiers.join(', ') || 'À préciser'}</td>
+                    <td className="px-3 py-3"><StatutBadge statut={p.statut} /></td>
+                    <td className="hidden whitespace-nowrap px-5 py-3 text-right text-xs tabular-nums text-muted-foreground lg:table-cell">{formatDate(p.created_at)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          {vueProjets === 'rappels' && aRappeler.length > 5 && <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">{aRappeler.length - 5} autres clients à retrouver dans les projets</p>}
+        </section>
+
+        <section aria-labelledby="artisans-titre" className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-5 py-5">
+            <h2 id="artisans-titre" className="text-base font-medium">Artisans en tête</h2>
+            <p className="mt-1 text-xs text-muted-foreground">CA des chantiers transmis sur la période</p>
+          </div>
+          {kpiArtisansQuery.isLoading ? <div className="p-5"><Skeleton className="h-56 w-full" /></div> : kpiArtisansQuery.isError ? (
+            <div className="p-5"><DashboardFeedback message="Le classement est indisponible" retry={() => void kpiArtisansQuery.refetch()} /></div>
+          ) : topArtisans.length === 0 ? <p className="px-5 py-8 text-[13px] leading-relaxed text-muted-foreground">Aucune signature pour les chantiers transmis sur cette période</p> : (
+            <ol className="divide-y divide-border">{topArtisans.map((a, i) => (
+              <li key={a.artisan_id}><Link to={`/artisans/${a.artisan_id}`} className="flex items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/50"><span className="w-4 shrink-0 text-xs tabular-nums text-muted-foreground">{i + 1}</span><span className="min-w-0 flex-1 truncate text-[13px]">{a.artisan_nom}</span><span className="shrink-0 text-[13px] font-medium tabular-nums">{formatEuros(a.ca_signe)}</span></Link></li>
+            ))}</ol>
+          )}
+        </section>
+      </div>
+
+      <div className="space-y-3">
+        <DetailsKpi debutPeriode={debutPeriode} />
+        {!projetsQuery.isLoading && !projetsQuery.isError && (
+            <details className="rounded-xl border border-border bg-card">
+              <summary className="cursor-pointer px-5 py-4 text-sm font-medium">Répartition, potentiel et pertes · toutes périodes</summary>
+              <div className="grid gap-6 border-t border-border p-5 lg:grid-cols-2">
                 <div>
-                  <p className="text-xs text-muted-foreground">CA potentiel</p>
-                  <p className="montant text-xl font-semibold">{formatEuros(pipeline.total)}</p>
+                  <dl className="space-y-3 text-sm">
+                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Projets enregistrés</dt><dd className="tabular-nums">{projets.length}</dd></div>
+                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Artisans du réseau</dt><dd className="tabular-nums">{artisansQuery.isLoading ? 'Chargement…' : artisansQuery.isError ? 'Indisponible' : artisansQuery.data?.length ?? 0}</dd></div>
+                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Devis en attente de réponse</dt><dd className="tabular-nums">{devisEnAttente.length} · {formatEuros(devisEnAttente.reduce((s, p) => s + (p.montant_devis ?? 0), 0))}</dd></div>
+                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Potentiel estimé des projets en cours</dt><dd className="tabular-nums">{formatEuros(potentiel)}</dd></div>
+                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Commission potentielle estimée</dt><dd className="tabular-nums">{formatEuros(commissionPotentielle)}</dd></div>
+                    <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Projets perdus ou abandonnés</dt><dd className="tabular-nums">{perdus.length} · {formatEuros(valeurPerdue)}</dd></div>
+                  </dl>
+                  <p className="mt-4 text-xs text-muted-foreground">Le potentiel repose sur {estimes.length} projets estimés, au taux de commission de chaque projet (10 % si non renseigné). Estimations internes, sans engagement de chiffre d’affaires ni de commission. Les pertes incluent les projets réattribuables.</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Commission potentielle</p>
-                  <p className="montant text-xl font-semibold text-primary">
-                    {formatEuros(pipeline.commission)}
-                  </p>
+                  <p className="mb-3 text-sm font-medium">Statut actuel des projets</p>
+                  {parStatut.length === 0 ? <p className="text-sm text-muted-foreground">Aucun projet à répartir</p> : (
+                    <ul className="space-y-2">{parStatut.map(({ statut, count }) => (
+                      <li key={statut}><Link to={`/projets?statut=${statut}`} className="flex items-center justify-between gap-3 rounded-md py-1 text-sm hover:text-primary"><span>{STATUTS[statut].label}</span><span className="tabular-nums">{count}</span></Link></li>
+                    ))}</ul>
+                  )}
                 </div>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {pipeline.nb} projet(s) en cours estimés
-              </p>
-            </CardContent>
-          </Card>
+            </details>
+        )}
 
-          {/* Perdu */}
-          <SectionTitre className="mt-8 first:mt-0">Perdu</SectionTitre>
-          <div className="grid grid-cols-2 gap-3">
-            <KpiTile icon={XCircle} label="Projets perdus" valeur={String(perdus.count)} tone="danger" />
-            <KpiTile icon={Euro} label="Valeur perdue" valeur={formatEuros(perdus.valeur)} tone="danger" />
-          </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Cumul depuis le début : projets perdus par un artisan ou abandonnés par le client. Ils ne
-            sont plus supprimés automatiquement.
-          </p>
-
-          {/* Commissions */}
-          <SectionTitre className="mt-8 first:mt-0">Commissions</SectionTitre>
-          <Card className="rounded-2xl border-border/70 shadow-card">
-            <CardContent className="space-y-3 py-4">
-              <div className="flex h-3 w-full overflow-hidden rounded-full bg-secondary">
-                <div className="h-full bg-[#22C55E]" style={{ width: `${pctEncaissee}%` }} />
-                <div className="h-full bg-[#F59E0B]" style={{ width: `${100 - pctEncaissee}%` }} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <span className="size-2 rounded-full bg-[#22C55E]" /> Encaissée
-                  </p>
-                  <p className="montant text-lg font-semibold text-[#16A34A]">
-                    {formatEuros(stats.encaissee)}
-                  </p>
-                </div>
-                <div>
-                  <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <span className="size-2 rounded-full bg-[#F59E0B]" /> À encaisser
-                  </p>
-                  <p className="montant text-lg font-semibold text-[#B45309]">
-                    {formatEuros(stats.aEncaisser)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Analyse & activité */}
-          <SectionTitre className="mt-8 first:mt-0">Analyse &amp; activité</SectionTitre>
-          <div className="grid gap-3 md:grid-cols-2">
-            {/* À faire : à rappeler / en attente */}
-            <Card className="rounded-2xl border-border/70 shadow-card">
-              <CardHeader>
-                <CardTitre>
-                  <PhoneCall className="size-4" />
-                  À faire ({aFaire.length})
-                </CardTitre>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {aFaire.length === 0 ? (
-                  <p className="py-1 text-sm text-muted-foreground">Rien à rappeler 🎉</p>
-                ) : (
-                  aFaire.slice(0, 6).map((p) => (
-                    <Link
-                      key={p.id}
-                      to={`/projets/${p.id}`}
-                      className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 p-3 transition-colors hover:bg-muted/60"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{p.client_nom}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {p.client_telephone || '—'}
-                          {p.client_ville ? ` · ${p.client_ville}` : ''}
-                        </p>
-                      </div>
-                      <StatutBadge statut={p.statut} />
-                    </Link>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Répartition par statut */}
-            <Card className="rounded-2xl border-border/70 shadow-card">
-              <CardHeader>
-                <CardTitre>Répartition par statut</CardTitre>
-              </CardHeader>
-              <CardContent>
-                <Suspense fallback={<GraphiqueEnAttente h={200} />}>
-                  <GraphiqueStatuts data={stats.parStatut} />
-                </Suspense>
-              </CardContent>
-            </Card>
-
-            {/* Top artisans */}
-            <Card className="rounded-2xl border-border/70 shadow-card">
-              <CardHeader>
-                <CardTitre>
-                  <Trophy className="size-4" />
-                  Top artisans
-                </CardTitre>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {topArtisans.length === 0 ? (
-                  <p className="py-1 text-sm text-muted-foreground">
-                    Aucun chantier signé sur la période.
-                  </p>
-                ) : (
-                  topArtisans.map((a, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm">
-                        {i + 1}. {a.name}
-                      </span>
-                      <span className="montant shrink-0 text-sm font-semibold text-primary">
-                        {formatEuros(a.total)}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* CA & commissions par mois */}
-          <Card className="mt-3 rounded-2xl border-border/70 shadow-card">
-            <CardHeader>
-              <CardTitre>CA & commissions (6 mois)</CardTitre>
-            </CardHeader>
-            <CardContent>
-              <Suspense fallback={<GraphiqueEnAttente h={220} />}>
-                <GraphiqueCa data={moisData} />
-              </Suspense>
-            </CardContent>
-          </Card>
-
-          {/* Derniers projets */}
-          <Card className="mt-3 rounded-2xl border-border/70 shadow-card">
-            <CardHeader>
-              <CardTitre>Derniers projets</CardTitre>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {derniers.length === 0 ? (
-                <p className="py-2 text-sm text-muted-foreground">
-                  Aucun projet pour le moment.
-                </p>
-              ) : (
-                derniers.map((p) => (
-                  <Link
-                    key={p.id}
-                    to={`/projets/${p.id}`}
-                    className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 p-3 transition-colors hover:bg-muted/60"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{p.client_nom}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {p.metiers.join(', ')} · {formatDate(p.created_at)}
-                      </p>
-                    </div>
-                    <StatutBadge statut={p.statut} />
-                  </Link>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+        <details className="rounded-xl border border-border bg-card">
+          <summary className="cursor-pointer px-5 py-4 text-sm font-medium">Qualité des demandes · métiers et territoires · tout l’historique</summary>
+          <div className="border-t border-border p-4"><QualiteLeads /></div>
+        </details>
+      </div>
     </div>
   )
 }

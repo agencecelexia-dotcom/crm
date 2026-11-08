@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { BadgeEuro, Check, Loader2, ChevronRight } from 'lucide-react'
+import { AlertCircle, BadgeEuro, Check, Loader2, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page-header'
@@ -15,9 +15,9 @@ import { supabase } from '@/lib/supabase/client'
 
 // Suivi de l'argent : devis signés dont la commission n'est pas encore encaissée.
 export function CommissionsPage() {
-  const { data: projets, isLoading } = useProjets()
+  const projetsQuery = useProjets()
+  const { data: projets } = projetsQuery
   const patch = usePatchProjet()
-  const qc = useQueryClient()
 
   // CE QUI EST DÛ, SELON LA MÊME DÉFINITION QUE LES INDICATEURS.
   //
@@ -26,7 +26,7 @@ export function CommissionsPage() {
   // pour 6 000 € de commission due, avec un bouton « Encaissée » — de quoi
   // facturer un artisan pour un chantier jamais signé. On ne liste plus que
   // les affaires réellement gagnées par un artisan (`commissions_dues`, 0166).
-  const { data: dues } = useQuery({
+  const duesQuery = useQuery({
     queryKey: ['commissions-dues'],
     queryFn: async (): Promise<Set<string>> => {
       const { data, error } = await supabase.rpc('commissions_dues')
@@ -34,6 +34,9 @@ export function CommissionsPage() {
       return new Set(((data as { projet_id: string }[]) ?? []).map((d) => d.projet_id))
     },
   })
+  const { data: dues } = duesQuery
+  const isLoading = projetsQuery.isPending || duesQuery.isPending
+  const isError = projetsQuery.isError || duesQuery.isError
 
   const aEncaisser = useMemo(
     () =>
@@ -49,11 +52,7 @@ export function CommissionsPage() {
     patch.mutate(
       { id, patch: { commission_encaissee: true } },
       {
-        onSuccess: () => {
-          toast.success('Commission encaissée')
-          // La liste vient de `commissions_dues` : sans ceci, la ligne restait.
-          void qc.invalidateQueries({ queryKey: ['commissions-dues'] })
-        },
+        onSuccess: () => toast.success('Commission encaissée'),
         onError: (e) =>
           toast.error('Échec', { description: e instanceof Error ? e.message : undefined }),
       },
@@ -68,14 +67,26 @@ export function CommissionsPage() {
       />
 
       {/* Total dû */}
-      <Card className="mb-4 flex items-center justify-between rounded-2xl border-primary/25 bg-primary/5 p-4 shadow-card">
+      {!isLoading && !isError && <Card className="mb-4 flex items-center justify-between rounded-2xl border-border bg-card p-5 shadow-card">
         <span className="text-sm font-medium text-muted-foreground">
           Total à encaisser ({aEncaisser.length})
         </span>
         <span className="montant text-2xl font-semibold text-primary">{formatEuros(totalDu)}</span>
-      </Card>
+      </Card>}
 
-      {isLoading ? (
+      {isError ? (
+        <div role="alert">
+          <EmptyState
+            icon={AlertCircle}
+            titre="Commissions indisponibles"
+            description="Le chargement a échoué. Réessayez pour consulter le solde à encaisser."
+            action={<Button variant="outline" onClick={() => {
+              void projetsQuery.refetch()
+              void duesQuery.refetch()
+            }}>Réessayer</Button>}
+          />
+        </div>
+      ) : isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-20 w-full rounded-2xl" />
@@ -84,8 +95,8 @@ export function CommissionsPage() {
       ) : aEncaisser.length === 0 ? (
         <EmptyState
           icon={BadgeEuro}
-          titre="Rien à encaisser 🎉"
-          description="Toutes les commissions des devis signés sont encaissées."
+          titre="Aucune commission à encaisser"
+          description="Aucun devis signé ne présente de commission restant à encaisser."
         />
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">

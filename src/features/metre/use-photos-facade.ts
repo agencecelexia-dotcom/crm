@@ -28,7 +28,14 @@ export interface PhotoFacade {
 
 async function appeler<T>(corps: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('facade-photo', { body: corps })
-  if (error) throw error
+  if (error) {
+    const contexte = (error as { context?: Response }).context
+    if (contexte instanceof Response) {
+      const refus = await contexte.clone().json().catch(() => null) as { error?: string } | null
+      if (refus?.error) throw new Error(refus.error)
+    }
+    throw error
+  }
   const r = data as { ok?: boolean; error?: string }
   if (!r?.ok) throw new Error(r?.error ?? 'echec')
   return data as T
@@ -36,7 +43,7 @@ async function appeler<T>(corps: Record<string, unknown>): Promise<T> {
 
 /** La requête des photos d'une maison : pour le crochet, et pour le rapport qui la lit d'un appui. */
 export const requetePhotosFacade = (token: string | undefined, cleabs: string | null) => ({
-  queryKey: ['photos-facade', cleabs],
+  queryKey: ['photos-facade', token ?? null, cleabs],
   // Les liens d'image sont signés pour une heure.
   staleTime: 1000 * 60 * 30,
   queryFn: async () => (await appeler<{ photos: PhotoFacade[] }>({ token, action: 'chercher', cleabs })).photos,
@@ -54,7 +61,7 @@ export function useLirePhoto(token: string | undefined, cleabs: string | null) {
     mutationFn: async (id: string) =>
       (await appeler<{ lecture: LectureGardee }>({ token, action: 'lire', id })).lecture,
     onSuccess: (lecture, id) =>
-      qc.setQueryData<PhotoFacade[]>(['photos-facade', cleabs], (avant) =>
+      qc.setQueryData<PhotoFacade[]>(['photos-facade', token ?? null, cleabs], (avant) =>
         avant?.map((p) => (p.id === id ? { ...p, lecture } : p)),
       ),
   })
@@ -67,7 +74,7 @@ export function useEcarterOuverture(token: string | undefined, cleabs: string | 
     mutationFn: async ({ id, rang, ecartee }: { id: string; rang: number; ecartee: boolean }) =>
       ({ id, ecartees: (await appeler<{ ecartees: number[] }>({ token, action: 'ecarter', id, rang, ecartee })).ecartees }),
     onSuccess: ({ id, ecartees }) =>
-      qc.setQueryData<PhotoFacade[]>(['photos-facade', cleabs], (avant) =>
+      qc.setQueryData<PhotoFacade[]>(['photos-facade', token ?? null, cleabs], (avant) =>
         avant?.map((p) => (p.id === id ? { ...p, ecartees } : p)),
       ),
   })
@@ -75,7 +82,7 @@ export function useEcarterOuverture(token: string | undefined, cleabs: string | 
 
 /** Le matériau du toit gardé pour cette maison (lu par la pré-mesure ou un artisan) ; null s'il n'a pas été lu. */
 export const requeteMateriauxToit = (token: string | undefined, cleabs: string | null) => ({
-  queryKey: ['materiaux-toit', cleabs],
+  queryKey: ['materiaux-toit', token ?? null, cleabs],
   staleTime: 1000 * 60 * 60,
   queryFn: async () =>
     (await appeler<{ materiaux: MateriauxGardes | null }>({ token, action: 'materiau_toit', cleabs })).materiaux,
@@ -91,7 +98,7 @@ export function useLireToit(token: string | undefined, cleabs: string | null) {
   return useMutation({
     mutationFn: async () =>
       (await appeler<{ materiaux: MateriauxGardes }>({ token, action: 'materiau_toit', cleabs, lire: true })).materiaux,
-    onSuccess: (m) => qc.setQueryData(['materiaux-toit', cleabs], m),
+    onSuccess: (m) => qc.setQueryData(['materiaux-toit', token ?? null, cleabs], m),
   })
 }
 
@@ -124,12 +131,15 @@ export function useDeposerPhoto(token: string | undefined, cleabs: string | null
       return { ...photo, lecture }
     },
     onSuccess: (photo) =>
-      qc.setQueryData<PhotoFacade[]>(['photos-facade', cleabs], (avant) => [photo, ...(avant ?? [])]),
+      qc.setQueryData<PhotoFacade[]>(['photos-facade', token ?? null, cleabs], (avant) => [photo, ...(avant ?? [])]),
   })
 }
 
 /** Ce que l'écran dit d'une erreur de la fonction. */
 export const MESSAGES_PHOTO: Record<string, string> = {
+  batiment_non_attribue: 'Confirmez que ce bâtiment est bien celui du chantier pour accéder à ses photos.',
+  contrat_requis: 'Signez votre contrat pour accéder aux photos du chantier.',
+  acces_refuse: 'Cette photo n’est pas accessible depuis votre espace artisan.',
   quota_atteint: 'Vingt photos lues aujourd’hui : la suite demain.',
   vision_occupee: 'La lecture est très demandée en ce moment : réessayez dans une minute.',
   vision_en_panne: 'La lecture de la photo a échoué : réessayez.',

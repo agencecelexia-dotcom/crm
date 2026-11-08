@@ -49,7 +49,7 @@ export function PhotosFacade({
   /** Déduire les ouvertures du métré en cours ; absent (vue de l'agence), pas de bouton. */
   onDeduire?: (m2: number) => void
 }) {
-  const { data: photos, isLoading } = usePhotosFacade(token, cleabs, true)
+  const { data: photos, isLoading, isError, error: erreurChargement, refetch } = usePhotosFacade(token, cleabs, true)
   const lireP = useLirePhoto(token, cleabs)
   const deposer = useDeposerPhoto(token, cleabs)
   const ecarter = useEcarterOuverture(token, cleabs)
@@ -79,6 +79,11 @@ export function PhotosFacade({
           <Loader2 className="size-3 animate-spin" />
           Recherche des photos de rue…
         </p>
+      ) : isError ? (
+        <div role="alert" className="space-y-2 text-sm">
+          <p>{MESSAGES_PHOTO[erreurChargement instanceof Error ? erreurChargement.message : ''] ?? 'Impossible de charger les photos de cette façade.'}</p>
+          <Button variant="outline" onClick={() => void refetch()}>Réessayer les photos</Button>
+        </div>
       ) : photo?.url ? (
         <figure className="space-y-1">
           <div className="relative overflow-hidden rounded-xl border border-border bg-muted">
@@ -114,7 +119,15 @@ export function PhotosFacade({
                         vectorEffect="non-scaling-stroke"
                         className="pointer-events-auto cursor-pointer"
                         role="button"
-                        aria-label={retiree ? 'Remettre cette ouverture' : 'Retirer cette ouverture'}
+                        tabIndex={0}
+                        aria-disabled={ecarter.isPending}
+                        aria-label={`${retiree ? 'Remettre' : 'Retirer'} cette ouverture ${i + 1}`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            if (!ecarter.isPending) ecarter.mutate({ id: photo.id, rang: i, ecartee: !retiree })
+                          }
+                        }}
                         onClick={() => !ecarter.isPending && ecarter.mutate({ id: photo.id, rang: i, ecartee: !retiree })}
                       />
                     )

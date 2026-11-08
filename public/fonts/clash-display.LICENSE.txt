@@ -1,0 +1,17 @@
+Clash Display — Indian Type Foundry
+License reference: ITF Free Font License (FFL), version 2.0 — 17 Aug 2026.
+
+Official license and family page:
+https://www.fontshare.com/licenses/itf-ffl
+https://www.fontshare.com/fonts/clash-display
+
+This file records the official license reference; it is not a replacement
+for the full license published by Indian Type Foundry.
+
+The original, unmodified WOFF2 variable font is used for the visual interface
+of the Celexia CRM. It was obtained directly from Fontshare's official CDN.
+The current official license explicitly permits self-hosting for the
+licensee's own websites and applications. The font is not offered as a
+selectable asset, redistributed as a font product, subsetted, or converted.
+
+Retrieved: 2026-11-08

@@ -17,63 +17,22 @@ import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
 import { usePatchProjet } from '../hooks/use-projets'
 import type { ProjetAvecArtisan } from '@/types/database'
+import { champsMontants, patchMontants, type ChampsMontants } from '../lib/montants-form'
 
 // Carte "Argent" : montants devis + commission auto (10 %) + encaissement.
 export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
   const patch = usePatchProjet()
-  const [devis, setDevis] = useState(projet.montant_devis?.toString() ?? '')
-  const [devisSigne, setDevisSigne] = useState(
-    projet.montant_devis_signe?.toString() ?? '',
-  )
-  const [dateSign, setDateSign] = useState<Date | undefined>(
-    projet.date_signature ? parseISO(projet.date_signature) : undefined,
-  )
-  const [taux, setTaux] = useState(
-    String(Math.round((projet.taux_commission ?? 0.1) * 100)),
-  )
-  const [estim, setEstim] = useState(projet.estimation_interne?.toString() ?? '')
+  const [modifications, setModifications] = useState<Partial<ChampsMontants>>({})
+  // Les champs intacts suivent les données serveur, sans écraser la saisie.
+  const champs = { ...champsMontants(projet), ...modifications }
+  const dateSign = champs.date_signature ? parseISO(champs.date_signature) : undefined
 
-  function toNum(v: string): number | null {
-    const n = parseFloat(v.replace(',', '.'))
-    return Number.isFinite(n) ? n : null
+  function modifier(champ: keyof ChampsMontants, valeur: string) {
+    setModifications((courant) => ({ ...courant, [champ]: valeur }))
   }
 
   function enregistrer() {
-    // N'ENVOYER QUE CE QUI A CHANGÉ.
-    //
-    // La carte renvoyait tous ses champs. Or ils sont initialisés à l'ouverture
-    // de la fiche : si l'artisan déclarait sa signature entre-temps (depuis son
-    // espace), corriger l'« estimation interne » réécrivait `montant_devis_signe`
-    // et `date_signature` à vide — et la commission tombait à zéro. Ne partir
-    // que des différences avec le projet tel qu'il est rend ce cas impossible.
-    const valeurs = {
-      montant_devis: toNum(devis),
-      montant_devis_signe: toNum(devisSigne),
-      estimation_interne: toNum(estim),
-      date_signature: dateSign ? format(dateSign, 'yyyy-MM-dd') : null,
-      taux_commission: (() => {
-        const t = parseFloat(taux.replace(',', '.'))
-        return Number.isFinite(t) && t >= 0 ? t / 100 : 0.1
-      })(),
-    }
-    const origine = {
-      montant_devis: projet.montant_devis ?? null,
-      montant_devis_signe: projet.montant_devis_signe ?? null,
-      estimation_interne: projet.estimation_interne ?? null,
-      date_signature: projet.date_signature ? projet.date_signature.slice(0, 10) : null,
-      // Le champ affiche le taux arrondi au point : c'est à CETTE valeur qu'on
-      // compare, sans quoi un taux de 12,5 % affiché « 13 » serait réécrit à
-      // 13 % par un simple enregistrement.
-      taux_commission: Math.round((projet.taux_commission ?? 0.1) * 100) / 100,
-    }
-    const modifie = Object.fromEntries(
-      Object.entries(valeurs).filter(([k, v]) => {
-        const avant = origine[k as keyof typeof origine]
-        return typeof v === 'number' && typeof avant === 'number'
-          ? Math.abs(v - avant) > 1e-9
-          : v !== avant
-      }),
-    )
+    const modifie = patchMontants(projet, modifications)
     if (Object.keys(modifie).length === 0) {
       toast.info('Aucune modification à enregistrer')
       return
@@ -84,7 +43,10 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
         patch: modifie,
       },
       {
-        onSuccess: () => toast.success('Montants enregistrés'),
+        onSuccess: () => {
+          setModifications({})
+          toast.success('Montants enregistrés')
+        },
         onError: (err) =>
           toast.error('Enregistrement impossible', {
             description: err instanceof Error ? err.message : undefined,
@@ -120,8 +82,9 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
               type="number"
               inputMode="decimal"
               className="h-11"
-              value={devis}
-              onChange={(e) => setDevis(e.target.value)}
+              value={champs.montant_devis}
+              disabled={patch.isPending}
+              onChange={(e) => modifier('montant_devis', e.target.value)}
             />
           </div>
           <div className="space-y-1.5">
@@ -131,8 +94,9 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
               type="number"
               inputMode="decimal"
               className="h-11"
-              value={devisSigne}
-              onChange={(e) => setDevisSigne(e.target.value)}
+              value={champs.montant_devis_signe}
+              disabled={patch.isPending}
+              onChange={(e) => modifier('montant_devis_signe', e.target.value)}
             />
           </div>
         </div>
@@ -144,6 +108,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
+                disabled={patch.isPending}
                 className={cn(
                   'h-11 w-full justify-start font-normal',
                   !dateSign && 'text-muted-foreground',
@@ -159,7 +124,8 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
               <Calendar
                 mode="single"
                 selected={dateSign}
-                onSelect={setDateSign}
+                onSelect={(date) => modifier('date_signature', date ? format(date, 'yyyy-MM-dd') : '')}
+                disabled={patch.isPending}
                 locale={fr}
                 autoFocus
               />
@@ -174,14 +140,15 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
             type="number"
             inputMode="decimal"
             className="h-11"
-            value={taux}
-            onChange={(e) => setTaux(e.target.value)}
+            value={champs.taux_commission}
+            disabled={patch.isPending}
+            onChange={(e) => modifier('taux_commission', e.target.value)}
           />
         </div>
 
         <div className="space-y-1.5 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
           <Label htmlFor="estim" className="text-sm">
-            🔒 Estimation interne (€){' '}
+            Estimation interne (€){' '}
             <span className="text-xs font-normal text-muted-foreground">— potentiel, jamais visible par l'artisan</span>
           </Label>
           <Input
@@ -189,8 +156,9 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
             type="number"
             inputMode="decimal"
             className="h-11"
-            value={estim}
-            onChange={(e) => setEstim(e.target.value)}
+            value={champs.estimation_interne}
+            disabled={patch.isPending}
+            onChange={(e) => modifier('estimation_interne', e.target.value)}
           />
         </div>
 
@@ -207,7 +175,7 @@ export function MontantsCard({ projet }: { projet: ProjetAvecArtisan }) {
 
         {/* Commission calculée par la base (10 %) — jamais recalculée côté front */}
         <div className="flex items-center justify-between rounded-lg bg-secondary p-3">
-          <span className="text-sm font-medium">Commission ({taux} % TTC)</span>
+          <span className="text-sm font-medium">Commission ({champsMontants(projet).taux_commission} % TTC)</span>
           <span className="montant text-xl font-semibold text-primary">
             {formatEuros(projet.commission)}
           </span>

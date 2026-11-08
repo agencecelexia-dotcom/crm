@@ -13,7 +13,7 @@ concurrency:
 jobs:
   verify:
     name: Type-check · Lint · Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +29,12 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Tests unitaires
+        run: npm run test:unit
+
+      - name: Cohérence SQL de l’espace artisan
+        run: npm run test:sql
 
       - name: Build
         run: npm run build
@@ -58,7 +64,7 @@ jobs:
 
   securite:
     name: Vulnérabilités des dépendances
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -67,17 +73,14 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # Seuil « critical » et non « high » : react-router traîne un advisory
-      # RSC (GHSA-qwww-vcr4-c8h2) non atteignable ici — l'app est une SPA
-      # cliente, sans RSC ni SSR — dont le seul « correctif » proposé est un
-      # downgrade en 7.11.0 qui reperdrait 4 correctifs réels.
-      # À repasser à --audit-level=high dès que l'advisory est levé en amont.
       - name: npm audit (production)
-        run: npm audit --omit=dev --audit-level=critical
+        run: npm audit --omit=dev --audit-level=high
 
   e2e:
     name: Tests end-to-end
-    runs-on: ubuntu-latest
+    # Version explicite : Chromium Playwright ne prend pas encore en charge
+    # l'image Ubuntu 26.04 vers laquelle ubuntu-latest a basculé.
+    runs-on: ubuntu-24.04
     needs: verify
     steps:
       - uses: actions/checkout@v4
@@ -93,9 +96,14 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      - name: Parcours CRM et artisan sur données fictives
+        run: npm run test:interface
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7

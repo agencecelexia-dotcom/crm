@@ -37,13 +37,16 @@ const JOUR = 86_400_000
 
 function joursDepuis(iso: string | null | undefined): number | null {
   if (!iso) return null
-  return Math.floor((Date.now() - new Date(iso).getTime()) / JOUR)
+  const date = new Date(iso).getTime()
+  return Number.isFinite(date) ? Math.floor((Date.now() - date) / JOUR) : null
 }
 
 /** Ancienneté lisible : « il y a 3 j », « il y a 2 mois ». */
 export function ancienneteLabel(iso: string | null | undefined): string | null {
-  const j = joursDepuis(iso)
-  if (j == null) return null
+  if (!iso || !Number.isFinite(new Date(iso).getTime())) return null
+  const aujourdHui = new Date()
+  const date = new Date(iso)
+  const j = Math.round((Date.UTC(aujourdHui.getFullYear(), aujourdHui.getMonth(), aujourdHui.getDate()) - Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())) / JOUR)
   if (j <= 0) return "aujourd'hui"
   if (j === 1) return 'hier'
   if (j < 30) return `il y a ${j} j`
@@ -75,6 +78,15 @@ export function urgenceChantier(p: ProjetEspace): Urgence {
       raison: 'RDV passé, à mettre à jour',
       groupe: 'rdv',
     }
+  }
+
+  // Une action planifiée est déjà prise en charge ; un RDV dépassé reste
+  // prioritaire, mais le vieux devis ne masque plus le prochain rappel.
+  if (rappel != null && Number.isFinite(rappel)) {
+    return { niveau: 'normale', score: 300, raison: 'Rappel programmé', groupe: 'relances' }
+  }
+  if (p.en_attente_depuis) {
+    return { niveau: 'normale', score: 200, raison: 'En attente', groupe: 'suivi' }
   }
 
   // Chantier neuf, jamais contacté : c'est une OPPORTUNITÉ, pas un retard.
@@ -116,10 +128,6 @@ export function urgenceChantier(p: ProjetEspace): Urgence {
     return { niveau: 'normale', score: 400, raison: 'RDV programmé', groupe: 'rdv' }
   }
 
-  if (rappel != null) {
-    return { niveau: 'normale', score: 300, raison: 'Rappel programmé', groupe: 'relances' }
-  }
-
   // Dossier dormant : dernière activité ancienne.
   const inactif = joursDepuis(p.derniere_activite)
   if (inactif != null && inactif >= 21) {
@@ -150,7 +158,8 @@ export const COULEUR_URGENCE: Record<NiveauUrgence, string> = {
 
 /** Recherche plein texte simple : nom, ville, métier, description. */
 export function correspond(p: ProjetEspace, q: string): boolean {
-  const t = q.trim().toLowerCase()
+  const normaliser = (texte: string) => texte.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+  const t = normaliser(q.trim())
   if (!t) return true
   const champs = [
     p.client_nom,
@@ -161,7 +170,7 @@ export function correspond(p: ProjetEspace, q: string): boolean {
     ...(p.metiers ?? []),
     p.description,
   ]
-  return champs.some((c) => c?.toLowerCase().includes(t))
+  return champs.some((c) => c != null && normaliser(c).includes(t))
 }
 
 /**
@@ -174,7 +183,8 @@ export function correspond(p: ProjetEspace, q: string): boolean {
  */
 export function dateReception(p: ProjetEspace): number {
   const iso = p.recu_le ?? p.derniere_activite
-  return iso ? new Date(iso).getTime() : 0
+  const date = iso ? new Date(iso).getTime() : 0
+  return Number.isFinite(date) ? date : 0
 }
 
 /**
@@ -195,5 +205,5 @@ export function estClos(p: ProjetEspace): boolean {
 export function estNouveau(p: ProjetEspace): boolean {
   if (p.etape || p.issue !== 'en_cours') return false
   const j = joursDepuis(p.recu_le)
-  return j != null && j <= 2
+  return j != null && j >= 0 && j < 2
 }

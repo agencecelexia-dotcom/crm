@@ -30,11 +30,11 @@ export function ApercuDernierSuivi({
 
   if (variante === 'inline') {
     return (
-      <p className="flex items-start gap-1.5 px-4 pb-2.5 text-xs text-muted-foreground sm:px-5">
+      <p className="flex items-start gap-2 px-4 pb-4 text-xs leading-relaxed text-muted-foreground sm:px-5">
         <MessageSquare className="mt-0.5 size-3 shrink-0" />
         <span className="min-w-0">
-          <span className={cn('font-medium', deLagence && 'text-primary')}>{qui}</span>
-          <span className="opacity-70"> · {dateLisible(s.created_at)}</span>
+          <span className="font-medium text-foreground">{qui}</span>
+          <span className="text-muted-foreground"> · {dateLisible(s.created_at)}</span>
           <span className="block truncate">{s.message}</span>
         </span>
       </p>
@@ -46,18 +46,18 @@ export function ApercuDernierSuivi({
       role="tooltip"
       className={cn(
         'pointer-events-none absolute left-4 right-4 top-full z-20 -mt-1',
-        'rounded-xl border border-border bg-popover p-3 shadow-lg',
-        'opacity-0 transition-opacity duration-150 group-hover:opacity-100',
+        'rounded-lg border border-border bg-popover p-3 shadow-sm',
+        'opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100',
         // Masqué au tactile, où le survol n'existe pas : la variante inline
         // prend le relais.
         'hidden sm:block',
       )}
     >
-      <p className="mb-1 flex items-baseline gap-1.5 text-xs">
-        <span className={cn('font-semibold', deLagence && 'text-primary')}>{qui}</span>
+      <p className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
+        <span className="font-semibold text-foreground">{qui}</span>
         <span className="text-muted-foreground">{dateLisible(s.created_at)}</span>
       </p>
-      <p className="whitespace-pre-wrap text-sm leading-snug">{s.message}</p>
+      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{s.message}</p>
     </div>
   )
 }

@@ -1,8 +1,10 @@
+import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import type { Point } from './geometrie'
 import type { LectureIA } from './modele3d'
 import type { SceneIA, VerifScene } from './scene-ia'
+import { bornerAttente, reprendreAttente, type AttenteMetre } from './attente-metre'
 
 /** Ce que rend la fonction `metre-ia`. */
 export interface EtapeIA {
@@ -15,7 +17,7 @@ export interface EtapeIA {
   en_cours?: boolean
 }
 
-export interface ReponseMetreIA {
+export interface ReponseMetreIA extends AttenteMetre {
   ok?: boolean
   error?: string
   trouve?: boolean
@@ -32,7 +34,7 @@ export interface ReponseMetreIA {
 
 /** La lecture prend une à trois minutes : on redemande toutes les 3 s, six minutes au plus. */
 const INTERVALLE_MS = 3000
-const ESSAIS_MAX = 120
+const DUREE_MAX_MS = 360_000
 
 async function appeler(corps: Record<string, unknown>): Promise<ReponseMetreIA> {
   const { data, error } = await supabase.functions.invoke('metre-ia', { body: corps })
@@ -52,19 +54,26 @@ export function useMetreIA(token: string | undefined, cleabs: string | null, poi
     enabled: !!token && !!cleabs,
     staleTime: 1000 * 30,
     retry: false,
-    refetchInterval: (q) => (q.state.data?.statut === 'en_cours' && q.state.dataUpdateCount < ESSAIS_MAX ? INTERVALLE_MS : false),
-    queryFn: () => appeler({ token, cleabs, action: 'etat' }),
+    refetchInterval: (q) => (q.state.status !== 'error' && q.state.data?.statut === 'en_cours' && !q.state.data.delaiDepasse ? INTERVALLE_MS : false),
+    queryFn: async () => bornerAttente(await appeler({ token, cleabs, action: 'etat' }), qc.getQueryData<ReponseMetreIA>(cle), Date.now(), DUREE_MAX_MS),
   })
   const lancer = useMutation({
     mutationFn: () => appeler({ token, cleabs, action: 'lire', point }),
-    onSuccess: (r) => qc.setQueryData(cle, r),
+    onSuccess: (r) => qc.setQueryData(cle, bornerAttente(r, undefined, Date.now(), DUREE_MAX_MS)),
   })
   // Les façades lues par l'IA arrivent en base : la vue 3D relit les photos quand la lecture se termine.
   const statut = etat.data?.statut
-  return { etat, lancer, statut, enCours: statut === 'en_cours' || lancer.isPending, refaire: () => {
-      qc.invalidateQueries({ queryKey: ['photos-facade', cleabs] })
-      // L'IA a pu remplacer le relevé gardé de la maison par ses pans corrigés.
-      qc.invalidateQueries({ queryKey: ['releve', cleabs] })
-    },
-  }
+  const refaire = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ['photos-facade', token ?? null, cleabs] })
+    // Cette référence doit rester stable : les vues l'appellent à la fin de
+    // l'analyse, pas à chaque changement de fond ou sélection d'une face.
+    void qc.invalidateQueries({ queryKey: ['releve', cleabs] })
+  }, [qc, cleabs, token])
+  const { refetch } = etat
+  const reprendre = useCallback(() => {
+    qc.setQueryData<ReponseMetreIA>(['metre-ia', cleabs], (r) => reprendreAttente(r, Date.now()))
+    // Une vérification de l'état, jamais un nouvel appel payant « lire ».
+    return refetch()
+  }, [qc, cleabs, refetch])
+  return { etat, lancer, statut, enCours: (statut === 'en_cours' && !etat.data?.delaiDepasse && !etat.isError) || lancer.isPending, refaire, reprendre }
 }

@@ -1,6 +1,6 @@
-import { useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
-  Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, Sparkles, X, Calculator,
+  Plus, Trash2, Loader2, Eye, Send, Save, ChevronDown, ListPlus, X, Calculator,
   MessageSquareText,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -33,8 +33,8 @@ import {
   useCreerDevis,
   useSetDevisPdf,
   useEnvoyerDevis,
-  envoyerDevisAuClient,
   type DevisPayload,
+  type BrouillonDevis,
   useEnregistrerPrix,
   useSuggestionsDevis,
   type LigneSuggeree,
@@ -53,6 +53,12 @@ const euro2 = (n: number) =>
     .format(n || 0)
     .replace(/[\u202f\u00a0]/g, ' ') + ' €'
 
+const nombre = (s: string) => {
+    const normalise = s.trim().replace(/[\s\u00a0\u202f]/g, '').replace(',', '.')
+    return normalise === '' ? 0 : /^-?\d+(?:\.\d*)?$/.test(normalise) ? Number(normalise) : NaN
+  }
+const num = (s: string) => Number.isFinite(nombre(s)) ? nombre(s) : 0
+
 interface LigneState {
   /** Déboursé sec : ce que la ligne lui coûte. Jamais imprimé sur le devis. */
   cout_unitaire: string
@@ -65,6 +71,7 @@ interface LigneState {
 }
 
 export interface DevisInitial {
+  brouillon?: BrouillonDevis
   affectation_token?: string
   client_nom?: string | null
   client_adresse?: string | null
@@ -92,7 +99,15 @@ export function DevisBuilder({
   onClose: () => void
   onDone?: () => void
 }) {
-  const identite = useIdentite(token).data
+  const brouillon = initial?.brouillon
+  const documentInitial = brouillon?.document_data
+  const sauvegarde = useRef<{ id: string; numero: string; revision: number } | null>(brouillon ? { id: brouillon.id, numero: brouillon.numero, revision: brouillon.revision ?? 0 } : null)
+  const [idempotence] = useState(() => brouillon?.idempotency_key ?? crypto.randomUUID())
+  const entrepriseBlocId = useId()
+  const clientBlocId = useId()
+  const conditionsId = useId()
+  const identiteQuery = useIdentite(token)
+  const identite = identiteQuery.data
   const creer = useCreerDevis(token)
   const setPdf = useSetDevisPdf(token)
   const envoyer = useEnvoyerDevis(token)
@@ -112,7 +127,7 @@ export function DevisBuilder({
   const [entretienOuvert, setEntretienOuvert] = useState(false)
 
   // En-tête entreprise (éditable, pré-rempli depuis « Mon entreprise »)
-  const [ent, setEnt] = useState({
+  const entBase = {
     nom: identite?.societe || vendeur.societe || '',
     adresse: identite?.adresse ?? vendeur.adresse ?? '',
     cp: identite?.code_postal ?? vendeur.code_postal ?? '',
@@ -121,17 +136,19 @@ export function DevisBuilder({
     forme: identite?.forme_juridique ?? vendeur.forme_juridique ?? '',
     tel: identite?.telephone ?? vendeur.telephone ?? '',
     email: identite?.email ?? vendeur.email ?? '',
-  })
-  const majEnt = (k: keyof typeof ent, v: string) => setEnt((p) => ({ ...p, [k]: v }))
+  }
+  const [entModifs, setEntModifs] = useState<Partial<typeof entBase>>(documentInitial ? Object.fromEntries(Object.entries(documentInitial.vendeur).map(([k, v]) => [k, v ?? ''])) : {})
+  const ent = { ...entBase, ...entModifs }
+  const majEnt = (k: keyof typeof ent, v: string) => setEntModifs((p) => ({ ...p, [k]: v }))
 
   // Client
   const [cli, setCli] = useState({
-    nom: initial?.client_nom ?? '',
-    adresse: initial?.client_adresse ?? '',
-    cp: initial?.client_cp ?? '',
-    ville: initial?.client_ville ?? '',
-    email: initial?.client_email ?? '',
-    tel: initial?.client_tel ?? '',
+    nom: brouillon?.client_nom ?? initial?.client_nom ?? '',
+    adresse: brouillon?.client_adresse ?? initial?.client_adresse ?? '',
+    cp: brouillon?.client_cp ?? initial?.client_cp ?? '',
+    ville: brouillon?.client_ville ?? initial?.client_ville ?? '',
+    email: brouillon?.client_email ?? initial?.client_email ?? '',
+    tel: brouillon?.client_tel ?? initial?.client_tel ?? '',
   })
   const majCli = (k: keyof typeof cli, v: string) => setCli((p) => ({ ...p, [k]: v }))
 
@@ -144,8 +161,8 @@ export function DevisBuilder({
   // L'objet est ce que le client lit en tête de son devis. Y déverser la liste
   // des métiers du chantier — « Toiture, Petits travaux / Multiservices » — ne
   // lui apprend rien et se retrouve tel quel sur le PDF.
-  const [objet, setObjet] = useState('')
-  const [lignes, setLignes] = useState<LigneState[]>([
+  const [objet, setObjet] = useState(brouillon?.objet ?? initial?.objet ?? '')
+  const [lignes, setLignes] = useState<LigneState[]>(brouillon?.lignes?.length ? brouillon.lignes.map((l) => ({ designation: l.designation, quantite: String(l.quantite), unite: l.unite, prix_unitaire: String(l.prix_unitaire), cout_unitaire: l.cout_unitaire == null ? '' : String(l.cout_unitaire), tva_taux: String(l.tva_taux ?? 0) })) : [
     { designation: '', quantite: '1', unite: 'u', prix_unitaire: '', cout_unitaire: '', tva_taux: '10' },
   ])
   // Par défaut la franchise : c'est le régime en place jusqu'ici, et basculer
@@ -156,27 +173,35 @@ export function DevisBuilder({
   // le générateur voyait son devis partir en « TVA non applicable, art. 293 B »
   // avec 30 % d'acompte. La valeur affichée est donc DÉRIVÉE : son choix s'il
   // en a fait un, sinon celle de sa fiche dès qu'elle arrive.
-  const [tvaChoisi, setTvaMode] = useState<'franchise' | 'normal' | null>(null)
+  const [tvaChoisi, setTvaMode] = useState<'franchise' | 'normal' | null>(brouillon?.tva_mode === 'normal' ? 'normal' : brouillon?.tva_mode === 'franchise' ? 'franchise' : null)
   const tvaMode = tvaChoisi ?? identite?.tva_mode_defaut ?? 'franchise'
-  const [acompteSaisi, setAcompte] = useState<string | null>(null)
+  const [acompteSaisi, setAcompte] = useState<string | null>(brouillon?.acompte_pct != null ? String(brouillon.acompte_pct) : null)
   const acompte = acompteSaisi ?? String(identite?.acompte_defaut ?? 30)
-  const [conditions, setConditions] = useState(
-    'Devis gratuit, valable 1 mois. Acompte à la commande, solde à la fin des travaux.',
-  )
+  const [conditionsSaisies, setConditions] = useState<string | null>(brouillon?.conditions ?? null)
+  const conditions = conditionsSaisies ?? identite?.conditions_paiement ?? 'Devis gratuit, valable 1 mois. Acompte à la commande, solde à la fin des travaux.'
   const [validite] = useState(() => {
+    if (brouillon?.date_validite) return brouillon.date_validite
     const d = new Date()
     d.setDate(d.getDate() + 30)
     return d.toISOString().slice(0, 10)
   })
   const [today] = useState(() => new Date().toISOString())
 
-  const num = (s: string) => parseFloat(s.replace(',', '.')) || 0
+  const version = JSON.stringify({ cli, objet, lignes, tvaChoisi, acompteSaisi, conditionsSaisies, entModifs })
+  const [versionInitiale, setVersionInitiale] = useState(version)
+  const modifie = version !== versionInitiale
+  useEffect(() => {
+    if (!modifie && !busy && !entretienOuvert) return
+    const proteger = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', proteger)
+    return () => window.removeEventListener('beforeunload', proteger)
+  }, [modifie, busy, entretienOuvert])
 
   // HT, TVA, TTC, déboursé, marge et commission — voir `calculs.ts`.
   const chiffres = useMemo(
     () =>
       calculerTotaux(
-        lignes.map((l) => ({
+        lignes.filter((l) => l.designation.trim()).map((l) => ({
           quantite: num(l.quantite),
           prix_unitaire: num(l.prix_unitaire),
           cout_unitaire: num(l.cout_unitaire),
@@ -332,25 +357,46 @@ export function DevisBuilder({
         ? { nom: identite.mediateur_nom, url: identite.mediateur_url }
         : null,
       cgv: identite?.cgv,
-      conditionsPaiement: identite?.conditions_paiement,
+      conditionsPaiement: null,
     }
   }
 
   // Fermer efface tout : un devis en cours ne se referme pas par accident.
   function demanderFermeture() {
-    if (lignesRemplies.length === 0 || busy) return onClose()
-    const n = lignesRemplies.length
-    if (window.confirm(`Abandonner ce devis ? ${n} ligne${n > 1 ? 's' : ''} non enregistrée${n > 1 ? 's' : ''}.`))
-      onClose()
+    if (enCours.current || busy) {
+      toast.info('Une opération est en cours. Attendez son résultat avant de fermer.')
+      return
+    }
+    if ((!modifie && !entretienOuvert) || window.confirm('Abandonner ce devis ? Vos modifications non enregistrées seront perdues.')) onClose()
   }
 
   function valider(): boolean {
+    if (identiteQuery.isLoading || identiteQuery.isError || !identite) {
+      toast.error('Votre fiche entreprise doit être chargée avant de générer le devis')
+      return false
+    }
     if (!cli.nom.trim()) {
       toast.error('Indiquez le nom du client')
       return false
     }
     if (!lignes.some((l) => l.designation.trim())) {
       toast.error('Ajoutez au moins une ligne')
+      return false
+    }
+    if (lignes.some((l) => !l.designation.trim() && (l.prix_unitaire.trim() || l.cout_unitaire.trim()))) {
+      toast.error('Complétez la désignation de chaque ligne chiffrée')
+      return false
+    }
+    if (lignes.some((l) => [l.quantite, l.prix_unitaire, l.cout_unitaire, l.tva_taux].some((v) => !Number.isFinite(nombre(v))))) {
+      toast.error('Valeur numérique invalide', { description: 'Vérifiez les quantités et les prix.' })
+      return false
+    }
+    if (lignesRemplies.some((l) => l.prix_unitaire < 0 || (l.cout_unitaire ?? 0) < 0)) {
+      toast.error('Prix ou déboursé négatif', { description: 'Corrigez la ligne avant d’enregistrer.' })
+      return false
+    }
+    if (!Number.isFinite(nombre(acompte)) || nombre(acompte) < 0 || nombre(acompte) > 100) {
+      toast.error('L’acompte doit être compris entre 0 et 100 %')
       return false
     }
     if (lignesRemplies.some((l) => (l.quantite ?? 0) < 0)) {
@@ -370,8 +416,12 @@ export function DevisBuilder({
   }
 
   async function apercu() {
-    if (!lignes.some((l) => l.designation.trim())) return toast.error('Ajoutez au moins une ligne')
-    await telechargerDevis(construireData('APERÇU'))
+    if (enCours.current || !valider()) return
+    enCours.current = true
+    setBusy(true)
+    try { await telechargerDevis(construireData(sauvegarde.current?.numero ?? 'APERÇU')) }
+    catch { toast.error('Le PDF n’a pas pu être généré. Vos saisies sont conservées.') }
+    finally { enCours.current = false; setBusy(false) }
   }
 
   /**
@@ -382,8 +432,8 @@ export function DevisBuilder({
    */
   async function enregistrer(mode: 'garder' | 'client') {
     const avecEnvoi = mode === 'client'
-    if (avecEnvoi && !cli.email.trim()) {
-      toast.error('Adresse du client manquante', {
+    if (avecEnvoi && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cli.email.trim())) {
+      toast.error('Adresse email du client invalide', {
         description: 'Ouvrez le bloc Client pour la renseigner.',
       })
       setClientOuvert(true)
@@ -395,7 +445,13 @@ export function DevisBuilder({
     setBusy(true)
     try {
       const payload: DevisPayload = {
-        affectation_token: initial?.affectation_token,
+        devis_id: sauvegarde.current?.id,
+        expected_revision: sauvegarde.current?.revision,
+        idempotency_key: idempotence,
+        document_data: construireData('__NUMERO_DEVIS__'),
+        email_html: devisEnHtml(construireData('__NUMERO_DEVIS__')),
+        email_subject: objetCourriel(construireData('__NUMERO_DEVIS__')),
+        affectation_token: brouillon?.affectation_token ?? initial?.affectation_token,
         client_nom: cli.nom,
         client_adresse: cli.adresse,
         client_cp: cli.cp,
@@ -421,7 +477,8 @@ export function DevisBuilder({
         conditions,
         date_validite: validite,
       }
-      const { id, numero } = await creer.mutateAsync(payload)
+      const { id, numero, revision } = await creer.mutateAsync(payload)
+      sauvegarde.current = { id, numero, revision }
 
       // Les lignes rejoignent sa bibliothèque : il ne les ressaisira plus.
       // Échec sans conséquence — le devis, lui, est déjà enregistré.
@@ -432,34 +489,20 @@ export function DevisBuilder({
         .catch(() => undefined)
       const blob = await devisEnBlob(construireData(numero))
       const url = await uploaderDevisGenere(token, numero, blob)
-      await setPdf.mutateAsync({ id, url })
+      await setPdf.mutateAsync({ id, url, revision })
 
       if (avecEnvoi) {
-        // Le devis passe en « envoyé » et, s'il vient d'un chantier, l'étape et
-        // le montant remontent au CRM — c'est `envoyer_devis_by_token` qui s'en
-        // charge, jusqu'au statut du projet.
-        await envoyer.mutateAsync(id)
-        const donnees = construireData(numero)
-        await envoyerDevisAuClient({
-          email: cli.email.trim(),
-          numero,
-          sujet: objetCourriel(donnees),
-          html: devisEnHtml(donnees),
-          pdf: blob,
-        })
-        toast.success(`Devis ${numero} envoyé à ${cli.email.trim()}`, {
-          description: initial?.affectation_token
-            ? 'Le chantier passe en « devis envoyé ».'
-            : undefined,
-        })
+        await envoyer.mutateAsync({ id, revision })
+        toast.success(`Devis ${numero} pris en charge pour envoi`, { description: 'La prise en charge est confirmée par le serveur ; la réception dépend de la messagerie du client.' })
       } else {
-        await telechargerDevis(construireData(numero))
+        telechargerBlob(blob, numero)
         toast.success(`Devis ${numero} enregistré`)
       }
+      setVersionInitiale(version)
       onDone?.()
       onClose()
     } catch (e) {
-      toast.error('Échec', { description: e instanceof Error ? e.message : undefined })
+      toast.error(sauvegarde.current ? 'Brouillon conservé, opération incomplète' : 'Sauvegarde impossible', { description: e instanceof Error ? e.message : undefined })
     } finally {
       enCours.current = false
       setBusy(false)
@@ -468,27 +511,32 @@ export function DevisBuilder({
 
   return (
     <Sheet open onOpenChange={(o) => !o && demanderFermeture()}>
-      <SheetContent side="bottom" className="flex max-h-[92dvh] flex-col overflow-hidden">
-        <SheetHeader>
-          <SheetTitle>Créer un devis</SheetTitle>
-          <SheetDescription className="sr-only">
-            Remplissez les lignes, prévisualisez, puis téléchargez ou recevez le PDF par email.
+      <SheetContent side="bottom" className="mx-auto flex h-[96dvh] max-h-[96dvh] w-full max-w-[1200px] flex-col gap-0 overflow-hidden rounded-t-2xl border border-border bg-background">
+        <SheetHeader className="shrink-0 border-b border-border bg-card px-5 py-4 pr-14 sm:px-6 sm:pr-14">
+          <SheetTitle className="font-display text-xl font-medium">{brouillon ? `Modifier le devis ${brouillon.numero}` : 'Créer un devis'}</SheetTitle>
+          <SheetDescription className="text-xs">
+            {cli.nom ? `Pour ${cli.nom}${cli.ville ? ` · ${cli.ville}` : ''}` : 'Renseignez le client et les prestations'} · aperçu avant enregistrement ou envoi
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {identiteQuery.isError && <div role="alert" className="m-4 rounded-lg border border-border bg-card p-4 text-sm"><p>Votre fiche entreprise n’a pas pu être chargée. Les mentions et le régime de TVA doivent être vérifiés avant de générer le devis.</p><Button variant="outline" size="sm" className="mt-3" onClick={() => void identiteQuery.refetch()}>Réessayer la fiche entreprise</Button></div>}
+          <fieldset disabled={busy} className="grid min-w-0 items-start gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 space-y-4">
           {/* En-tête entreprise (repliable) */}
-          <div className="rounded-xl border border-border">
+          <div className="rounded-xl border border-border bg-card">
             <button
               type="button"
               onClick={() => setEnTeteOuvert((v) => !v)}
-              className="flex w-full items-center justify-between p-3 text-sm font-medium"
+              aria-expanded={enTeteOuvert}
+              aria-controls={entrepriseBlocId}
+              className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-[13px] font-medium"
             >
-              En-tête : {ent.nom}
-              <ChevronDown className={`size-4 transition-transform ${enTeteOuvert ? 'rotate-180' : ''}`} />
+              <span className="min-w-0 truncate">Votre entreprise · {ent.nom || 'À renseigner'}</span>
+              <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${enTeteOuvert ? 'rotate-180' : ''}`} />
             </button>
             {enTeteOuvert && (
-              <div className="grid grid-cols-2 gap-2 border-t border-border p-3">
+              <div id={entrepriseBlocId} className="grid grid-cols-2 gap-3 border-t border-border p-4">
                 <Champ label="Nom / société" value={ent.nom} onChange={(v) => majEnt('nom', v)} className="col-span-2" />
                 <Champ label="Adresse" value={ent.adresse} onChange={(v) => majEnt('adresse', v)} className="col-span-2" />
                 <Champ label="Code postal" value={ent.cp} onChange={(v) => majEnt('cp', v)} />
@@ -502,11 +550,13 @@ export function DevisBuilder({
           </div>
 
           {/* Client — replié dès lors que le chantier l'a renseigné */}
-          <div className="rounded-xl border border-border">
+          <div className="rounded-xl border border-border bg-card">
             <button
               type="button"
               onClick={() => setClientOuvert((v) => !v)}
-              className="flex w-full items-center justify-between gap-2 p-3 text-sm font-medium"
+              aria-expanded={clientOuvert}
+              aria-controls={clientBlocId}
+              className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-[13px] font-medium"
             >
               <span className="min-w-0 truncate text-left">
                 Client : {cli.nom || <span className="text-muted-foreground">à renseigner</span>}
@@ -517,7 +567,7 @@ export function DevisBuilder({
               />
             </button>
             {clientOuvert && (
-              <div className="grid grid-cols-2 gap-2 border-t border-border p-3">
+              <div id={clientBlocId} className="grid grid-cols-2 gap-3 border-t border-border p-4">
                 <Champ label="Nom" value={cli.nom} onChange={(v) => majCli('nom', v)} className="col-span-2" />
                 <Champ label="Adresse" value={cli.adresse} onChange={(v) => majCli('adresse', v)} className="col-span-2" />
                 <Champ label="Code postal" value={cli.cp} onChange={(v) => majCli('cp', v)} />
@@ -529,12 +579,12 @@ export function DevisBuilder({
           </div>
 
           {/* Objet */}
-          <Champ label="Objet du devis" value={objet} onChange={setObjet} placeholder="Ex. Fourniture et pose de menuiseries" />
+          <div className="rounded-xl border border-border bg-card p-4"><Champ label="Objet du devis" value={objet} onChange={setObjet} placeholder="Ex. Fourniture et pose de menuiseries" /></div>
 
           {/* Lignes */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold">Prestations</p>
+          <section aria-labelledby={`${clientBlocId}-prestations`} className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-1">
+              <h2 id={`${clientBlocId}-prestations`} className="text-base font-medium">Prestations</h2>
               <Select
                 value={tvaMode}
                 onValueChange={(v) => setTvaMode(v as 'franchise' | 'normal')}
@@ -557,11 +607,11 @@ export function DevisBuilder({
             {lignesRemplies.length === 0 && (
               <Button
                 variant="outline"
-                className="h-auto w-full flex-col items-start gap-0.5 border-primary/30 bg-primary/5 py-3 text-left"
+                className="h-auto w-full flex-col items-start gap-1 border-border bg-card px-4 py-3 text-left"
                 onClick={() => setEntretienOuvert(true)}
               >
                 <span className="flex items-center gap-1.5 font-medium">
-                  <MessageSquareText className="size-4 text-primary" />
+                  <MessageSquareText className="size-4 text-muted-foreground" aria-hidden />
                   Décrire le chantier
                 </span>
                 <span className="whitespace-normal text-xs font-normal text-muted-foreground">
@@ -605,14 +655,14 @@ export function DevisBuilder({
                 {suggerer.isPending ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (
-                  <Sparkles className="size-4" />
+                  <ListPlus className="size-4" aria-hidden />
                 )}
                 Proposer des lignes depuis le dossier
               </Button>
             )}
 
             {!!suggestions?.lignes?.length && (
-              <div className="space-y-2 rounded-xl border border-primary/25 bg-primary/5 p-3">
+              <div className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium">
                     {suggestions.lignes.length} lignes proposées
@@ -658,7 +708,7 @@ export function DevisBuilder({
                             : 'prix à saisir'}
                         </p>
                         {x.pourquoi && (
-                          <p className="mt-1 text-xs italic text-muted-foreground">{x.pourquoi}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{x.pourquoi}</p>
                         )}
                       </button>
                     </li>
@@ -702,7 +752,7 @@ export function DevisBuilder({
                 partagent. C'est le geste qui reste le plus répétitif une fois
                 les lignes posées par un modèle. */}
             {uniteCote && (
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-2.5">
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
                 <div className="relative w-24 shrink-0">
                   <Input
                     type="text"
@@ -734,7 +784,7 @@ export function DevisBuilder({
             )}
 
             {lignes.map((l, i) => (
-              <div key={i} className="space-y-2 rounded-xl border border-border p-2.5">
+              <div key={i} className="space-y-3 rounded-xl border border-border bg-card p-4">
                 <Textarea
                   placeholder="Désignation (ex. Fenêtre PVC 2 vantaux, pose comprise)"
                   value={l.designation}
@@ -754,7 +804,7 @@ export function DevisBuilder({
                     aria-label="Quantité"
                   />
                   <Select value={l.unite} onValueChange={(v) => majLigne(i, 'unite', v)}>
-                    <SelectTrigger className="h-11 w-24 shrink-0">
+                    <SelectTrigger className="h-11 w-24 shrink-0" aria-label="Unité de la ligne">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -846,10 +896,13 @@ export function DevisBuilder({
               lignes={lignesRemplies}
               metier={initial?.metier ?? (objet || null)}
             />
+          </section>
           </div>
 
+          <aside aria-label="Récapitulatif et conditions du devis" className="min-w-0 space-y-4 lg:sticky lg:top-6">
           {/* Totaux */}
-          <div className="space-y-1.5 rounded-xl bg-primary/5 p-3">
+          <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+            <h2 className="mb-4 text-sm font-medium">Récapitulatif</h2>
             {tvaMode === 'normal' && (
               <>
                 <div className="flex items-center justify-between text-sm">
@@ -862,27 +915,25 @@ export function DevisBuilder({
                 </div>
               </>
             )}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className="text-sm font-medium">
                 {tvaMode === 'normal' ? 'Total TTC' : 'Net à payer'}
               </span>
-              <span className="montant text-xl font-semibold text-primary">
+              <span className="montant text-2xl font-medium text-foreground">
                 {euro2(chiffres.ttc)}
               </span>
             </div>
-          </div>
-          {tvaMode === 'franchise' && (
-            <p className="text-xs text-muted-foreground">
-              TVA non applicable, art. 293 B du CGI.
-            </p>
-          )}
+            {tvaMode === 'franchise' && <p className="border-t border-border pt-3 text-xs text-muted-foreground">TVA non applicable, art. 293 B du CGI.</p>}
+          </section>
 
           {/* Ce que ça vous laisse — jamais imprimé sur le devis du client. */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-border p-2.5">
+          <section className="rounded-xl border border-border bg-card p-5">
+            <h2 className="mb-4 text-sm font-medium">Pour votre entreprise</h2>
+            <div className="space-y-4">
+            <div>
               <p className="text-xs text-muted-foreground">Votre marge, net de commission</p>
               <p
-                className={`montant text-base font-semibold ${
+                className={`montant mt-2 text-lg font-medium ${
                   chiffres.cout > 0 && chiffres.margePct < 15 ? 'text-destructive' : ''
                 }`}
               >
@@ -897,15 +948,16 @@ export function DevisBuilder({
                 )}
               </p>
             </div>
-            <div className="rounded-xl border border-border p-2.5">
+            <div className="border-t border-border pt-4">
               <p className="text-xs text-muted-foreground">
                 Commission Celexia
                 {etat?.taux_commission != null &&
-                  ` (${(etat.taux_commission * 100).toFixed(0)} %)`}
+                  ` (${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(etat.taux_commission * 100)} %)`}
               </p>
-              <p className="montant text-base font-semibold">{euro2(chiffres.commission)}</p>
+              <p className="montant mt-2 text-lg font-medium">{euro2(chiffres.commission)}</p>
             </div>
-          </div>
+            </div>
+          <div className="mt-4 border-t border-border pt-3">
           {afficheDebourses ? (
             <p className="text-xs text-muted-foreground">
               {chiffres.cout === 0
@@ -916,7 +968,7 @@ export function DevisBuilder({
             <Button
               variant="ghost"
               size="sm"
-              className="w-full text-muted-foreground"
+              className="h-auto w-full justify-start whitespace-normal px-0 text-left text-xs text-muted-foreground"
               onClick={() => setDeboursesOuverts(true)}
             >
               <Calculator className="size-4" />
@@ -924,39 +976,45 @@ export function DevisBuilder({
             </Button>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
+          </div>
+          </section>
+
+          <section className="space-y-4 rounded-xl border border-border bg-card p-5">
+            <h2 className="text-sm font-medium">Conditions de paiement</h2>
             <Champ label="Acompte (%)" value={acompte} onChange={setAcompte} type="number" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Conditions</Label>
-            <Textarea value={conditions} onChange={(e) => setConditions(e.target.value)} rows={2} />
-          </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor={conditionsId}>Conditions</Label>
+              <Textarea id={conditionsId} value={conditions} onChange={(e) => setConditions(e.target.value)} rows={4} className="text-sm leading-relaxed" />
+            </div>
+          </section>
+          </aside>
+          </fieldset>
         </div>
 
         {/* Actions — précédées du total, qui reste ainsi sous les yeux quelle
             que soit la position dans un devis de quinze lignes. */}
-        <div className="border-t border-border p-4 pt-3">
+        <div className="shrink-0 border-t border-border bg-card px-4 py-3 sm:px-6">
           <div className="mb-2.5 flex items-baseline justify-between gap-2">
             <span className="text-sm text-muted-foreground">
               {lignesRemplies.length} ligne{lignesRemplies.length > 1 ? 's' : ''}
               {tvaMode === 'normal' ? ' · TTC' : ''}
             </span>
-            <span className="montant text-lg font-semibold text-primary">{euro2(chiffres.ttc)}</span>
+            <span className="montant text-lg font-medium">{euro2(chiffres.ttc)}</span>
           </div>
           {/* Trois colonnes dès le mobile : un bouton pleine largeur ici
               occupait exactement la place de « Reprendre ces lignes » dans
               l'entretien, et un second appui envoyait le devis par email. */}
           <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" onClick={apercu} disabled={busy}>
-            <Eye className="size-4" />
+          <Button variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={apercu} disabled={busy}>
+            <Eye className="hidden size-4 sm:block" aria-hidden />
             Aperçu
           </Button>
-          <Button variant="outline" onClick={() => enregistrer('garder')} disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          <Button variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={() => enregistrer('garder')} disabled={busy} aria-busy={busy}>
+            {busy ? <Loader2 className="hidden size-4 animate-spin sm:block" aria-hidden /> : <Save className="hidden size-4 sm:block" aria-hidden />}
             Enregistrer
           </Button>
-          <Button onClick={() => enregistrer('client')} disabled={busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+          <Button className="min-w-0 px-2 text-xs sm:text-sm" onClick={() => enregistrer('client')} disabled={busy} aria-busy={busy}>
+            {busy ? <Loader2 className="hidden size-4 animate-spin sm:block" aria-hidden /> : <Send className="hidden size-4 sm:block" aria-hidden />}
             Au client
           </Button>
           </div>
@@ -1017,4 +1075,15 @@ function Champ({
       />
     </div>
   )
+}
+
+function telechargerBlob(blob: Blob, numero: string) {
+  const url = URL.createObjectURL(blob)
+  const lien = document.createElement('a')
+  lien.href = url
+  lien.download = `devis-${numero}.pdf`
+  document.body.appendChild(lien)
+  lien.click()
+  lien.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

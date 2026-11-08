@@ -48,7 +48,7 @@ export function texteMetre(r: ResumeMetre): string {
     const source = SOURCE[t.source] + (t.vol ? ` (vol de ${t.vol})` : '')
     lignes.push(`Toit${t.versant ? ` (versant ${t.versant})` : ''} : ${formatM2(t.surface)} — ${detail} — ${source}`)
     lignes.push(
-      `  À commander : ${[5, 10, 15].map((c) => `${formatM2(t.surface * (1 + c / 100))} (+${c} %)`).join(' · ')}`,
+      `  Simulation de chutes, à vérifier avant commande : ${[5, 10, 15].map((c) => `${formatM2(t.surface * (1 + c / 100))} (+${c} %)`).join(' · ')}`,
     )
   }
   for (const f of r.facades) {
@@ -64,7 +64,7 @@ export function texteMetre(r: ResumeMetre): string {
 }
 
 /** Partager si le téléphone sait le faire, sinon copier. Rend ce qui a été fait. */
-export async function partagerTexte(titre: string, texte: string): Promise<'partage' | 'copie' | 'echec'> {
+export async function partagerTexte(titre: string, texte: string): Promise<'partage' | 'copie' | 'annule' | 'echec'> {
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       await navigator.share({ title: titre, text: texte })
@@ -72,7 +72,7 @@ export async function partagerTexte(titre: string, texte: string): Promise<'part
     }
   } catch (e) {
     // L'artisan a refermé la feuille de partage : rien à signaler.
-    if (e instanceof DOMException && e.name === 'AbortError') return 'echec'
+    if (e instanceof DOMException && e.name === 'AbortError') return 'annule'
   }
   try {
     await navigator.clipboard.writeText(texte)

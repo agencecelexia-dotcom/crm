@@ -1,7 +1,7 @@
 import { Building2, FileText, HardHat, LifeBuoy, Ruler, Wallet } from 'lucide-react'
 
 /**
- * Les cinq écrans de l'espace artisan.
+ * Les six écrans de l'espace artisan.
  *
  * Tout tenait auparavant sur une seule page : contrat, tableau de bord,
  * identité, assurances, devis, chantiers, relevé de commissions et mentions.

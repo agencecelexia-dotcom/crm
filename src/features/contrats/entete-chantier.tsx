@@ -1,7 +1,7 @@
-import { AlertTriangle, ChevronDown, Lock, MapPin } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, Lock, MapPin } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import { StatutBadge } from '@/components/statut-badge'
+import { StatutArtisan } from './statut-artisan'
 import { formatEuros } from '@/lib/format'
 import { statutInfo } from '@/lib/constants'
 import { ancienneteLabel, COULEUR_URGENCE, estNouveau, urgenceChantier } from './urgence-chantier'
@@ -27,7 +27,7 @@ export function EnteteChantier({
 }: {
   projet: ProjetEspace
   signe: boolean
-  /** Non fourni = en-tête non dépliable (kanban, drawer). */
+  /** Non fourni avec onToggle = ouverture du panneau latéral. */
   ouvert?: boolean
   onToggle?: () => void
   /** Variante dense, pour les colonnes du kanban. */
@@ -45,7 +45,7 @@ export function EnteteChantier({
     signe && projet.client_nom ? (
       projet.client_nom
     ) : (
-      <span className="flex items-center gap-1 italic text-muted-foreground">
+      <span className="flex items-center gap-1.5 text-muted-foreground">
         <Lock className="size-3.5 shrink-0" /> Client confidentiel
       </span>
     )
@@ -54,23 +54,23 @@ export function EnteteChantier({
     <div
       className={cn(
         'flex items-center gap-3',
-        compact ? 'p-3' : 'p-4 pl-5 sm:p-5 sm:pl-6',
-        depliable && 'cursor-pointer transition-colors hover:bg-accent/40',
+        compact ? 'p-4' : 'p-4 sm:px-5 xl:min-h-24',
+        depliable && 'cursor-pointer transition-colors hover:bg-muted/40',
       )}
       onClick={depliable ? onToggle : undefined}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className={cn('min-w-0 flex-1', !compact && 'xl:grid xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)_minmax(0,1fr)] xl:items-center xl:gap-6')}>
+        <div className={cn('flex flex-wrap items-center gap-2', !compact && 'xl:gap-x-2 xl:gap-y-1')}>
           <span
             className={cn(
-              'min-w-0 truncate font-display tracking-tight',
-              compact ? 'text-sm' : 'text-base',
+              'min-w-0 break-words font-semibold text-foreground',
+              compact ? 'text-sm' : 'text-base xl:w-full',
             )}
           >
             {titre}
           </span>
           {projet.client_ville && (
-            <span className="flex min-w-0 items-center gap-0.5 text-sm text-foreground/70">
+            <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
               <MapPin className="size-3.5 shrink-0" />
               <span className="truncate">{projet.client_ville}</span>
             </span>
@@ -78,42 +78,49 @@ export function EnteteChantier({
           {/* Un chantier tout juste reçu n'a encore déclenché aucune règle
               d'urgence : sans marqueur, il se noie parmi les anciens. */}
           {nouveau && (
-            <span className="rounded-full bg-[#0EA5E9] px-2 py-0.5 text-xs font-semibold text-white">
+            <span className="text-xs font-medium text-primary">
               Nouveau
             </span>
           )}
           {nonLus > 0 && (
-            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+              <span aria-hidden className="size-1.5 rounded-full bg-current" />
               {nonLus} message{nonLus > 1 ? 's' : ''}
             </span>
           )}
         </div>
 
-        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-          <span className="truncate">{metiers.join(', ')}</span>
-          {!compact && <StatutBadge statut={projet.statut} />}
-          {age && <span className="text-xs">· reçu {age}</span>}
+        <p className={cn('mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground', !compact && 'xl:mt-0 xl:flex-col xl:items-start xl:gap-2')}>
+          <span className="break-words">{metiers.join(', ')}</span>
+          {(!compact || projet.issue === 'gagne' || projet.issue === 'perdu') && <StatutArtisan statut={projet.statut} />}
+          {compact && age && <span className="text-xs">· reçu {age}</span>}
         </p>
 
-        {urgence.raison && (
-          <p
-            className={cn(
-              'mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
-              COULEUR_URGENCE[urgence.niveau],
-            )}
-          >
-            {urgence.niveau === 'critique' && <AlertTriangle className="size-3" />}
-            {urgence.raison}
-          </p>
-        )}
+        <div className={cn(!compact && 'mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 xl:mt-0 xl:flex-col xl:items-start')}>
+          {urgence.raison && (
+            <p
+              className={cn(
+                'inline-flex items-start gap-1.5 rounded-md border px-2 py-1 text-xs font-medium',
+                compact && 'mt-2',
+                COULEUR_URGENCE[urgence.niveau],
+              )}
+            >
+              {urgence.niveau === 'critique' && <AlertTriangle className="mt-0.5 size-3 shrink-0" />}
+              {urgence.raison}
+            </p>
+          )}
+          {!compact && age && <span className="text-xs text-muted-foreground">Reçu {age}</span>}
+        </div>
 
-        {compact && montant != null && (
-          <p className="montant mt-1.5 text-sm font-semibold">{formatEuros(montant)}</p>
+        {montant != null && (
+          <p className={cn('montant mt-2 text-sm font-semibold', !compact && 'sm:hidden')}>
+            {formatEuros(montant)}
+          </p>
         )}
       </div>
 
       {!compact && (
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center justify-end gap-3 xl:w-36">
           {montant != null && (
             <span className="montant hidden text-sm font-semibold sm:block">
               {formatEuros(montant)}
@@ -127,14 +134,18 @@ export function EnteteChantier({
                 onToggle?.()
               }}
               aria-expanded={ouvert}
-              aria-label={ouvert ? 'Replier le chantier' : 'Déplier le chantier'}
+              aria-label={ouvert === undefined ? 'Ouvrir le chantier' : ouvert ? 'Replier le chantier' : 'Déplier le chantier'}
               className={cn(
-                'flex size-8 items-center justify-center rounded-full transition-all duration-200',
+                'flex size-11 items-center justify-center rounded-lg transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                ouvert ? 'rotate-180 bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+                ouvert ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted',
               )}
             >
-              <ChevronDown className="size-5" />
+              {ouvert === undefined ? (
+                <ChevronRight className="size-5" />
+              ) : (
+                <ChevronDown className={cn('size-5 transition-transform', ouvert && 'rotate-180')} />
+              )}
             </button>
           )}
         </div>
@@ -148,7 +159,7 @@ export function LisereStatut({ statut }: { statut: string }) {
   return (
     <span
       aria-hidden
-      className="absolute inset-y-0 left-0 w-1"
+      className="absolute inset-y-0 left-0 w-0.5 opacity-60"
       style={{ background: statutInfo(statut).color }}
     />
   )

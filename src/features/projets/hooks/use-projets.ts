@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import { composerAdresse, geocoder } from '@/lib/geocoding'
 import type { Projet, ProjetAvecArtisan, ProjetInput } from '@/types/database'
+import { invaliderDonneesProjets } from '../lib/invalidation'
 
 const TABLE = 'projets'
 // Jointure légère vers l'artisan assigné (pour l'affichage en liste/fiche).
@@ -115,11 +116,6 @@ async function enrichirAvecCoordonnees(
   }
 }
 
-function invalider(qc: ReturnType<typeof useQueryClient>, id?: string) {
-  qc.invalidateQueries({ queryKey: ['projets'] })
-  if (id) qc.invalidateQueries({ queryKey: ['projets', id] })
-}
-
 /** Création d'un projet (renseigne created_by + géocode l'adresse client). */
 export function useCreateProjet() {
   const qc = useQueryClient()
@@ -135,7 +131,7 @@ export function useCreateProjet() {
       if (error) throw error
       return data
     },
-    onSuccess: () => invalider(qc),
+    onSuccess: () => invaliderDonneesProjets(qc),
   })
 }
 
@@ -160,7 +156,7 @@ export function useUpdateProjet() {
       if (error) throw error
       return data
     },
-    onSuccess: (data) => invalider(qc, data.id),
+    onSuccess: () => invaliderDonneesProjets(qc),
   })
 }
 
@@ -187,7 +183,7 @@ export function usePatchProjet() {
       if (error) throw error
       return data
     },
-    onSuccess: (data) => invalider(qc, data.id),
+    onSuccess: () => invaliderDonneesProjets(qc),
   })
 }
 
@@ -202,7 +198,7 @@ export function useDeleteProjet() {
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalider(qc),
+    onSuccess: () => invaliderDonneesProjets(qc),
   })
 }
 
@@ -230,10 +226,7 @@ export function useRestaurerProjet() {
       const { error } = await supabase.from(TABLE).update({ deleted_at: null }).eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => {
-      invalider(qc)
-      qc.invalidateQueries({ queryKey: ['projets', 'corbeille'] })
-    },
+    onSuccess: () => invaliderDonneesProjets(qc),
   })
 }
 
@@ -245,6 +238,6 @@ export function useSupprimerDefinitivement() {
       const { error } = await supabase.from(TABLE).delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projets', 'corbeille'] }),
+    onSuccess: () => invaliderDonneesProjets(qc),
   })
 }

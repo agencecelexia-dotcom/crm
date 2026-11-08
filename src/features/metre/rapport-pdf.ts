@@ -117,7 +117,34 @@ export async function construireRapport(r: RapportMetre, releve: Releve, image3d
   doc.line(marge, y, pageW - marge, y)
   y += 7
 
+  // Les valeurs du chantier priment pour la lecture du rapport. Les tableaux
+  // géométriques restent intacts : une correction de surface ne redessine pas
+  // artificiellement les pans et les façades du relevé.
+  if (r.dossier.length) {
+    titreSection('Dossier du chantier : valeurs et provenance')
+    for (const ligne of r.dossier) {
+      const contenu = `${ligne.element} : ${ligne.quantite?.toLocaleString('fr-FR')} ${ligne.unite} — ${ligne.source}. ${ligne.validation}.${ligne.detail ? ` ${ligne.detail}` : ''}`
+      doc.setFont(F, ligne.rubrique === 'Valeurs confirmées' ? 'bold' : 'normal')
+      doc.setFontSize(9)
+      couleur(GRIS)
+      const lignes = doc.splitTextToSize(net(contenu), largeur) as string[]
+      for (const l of lignes) {
+        assurer(5)
+        texte(l, marge, y)
+        y += 4.5
+      }
+      y += 2
+    }
+  }
+  titreSection('Relevé automatique conservé')
+  doc.setFont(F, 'normal')
+  doc.setFontSize(9)
+  couleur(GRIS)
+  texte(`Confiance : ${r.confiance}. Estimation à distance, sans remplacement par les corrections du chantier.`, marge, y, { maxWidth: largeur })
+  y += 11
+
   // ---------- Les chiffres clés ----------
+  assurer(26)
   const cles: [string, string, string][] = [
     ['Toiture', formatM2(r.toiture.surface), `${r.toiture.nombre} pans, pente ${pct(r.toiture.penteDesPans)}`],
     [
@@ -205,7 +232,7 @@ export async function construireRapport(r: RapportMetre, releve: Releve, image3d
   doc.setFontSize(8.5)
   couleur(GRIS)
   const aCommander = [5, 10, 15].map((c) => `${formatM2(r.toiture.surface * (1 + c / 100))} (+${c} %)`).join(' · ')
-  texte(`Surface vraie, pente comprise${r.toiture.debord ? `, débord mesuré : ${r.toiture.debord}` : ''}. À commander, chutes comprises : ${aCommander}.`, marge, y, { maxWidth: largeur })
+  texte(`Estimation initiale, pente comprise${r.toiture.debord ? `, débord mesuré : ${r.toiture.debord}` : ''}. Simulation de chutes sur ce relevé : ${aCommander}. À vérifier avant commande.`, marge, y, { maxWidth: largeur })
   y += 9
 
   if (r.lineaires.length) {

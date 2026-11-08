@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { cn } from '@/lib/utils'
@@ -35,7 +35,6 @@ import { ContratFormate } from './contrat-format'
 import { ChantiersPerdus } from './chantiers-perdus'
 import { PiedDePageArtisan } from './pied-de-page-artisan'
 import { EnteteChantier, LisereStatut } from './entete-chantier'
-import { CorpsChantier } from './corps-chantier'
 import { KanbanChantiers } from './kanban-chantiers'
 import { DrawerChantier } from './drawer-chantier'
 import { ReleveCommissions } from './releve-commissions'
@@ -43,11 +42,13 @@ import { correspond, dateReception, estClos, urgenceChantier } from './urgence-c
 import { ApercuDernierSuivi } from './apercu-dernier-suivi'
 import { TableauDeBordArtisan } from './tableau-de-bord-artisan'
 import { DevisBuilder, type DevisInitial } from '@/features/devis/devis-builder'
-import { useListeDevis } from '@/features/devis/use-devis'
+import { useListeDevis, useReprendreDevis, type BrouillonDevis } from '@/features/devis/use-devis'
 import { CarteIdentite } from '@/features/devis/carte-identite'
 import { EcranMetres } from '@/features/metre/ecran-metres'
 import { FeuilleMetreDifferee } from '@/features/metre/feuille-metre-differee'
-import { MenuEspace } from './menu-espace'
+import { CadreEspace } from './cadre-espace'
+import { ECRANS } from './ecrans-espace'
+import { PageHeader } from '@/components/page-header'
 import { useVueEspace } from './use-vue-espace'
 import { CarteAssurances } from '@/features/assurances/carte-assurances'
 import { useEtatChiffrage } from '@/features/assurances/use-assurances'
@@ -69,7 +70,8 @@ export function EspaceArtisanPage() {
   })
   // Le générateur de devis s'ouvre aux artisans dont les assurances sont
   // déposées ET validées (0131) — il était jusqu'ici réservé en dur à un seul.
-  const { data: chiffrage } = useEtatChiffrage(token)
+  const chiffrageQuery = useEtatChiffrage(token)
+  const chiffrage = chiffrageQuery.data
   const [devisInitial, setDevisInitial] = useState<DevisInitial | null>(null)
   // Bascule pipe actif / espace « Perdus » (migration 0070).
   const [vuePerdus, setVuePerdus] = useState(false)
@@ -146,10 +148,12 @@ export function EspaceArtisanPage() {
       </Centre>
     )
 
-  const { artisan, engagement, signe, contrat_externe, projets } = data
+  const { artisan, engagement, signe, contrat_externe, projets: projetsRecus } = data
+  const accesOuvert = signe || contrat_externe
+  const projets = accesOuvert ? projetsRecus : projetsRecus.map((p) => ({ ...p, client_nom: null, client_telephone: null, client_email: null, client_adresse: null, client_code_postal: null, suivis: [] }))
   const projetsPerdus = data.projets_perdus ?? []
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
-  const peutChiffrer = chiffrage?.peut_chiffrer === true
+  const peutChiffrer = accesOuvert && chiffrage?.peut_chiffrer === true
 
   function ouvrirDevisProjet(p: ProjetEspace) {
     setDevisInitial({
@@ -166,334 +170,110 @@ export function EspaceArtisanPage() {
     })
   }
 
-  const initiale = (nomArtisan || '?').trim().charAt(0).toUpperCase()
+  const ecran = ECRANS.find((e) => e.cle === vue) ?? ECRANS[0]
+  const naviguer = (destination: typeof vue) => {
+    setVuePerdus(false)
+    allerA(destination)
+  }
 
   return (
-    <div className="relative min-h-dvh overflow-x-clip bg-background">
-      {/* Bande décorative du hero (purement visuelle) */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72">
-        <div className="absolute inset-0 bg-gradient-to-b from-violet-100 via-violet-50/60 to-transparent" />
-        <div className="absolute -left-20 -top-24 size-72 rounded-full bg-violet-300/20 blur-3xl" />
-        <div className="absolute -right-16 top-4 size-56 rounded-full bg-violet-400/10 blur-3xl" />
-      </div>
+    <CadreEspace vue={vue} onAller={naviguer} nom={nomArtisan || 'Artisan'} societe={artisan.societe} signe={accesOuvert} nbChantiers={projets.length}>
+      <PageHeader
+        titre={vue === 'chantiers' && vuePerdus ? 'Chantiers perdus' : ecran.titre}
+        sousTitre={`${artisan.societe || nomArtisan} · ${ecran.detail}`}
+        action={<div className="flex flex-wrap items-center gap-2">
+          {vue === 'chantiers' && projetsPerdus.length > 0 && !vuePerdus && <Button variant="outline" onClick={() => setVuePerdus(true)}><RotateCcw className="size-4" aria-hidden />Perdus <span className="text-xs tabular-nums text-muted-foreground">{projetsPerdus.length}</span></Button>}
+          {vue === 'devis' && peutChiffrer && <Button onClick={() => setDevisInitial({})}><FilePlus className="size-4" aria-hidden />Nouveau devis</Button>}
+        </div>}
+      />
 
-      <div className="mx-auto max-w-5xl px-4 py-7 sm:px-6 sm:py-12">
-        {isError && (
-          <div
-            role="status"
-            className="mx-auto mb-4 flex max-w-2xl items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-          >
-            <WifiOff className="size-4 shrink-0" />
-            <span className="flex-1">Connexion perdue : les informations affichées peuvent dater.</span>
-            <Button size="sm" variant="outline" className="h-9" onClick={() => void refetch()}>
-              Réessayer
-            </Button>
-          </div>
+      {isError && <div role="status" className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><WifiOff className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1">Connexion perdue : les informations affichées peuvent dater.</span><Button size="sm" variant="outline" onClick={() => void refetch()}>Réessayer</Button></div>}
+
+      {!accesOuvert && <SignatureContrat engagement={engagement} onSigne={() => void refetch()} />}
+
+      {vue === 'chantiers' && (vuePerdus ? (
+        <ChantiersPerdus projets={projetsPerdus} signe={accesOuvert} onRetour={() => setVuePerdus(false)} onChange={() => void refetch()} />
+      ) : (
+        <div className="space-y-6">
+          {accesOuvert && data.stats && <TableauDeBordArtisan stats={data.stats} projets={projets} onFiltrer={(f) => {
+            setFiltreDemande(f)
+            document.getElementById('mes-chantiers')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+          }} />}
+          <ListeChantiers filtreDemande={filtreDemande} onFiltreApplique={() => setFiltreDemande(null)} projets={projets} signe={accesOuvert} onChange={() => void refetch()} onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined} onMesurer={accesOuvert ? setMesure : undefined} />
+          {accesOuvert && <p className="text-xs leading-6 text-muted-foreground">Votre interlocuteur Celexia vous transmet ces chantiers. Contactez vos clients et renseignez l’avancement pour garder un suivi partagé avec l’agence.</p>}
+        </div>
+      ))}
+
+      {vue === 'devis' && accesOuvert && token && <div className="space-y-5">
+        {chiffrageQuery.isLoading ? <Skeleton className="h-24 w-full rounded-xl" aria-label="Chargement de l’accès au générateur" /> : chiffrageQuery.isError ? (
+          <div role="alert" className="rounded-xl border border-border bg-card p-6"><h2 className="text-base font-medium">L’accès aux devis n’a pas pu être vérifié</h2><p className="mt-2 text-sm text-muted-foreground">Vos devis existants restent consultables. Réessayez pour retrouver le générateur.</p><Button variant="outline" className="mt-4" onClick={() => void chiffrageQuery.refetch()}>Réessayer</Button></div>
+        ) : !peutChiffrer && (
+          <section className="flex items-start gap-4 rounded-xl border border-border bg-card p-5">
+            <Lock className="mt-1 size-5 shrink-0 text-muted-foreground" aria-hidden />
+            <div><h2 className="text-base font-medium">Activez la création de vos devis</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Vos devis et leurs PDF restent consultables. La création et la modification nécessitent des attestations décennale et RC professionnelle validées par Celexia.</p><Button variant="outline" className="mt-4" onClick={() => naviguer('entreprise')}>Compléter mes assurances</Button></div>
+          </section>
         )}
-      <header className="mb-8 sm:mb-12">
-        <div className="mb-6 flex justify-center">
-          <BrandLogo className="h-10 mix-blend-multiply sm:h-11" />
-        </div>
-        <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-x-4 gap-y-3">
-          <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary font-display text-xl font-semibold text-primary-foreground shadow-violet sm:size-14 sm:text-2xl">
-            {initiale}
-          </span>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-2xl tracking-tight sm:text-3xl">
-              {nomArtisan}
-            </h1>
-            {artisan.societe && artisan.societe !== nomArtisan && (
-              <p className="truncate text-sm text-muted-foreground">{artisan.societe}</p>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {contrat_externe || signe ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#22C55E]/25 bg-[#22C55E]/10 px-3 py-1.5 text-xs font-medium text-[#16A34A]">
-                <CheckCircle2 className="size-3.5" /> Contrat signé
-              </span>
-            ) : (
-              <a
-                href="#contrat"
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-3 py-1.5 text-xs font-medium text-[#B45309] transition-colors hover:bg-[#F59E0B]/20"
-              >
-                <Lock className="size-3.5" /> Contrat à signer
-              </a>
-            )}
-            {/* « Perdus » n'a de sens que devant la liste des chantiers. */}
-            {vue === 'chantiers' && projetsPerdus.length > 0 && !vuePerdus && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="bg-card"
-                onClick={() => setVuePerdus(true)}
-              >
-                <RotateCcw className="size-4" />
-                Perdus
-                <span className="ml-0.5 rounded-full bg-muted px-1.5 text-xs font-semibold">
-                  {projetsPerdus.length}
-                </span>
-              </Button>
-            )}
-            <MenuEspace
-              vue={vue}
-              onAller={(v) => {
-                setVuePerdus(false)
-                allerA(v)
-              }}
-              compteurs={{ chantiers: projets.length }}
-            />
-          </div>
-        </div>
-      </header>
+        <MesDevis token={token} modifiable={peutChiffrer} onCreer={() => setDevisInitial({})} onReprendre={(brouillon) => setDevisInitial({ brouillon, client_nom: brouillon.client_nom, affectation_token: brouillon.affectation_token })} />
+      </div>}
+      {vue === 'metres' && accesOuvert && token && <EcranMetres token={token} projets={projets} />}
+      {vue === 'commissions' && accesOuvert && token && <ReleveCommissions token={token} />}
 
-      {/* Le contrat commande tout le reste : tant qu'il n'est pas signé, il
-          s'affiche quel que soit l'écran choisi. */}
-      {!signe && !contrat_externe && (
-        <div className="mx-auto max-w-2xl">
-          <SignatureContrat engagement={engagement} onSigne={() => void refetch()} />
+      {vue === 'entreprise' && accesOuvert && (
+        <div className="space-y-6">
+          <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card px-5 py-5" aria-label="Contrat de partenariat">
+            <div className="flex items-center gap-3"><CheckCircle2 className="size-5 shrink-0 text-emerald-700" aria-hidden /><div><h2 className="text-sm font-medium">Contrat de partenariat signé</h2><p className="mt-1 text-xs text-muted-foreground">{contrat_externe ? 'Contrat enregistré par votre agence' : engagement.signed_at ? `Signé le ${formatDate(engagement.signed_at)}` : 'Votre engagement avec Celexia'}</p></div></div>
+            {!contrat_externe && <Button variant="outline" size="sm" onClick={() => telechargerContratPdf({ contenu: finaliserContenu(engagement.contenu, engagement.signed_at), signataire: engagement.signataire_nom, signedAt: engagement.signed_at, signatureDataUrl: engagement.signature_data, apporteurSignatureUrl: engagement.apporteur_signature })}><Download className="size-4" aria-hidden />Télécharger le contrat</Button>}
+          </section>
+          {token && <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]"><div className="min-w-0"><CarteIdentite token={token} /></div><div className="min-w-0"><CarteAssurances token={token} /></div></div>}
         </div>
       )}
-
-      {/* ---------- Mes chantiers ---------- */}
-      {vue === 'chantiers' &&
-        (vuePerdus ? (
-          <div className="mx-auto max-w-2xl">
-            <ChantiersPerdus
-                        projets={projetsPerdus}
-                        signe={signe}
-                        onRetour={() => setVuePerdus(false)}
-                        onChange={() => void refetch()}
-                      />
-          </div>
-        ) : (
-          <>
-            <div className="mx-auto max-w-2xl">
-              {/* Intro */}
-                    {signe && (
-                      <div className="mb-3 flex items-start gap-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 font-display text-sm font-semibold text-primary">
-                          A
-                        </span>
-                        <p className="text-sm leading-relaxed text-foreground/90">
-                          <strong>Antoine</strong> vous transmet ces chantiers. Contactez vos
-                          clients dès que possible et tenez-nous informés avec les boutons de suivi.
-                        </p>
-                      </div>
-                    )}
-              {/* Résumé de son activité (statuts + commission due) */}
-                    {signe && data.stats && (
-                      <TableauDeBordArtisan
-                        stats={data.stats}
-                        onFiltrer={(f) => {
-                          setFiltreDemande(f)
-                          document.getElementById('mes-chantiers')?.scrollIntoView({ behavior: 'smooth' })
-                        }}
-                      />
-                    )}
-            </div>
-            <div className="mx-auto max-w-5xl">
-              <ListeChantiers
-                      filtreDemande={filtreDemande}
-                      onFiltreApplique={() => setFiltreDemande(null)}
-                      projets={projets}
-                      signe={signe}
-                      onChange={() => void refetch()}
-                      onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined}
-                      onMesurer={setMesure}
-                    />
-            </div>
-          </>
-        ))}
-
-      {/* ---------- Mes devis ---------- */}
-      {vue === 'devis' && (
-        <div className="mx-auto max-w-2xl space-y-4">
-          {peutChiffrer && token ? (
-            <>
-              <Button className="w-full shadow-violet" onClick={() => setDevisInitial({})}>
-                <FilePlus className="size-4" />
-                Nouveau devis
-              </Button>
-              {peutChiffrer && token && <MesDevis token={token} />}
-            </>
-          ) : (
-            <div className="rounded-2xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-4 text-sm text-[#B45309]">
-              <p className="font-medium">Le chiffrage n’est pas encore ouvert.</p>
-              <p className="mt-1">
-                Déposez votre attestation décennale et votre RC pro dans « Mon entreprise » :
-                l’agence les valide, et le générateur de devis s’ouvre.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ---------- Métrés ---------- */}
-      {vue === 'metres' && token && (
-        <div className="mx-auto max-w-2xl">
-          <EcranMetres token={token} projets={projets} />
-        </div>
-      )}
-
-      {/* ---------- Commissions ---------- */}
-      {vue === 'commissions' && signe && token && (
-        <div className="mx-auto max-w-2xl">
-          <ReleveCommissions token={token} />
-        </div>
-      )}
-
-      {/* ---------- Mon entreprise ---------- */}
-      {vue === 'entreprise' && (
-        <div className="mx-auto max-w-2xl">
-          {contrat_externe ? null : signe ? (
-                  <div className="mb-4 rounded-2xl border border-[#22C55E]/25 bg-[#22C55E]/5 shadow-card">
-                    <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
-                      <p className="flex min-w-0 items-center gap-2.5 text-sm font-medium">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#22C55E]/15 text-[#16A34A]">
-                          <CheckCircle2 className="size-5" />
-                        </span>
-                        <span className="min-w-0">
-                          Contrat signé
-                          {engagement.signed_at && (
-                            <span className="block truncate text-xs font-normal text-muted-foreground sm:inline sm:before:content-['_']">
-                              le {formatDate(engagement.signed_at)}
-                            </span>
-                          )}
-                        </span>
-                      </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 bg-card"
-                        onClick={() =>
-                          telechargerContratPdf({
-                            contenu: finaliserContenu(engagement.contenu, engagement.signed_at),
-                            signataire: engagement.signataire_nom,
-                            signedAt: engagement.signed_at,
-                            signatureDataUrl: engagement.signature_data,
-                            apporteurSignatureUrl: engagement.apporteur_signature,
-                          })
-                        }
-                      >
-                        <Download className="size-4" />
-                        Télécharger
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-          {(signe || contrat_externe) && token && (
-                    <>
-                      {/* Renseignée une fois, portée par tous ses devis : en-tête,
-                          immatriculation, assurance, conditions générales. */}
-                      <CarteIdentite token={token} />
-                      <CarteAssurances token={token} />
-                    </>
-                  )}
-        </div>
-      )}
-
-      {/* ---------- Aide ---------- */}
       {vue === 'aide' && <PiedDePageArtisan />}
-      </div>
 
-      {/* Le métré, ouvert depuis n'importe quel chantier. */}
-      {mesure && token && (
-        <FeuilleMetreDifferee
-          key={mesure.token}
-          token={token}
-          affectationToken={mesure.token}
-          titre={mesure.client_nom}
-          onClose={() => setMesure(null)}
-        />
-      )}
-
-      {/* Générateur de devis, quel que soit l'écran : il s'ouvre depuis les
-          devis comme depuis un chantier. */}
-      {peutChiffrer && token && devisInitial && (
-        <DevisBuilder
-          key={devisInitial.affectation_token ?? 'standalone'}
-          token={token}
-          vendeur={artisan}
-          initial={devisInitial}
-          onClose={() => setDevisInitial(null)}
-          onDone={() => void refetch()}
-        />
-      )}
-
-
-    </div>
+      {accesOuvert && mesure && token && <FeuilleMetreDifferee key={mesure.token} token={token} affectationToken={mesure.token} titre={mesure.client_nom} onClose={() => setMesure(null)} />}
+      {peutChiffrer && token && devisInitial && <DevisBuilder key={devisInitial.brouillon?.id ?? devisInitial.affectation_token ?? 'standalone'} token={token} vendeur={artisan} initial={devisInitial} onClose={() => setDevisInitial(null)} onDone={() => void refetch()} />}
+    </CadreEspace>
   )
 }
 
 // Titre de section du portail artisan.
 function SectionTitre({ children, compte }: { children: ReactNode; compte?: number }) {
   return (
-    <h2 className="mb-4 flex items-center gap-2.5 font-display text-xl tracking-tight sm:text-2xl">
-      <span aria-hidden className="inline-block h-5 w-1 rounded-full bg-primary" />
+    <h2 className="flex items-center gap-2 font-display text-lg font-medium tracking-tight">
       <span>{children}</span>
       {compte != null && (
-        <span className="font-sans text-base font-normal text-muted-foreground">({compte})</span>
+        <span className="font-sans text-xs font-normal tabular-nums text-muted-foreground">({compte})</span>
       )}
     </h2>
   )
 }
 
-function MesDevis({ token }: { token: string }) {
-  const { data: devis } = useListeDevis(token)
-  if (!devis || devis.length === 0) return null
+function MesDevis({ token, modifiable, onCreer, onReprendre }: { token: string; modifiable: boolean; onCreer: () => void; onReprendre: (devis: BrouillonDevis) => void }) {
+  const reprendre = useReprendreDevis(token)
+  const { data: devis, isLoading, isError, refetch } = useListeDevis(token)
+  const [filtre, setFiltre] = useState<'tous' | 'brouillon' | 'envoye'>('tous')
+  const liste = (devis ?? []).filter((d) => filtre === 'tous' || d.statut === filtre)
+  if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" aria-label="Chargement des devis" />
+  if (isError) return <div role="alert" className="rounded-xl border border-border bg-card p-6"><h2 className="text-base font-medium">Impossible de charger vos devis</h2><p className="mt-2 text-sm text-muted-foreground">Vos documents ne sont pas disponibles pour le moment.</p><Button variant="outline" className="mt-4" onClick={() => void refetch()}>Réessayer</Button></div>
+  if (!devis?.length) return <section className="rounded-xl border border-border bg-card px-6 py-14 text-center"><FileText className="mx-auto mb-4 size-7 text-muted-foreground" strokeWidth={1.5} aria-hidden /><h2 className="text-xl font-medium">{modifiable ? 'Votre premier devis commence ici' : 'Aucun devis enregistré'}</h2><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">Créez un devis pour un chantier ou un nouveau client. Retrouvez ensuite ses montants, son statut et son PDF dans cet espace.</p>{modifiable && <Button className="mt-6" onClick={onCreer}><FilePlus className="size-4" aria-hidden />Créer un devis</Button>}</section>
   return (
-    <section id="mes-chantiers" className="mt-10">
-      <SectionTitre compte={devis.length}>Mes devis</SectionTitre>
-      <ul className="grid gap-2.5 sm:grid-cols-2">
-        {devis.map((d) => (
-          <li key={d.id}>
-            <Card className="flex items-center gap-3 p-3.5 shadow-card transition-shadow hover:shadow-card-hover">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <FileText className="size-4" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {d.numero} · {d.client_nom ?? '—'}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(d.total || 0).replace(/[\u202f\u00a0]/g, ' ')} € ·{' '}
-                  <span
-                    className={cn(
-                      'mx-1 inline-block rounded-full px-2 py-px align-middle text-[10px] font-medium',
-                      d.statut === 'envoye'
-                        ? 'bg-[#22C55E]/10 text-[#16A34A]'
-                        : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {d.statut === 'envoye' ? 'Envoyé' : 'Brouillon'}
-                  </span>
-                  {d.objet ? ` · ${d.objet}` : ''}
-                </p>
-              </div>
-              {d.pdf_url && (
-                <Button asChild size="sm" variant="outline" className="shrink-0">
-                  <a href={d.pdf_url} target="_blank" rel="noopener">
-                    <Download className="size-4" />
-                    PDF
-                  </a>
-                </Button>
-              )}
-            </Card>
-          </li>
-        ))}
-      </ul>
+    <section className="overflow-hidden rounded-xl border border-border bg-card" aria-label="Liste des devis">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Filtrer les devis">{([{ cle: 'tous', label: 'Tous' }, { cle: 'brouillon', label: 'Brouillons' }, { cle: 'envoye', label: 'Envoyés' }] as const).map((f) => <button type="button" key={f.cle} aria-pressed={filtre === f.cle} onClick={() => setFiltre(f.cle)} className={cn('min-h-11 rounded-md px-3 text-xs transition-colors md:min-h-8', filtre === f.cle ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/50')}>{f.label}</button>)}</div>
+        <p role="status" className="text-xs tabular-nums text-muted-foreground">{liste.length} devis</p>
+      </div>
+      <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_100px_160px] gap-4 border-b border-border bg-muted/40 px-5 py-3 text-xs text-muted-foreground xl:grid" aria-hidden><span>Client · référence</span><span>Objet</span><span className="text-right">Montant</span><span>Statut</span><span className="text-right">Document</span></div>
+      {!liste.length ? <p className="p-8 text-center text-sm text-muted-foreground">Aucun devis dans cette vue.</p> : <ul className="divide-y divide-border">{liste.map((d) => <li key={d.id} className="grid grid-cols-2 items-center gap-3 px-4 py-5 sm:px-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_120px_100px_160px] xl:gap-4">
+        <div className="min-w-0"><p className="break-words text-sm font-medium">{d.client_nom || 'Client non renseigné'}</p><p className="mt-1 text-xs text-muted-foreground">{d.numero}</p><p className="mt-1 text-xs tabular-nums text-muted-foreground">{formatDate(d.date_devis)}</p></div>
+        <p className="min-w-0 break-words text-xs leading-5 text-muted-foreground">{d.objet || 'Objet non renseigné'}</p>
+        <p className="text-sm font-medium tabular-nums xl:text-right">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(d.total || 0)}</p>
+        <p className="flex items-center justify-end gap-1.5 text-xs text-muted-foreground xl:justify-start"><span className={cn('size-1.5 rounded-full', d.statut === 'envoye' ? 'bg-emerald-600' : 'bg-muted-foreground/50')} aria-hidden />{d.statut === 'envoye' ? 'Envoyé' : ['en_cours', 'incertain', 'confirme'].includes(d.envoi_etat ?? '') ? 'Envoi à vérifier' : 'Brouillon'}</p>
+        <div className="col-span-2 flex flex-wrap justify-end gap-2 xl:col-span-1">{d.statut !== 'envoye' && ['en_cours', 'incertain', 'confirme'].includes(d.envoi_etat ?? '') && <a className="text-xs text-primary underline underline-offset-4" href={`/artisan/${encodeURIComponent(token)}?vue=aide`}>Contacter Celexia</a>}{modifiable && d.statut === 'brouillon' && !['en_cours', 'incertain', 'confirme'].includes(d.envoi_etat ?? '') && <Button size="sm" variant="outline" disabled={reprendre.isPending} aria-label={`Reprendre le devis ${d.numero}`} onClick={() => reprendre.mutate(d.id, { onSuccess: onReprendre, onError: (e) => toast.error(e instanceof Error ? e.message : 'Brouillon indisponible') })}>{reprendre.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <FileText className="size-3.5" />}Reprendre</Button>}{d.pdf_url ? <Button asChild size="sm" variant="outline"><a href={d.pdf_url} target="_blank" rel="noopener noreferrer" aria-label={`Ouvrir le PDF du devis ${d.numero}`}><Download className="size-3.5" aria-hidden />PDF</a></Button> : <span className="text-xs text-muted-foreground">PDF non disponible</span>}</div>
+      </li>)}</ul>}
     </section>
   )
 }
 
 // Liste filtrable par statut (chips « Tous » + statuts présents avec compteur).
-const EN_COURS: StatutProjet[] = [
-  'artisan_assigne',
-  'contacte',
-  'rdv_pris',
-  'devis_envoye',
-  'devis_signe',
-]
 
 function ListeChantiers({
   projets,
@@ -526,8 +306,8 @@ function ListeChantiers({
   }
 
   const compte = (s: StatutProjet) => projets.filter((p) => p.statut === s).length
-  const nbEnCours = projets.filter((p) => EN_COURS.includes(p.statut)).length
-  const statutsPresents = STATUTS_ORDRE.filter((s) => compte(s) > 0)
+  const nbEnCours = projets.filter((p) => !estClos(p)).length
+  const statutsPresents = STATUTS_ORDRE.filter((s) => compte(s) > 0 || filtre === s)
 
   // Urgence calculée une fois par chantier : sert au filtre, au tri et au badge.
   const urgences = useMemo(
@@ -546,9 +326,9 @@ function ListeChantiers({
 
   const filtres: { cle: 'tous' | 'en_cours' | 'urgents' | StatutProjet; label: string; n: number }[] = [
     { cle: 'tous', label: 'Tous', n: projets.length },
-    ...(nbUrgents > 0 ? [{ cle: 'urgents' as const, label: 'À traiter', n: nbUrgents }] : []),
-    { cle: 'en_cours', label: 'En cours', n: nbEnCours },
-    ...statutsPresents.map((s) => ({ cle: s, label: statutInfo(s).label, n: compte(s) })),
+    ...(nbUrgents > 0 || filtre === 'urgents' ? [{ cle: 'urgents' as const, label: 'À traiter', n: nbUrgents }] : []),
+    { cle: 'en_cours', label: 'Avant signature', n: nbEnCours },
+    ...statutsPresents.map((s) => ({ cle: s, label: s === 'artisan_assigne' ? 'À contacter' : statutInfo(s).label, n: compte(s) })),
   ]
 
   // ORDRE CHRONOLOGIQUE, du plus récent au plus ancien : l'ordre de dépôt dans
@@ -568,12 +348,13 @@ function ListeChantiers({
             : filtre === 'urgents'
               ? estUrgent(p.id)
               : filtre === 'en_cours'
-                ? EN_COURS.includes(p.statut)
+                ? !estClos(p)
                 : p.statut === filtre,
         )
         .filter((p) => correspond(p, recherche))
         .sort((a, b) => {
-          const ecart = Number(estClos(a)) - Number(estClos(b))
+          const groupe = (p: ProjetEspace) => p.issue === 'perdu' || p.statut === 'termine' ? 2 : p.issue === 'gagne' ? 1 : 0
+          const ecart = groupe(a) - groupe(b)
           if (ecart !== 0) return ecart
           return dateReception(b) - dateReception(a)
         }),
@@ -582,33 +363,43 @@ function ListeChantiers({
   )
 
   return (
-    <section className="mt-10">
+    <section id="mes-chantiers" className="scroll-mt-20">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SectionTitre compte={projets.length}>Vos chantiers</SectionTitre>
         {/* Une liste plate ne montre pas où le flux se bloque (audit §6). */}
-        <div role="tablist" aria-label="Affichage" className="flex gap-1 rounded-full bg-muted p-1">
+        <div role="tablist" aria-label="Affichage" className="flex gap-1 rounded-lg border border-border bg-card p-1">
           {(['liste', 'kanban'] as const).map((v) => (
             <button
               key={v}
               type="button"
               role="tab"
+              id={`affichage-${v}`}
+              aria-controls="chantiers-affichage"
+              tabIndex={vue === v ? 0 : -1}
               aria-selected={vue === v}
               onClick={() => setVue(v)}
+              onKeyDown={(event) => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                event.preventDefault()
+                const suivant = event.key === 'Home' ? 'liste' : event.key === 'End' ? 'kanban' : vue === 'liste' ? 'kanban' : 'liste'
+                setVue(suivant)
+                document.getElementById(`affichage-${suivant}`)?.focus()
+              }}
               className={cn(
-                'flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors',
+                'flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors md:min-h-8',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                vue === v ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+                vue === v ? 'bg-muted text-foreground' : 'text-muted-foreground',
               )}
             >
               {v === 'liste' ? <Rows3 className="size-3.5" /> : <Columns3 className="size-3.5" />}
-              {v === 'liste' ? 'Liste' : 'Kanban'}
+              {v === 'liste' ? 'Liste' : 'Par étape'}
             </button>
           ))}
         </div>
       </div>
 
       {/* Recherche : 65 cartes sans moyen de retrouver un client (audit §6). */}
-      <div className="relative mb-3">
+      <div className="relative mb-3 max-w-2xl">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
@@ -621,7 +412,7 @@ function ListeChantiers({
       </div>
 
       {/* Filtres par statut */}
-      <div className="scrollbar-hide -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border pb-1">
         {filtres.map((f) => (
           <button
             key={f.cle}
@@ -629,18 +420,18 @@ function ListeChantiers({
             onClick={() => setFiltre(f.cle)}
             aria-pressed={filtre === f.cle}
             className={cn(
-              'flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-xs font-medium transition-all duration-200 active:scale-[0.98]',
+              'flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-xs transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
               filtre === f.cle
-                ? 'border-transparent bg-primary text-primary-foreground shadow-violet'
-                : 'border-border/70 bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
+                ? 'border-primary font-medium text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
             {f.label}
             <span
               className={cn(
-                'rounded-full px-1.5 py-px text-[10px] tabular-nums',
-                filtre === f.cle ? 'bg-white/20' : 'bg-muted',
+                'text-[11px] tabular-nums text-muted-foreground',
+                filtre === f.cle && 'text-foreground',
               )}
             >
               {f.n}
@@ -649,10 +440,11 @@ function ListeChantiers({
         ))}
       </div>
 
+      <div id="chantiers-affichage" role="tabpanel" aria-labelledby={`affichage-${vue}`}>
       {vue === 'kanban' ? (
         <KanbanChantiers projets={liste} signe={signe} onOuvrir={setOuvertDrawer} />
       ) : liste.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card/50 p-8 text-center">
+        <div className="rounded-xl border border-border bg-card p-10 text-center">
           <span className="mx-auto mb-3 flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
             <FileText className="size-5" />
           </span>
@@ -675,35 +467,35 @@ function ListeChantiers({
             // tranchés, gagnés COMME perdus — 34 perdus pour 13 gagnés
             // aujourd'hui. « Terminé » désigne par ailleurs l'étape finale du
             // parcours, et laissait croire que les travaux étaient faits.
-            const clos = estClos(p)
-            const premierClos = clos && (i === 0 || !estClos(liste[i - 1]))
+            const groupe = (p: ProjetEspace) => p.issue === 'perdu' || p.statut === 'termine' ? 'clos' : p.issue === 'gagne' ? 'travaux' : 'commercial'
+            const categorie = groupe(p)
+            const premierClos = categorie !== 'commercial' && (i === 0 || groupe(liste[i - 1]) !== categorie)
             return (
               <div key={p.id} className={premierClos ? 'space-y-3 pt-3' : undefined}>
                 {premierClos && (
                   <div className="flex items-center gap-3 pb-1">
                     <span className="h-px flex-1 bg-border" />
                     <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Dossiers clos
+                      {categorie === 'travaux' ? 'Travaux à suivre' : 'Terminés ou perdus'}
                     </span>
                     <span className="h-px flex-1 bg-border" />
                   </div>
                 )}
-                <ProjetItem
-                  projet={p}
-                  signe={signe}
-                  onChange={onChange}
-                  onCreerDevis={onCreerDevis}
-                  onMesurer={onMesurer}
-                />
+                <Card className="group relative gap-0 overflow-hidden rounded-lg py-0">
+                  <LisereStatut statut={p.statut} />
+                  <EnteteChantier projet={p} signe={signe} onToggle={() => setOuvertDrawer(p)} />
+                  {signe && <ApercuDernierSuivi projet={p} variante="inline" />}
+                </Card>
               </div>
             )
           })}
         </div>
       )}
 
+      </div>
       {/* Détail en panneau latéral : la liste reste visible derrière. */}
       <DrawerChantier
-        projet={ouvertDrawer}
+        projet={projets.find((p) => p.id === ouvertDrawer?.id) ?? null}
         signe={signe}
         onClose={() => setOuvertDrawer(null)}
         onChange={onChange}
@@ -726,11 +518,14 @@ function SignatureContrat({
   const [nom, setNom] = useState('')
   const [accepte, setAccepte] = useState(false)
   const [envoi, setEnvoi] = useState(false)
+  const signatureEnCours = useRef(false)
 
   async function signer() {
+    if (signatureEnCours.current) return
     if (!nom.trim()) return toast.error('Indiquez votre nom')
     if (!accepte) return toast.error('Vous devez cocher « Lu et approuvé »')
-    if (padRef.current?.isEmpty()) return toast.error('Signez dans le cadre')
+    if (!padRef.current || padRef.current.isEmpty()) return toast.error('Signez dans le cadre')
+    signatureEnCours.current = true
     setEnvoi(true)
     try {
       const signature = padRef.current!.toDataURL()
@@ -747,131 +542,24 @@ function SignatureContrat({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Erreur')
     } finally {
+      signatureEnCours.current = false
       setEnvoi(false)
     }
   }
 
   return (
-    <Card id="contrat" className="mb-4 scroll-mt-4 overflow-hidden py-0 shadow-card">
-      {/* Barre d'accent cérémonielle */}
-      <div aria-hidden className="h-1 w-full bg-gradient-to-r from-primary to-violet-400" />
-      <CardContent className="space-y-4 pb-6 pt-5">
-        <div>
-          <h1 className="font-display text-xl tracking-tight">Votre contrat d'engagement</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Signez-le une seule fois : il couvre tous vos chantiers, présents et à venir.
-          </p>
-          {/* Rail d'étapes (purement visuel) */}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            {['Lire', 'Signer', 'Valider'].map((etape, i) => (
-              <span
-                key={etape}
-                className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1"
-              >
-                <span className="grid size-4 place-items-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
-                  {i + 1}
-                </span>
-                {etape}
-              </span>
-            ))}
-          </div>
+    <section id="contrat" className="mb-6 scroll-mt-20 overflow-hidden rounded-xl border border-border bg-card" aria-labelledby="contrat-titre">
+      <div className="border-b border-border px-5 py-5 sm:px-6"><p className="mb-2 text-xs font-medium text-muted-foreground">Bienvenue chez Celexia</p><h2 id="contrat-titre" className="text-xl font-medium">Votre contrat d’engagement</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Signez-le une seule fois pour accéder aux coordonnées de vos clients et aux outils de votre espace. Il couvre vos chantiers présents et à venir.</p></div>
+      <div className="grid gap-6 p-4 sm:p-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0"><h3 className="mb-3 text-sm font-medium">01 · Lire les conditions</h3><div tabIndex={0} role="region" aria-label="Conditions du contrat, document défilant" className="max-h-[55dvh] overflow-y-auto rounded-lg border border-border bg-white"><ContratFormate contenu={finaliserContenu(engagement.contenu, engagement.signed_at)} apporteurSignature={engagement.apporteur_signature} /></div></div>
+        <div className="min-w-0 space-y-5"><h3 className="text-sm font-medium">02 · Signer votre engagement</h3>
+          <div className="space-y-2"><Label htmlFor="nom">Nom du signataire</Label><Input id="nom" className="h-11" autoComplete="name" value={nom} onChange={(e) => setNom(e.target.value)} /></div>
+          <div className="space-y-2"><div className="flex items-center justify-between"><span className="text-sm font-medium">Signature</span><Button type="button" variant="ghost" size="sm" onClick={() => padRef.current?.clear()}>Effacer</Button></div><SignaturePad ref={padRef} className="h-40 w-full rounded-lg border border-input bg-white" /><p className="text-xs text-muted-foreground">Dessinez votre signature dans le cadre.</p></div>
+          <label className="flex min-h-11 cursor-pointer items-start gap-3 text-xs leading-6"><Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(v === true)} className="mt-1" /><span>J’ai lu et j’approuve l’intégralité des conditions du présent contrat.</span></label>
+          <Button onClick={signer} disabled={envoi} className="h-11 w-full">{envoi && <Loader2 className="size-4 animate-spin" aria-hidden />}Signer le contrat</Button>
         </div>
-
-        <div className="relative">
-          <div className="max-h-[45dvh] overflow-y-auto rounded-xl border border-border bg-white shadow-inner sm:max-h-[55dvh]">
-            <ContratFormate
-              contenu={finaliserContenu(engagement.contenu, engagement.signed_at)}
-              apporteurSignature={engagement.apporteur_signature}
-            />
-          </div>
-          {/* Fondu bas : indique qu'il reste du contenu à faire défiler */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-px bottom-px h-10 rounded-b-xl bg-gradient-to-t from-white to-transparent"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="nom">Nom du signataire</Label>
-          <Input id="nom" className="h-11" value={nom} onChange={(e) => setNom(e.target.value)} />
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label>Signature</Label>
-            <Button type="button" variant="ghost" size="sm" onClick={() => padRef.current?.clear()}>
-              Effacer
-            </Button>
-          </div>
-          <SignaturePad
-            ref={padRef}
-            className="h-40 w-full rounded-xl border-2 border-dashed border-input bg-white"
-          />
-        </div>
-
-        <label className="flex items-start gap-2 text-sm">
-          <Checkbox checked={accepte} onCheckedChange={(v) => setAccepte(v === true)} className="mt-0.5" />
-          <span>J'ai lu et j'approuve l'intégralité des conditions du présent contrat.</span>
-        </label>
-
-        <Button
-          onClick={signer}
-          disabled={envoi}
-          className="h-12 w-full text-base shadow-violet transition-transform active:scale-[0.99]"
-        >
-          {envoi && <Loader2 className="size-4 animate-spin" />}
-          Signer le contrat
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
-// -------------------- Un chantier (accordéon) --------------------
-function ProjetItem({
-  projet,
-  signe,
-  onChange,
-  onCreerDevis,
-  onMesurer,
-}: {
-  projet: ProjetEspace
-  signe: boolean
-  onChange: () => void
-  onCreerDevis?: (p: ProjetEspace) => void
-  onMesurer?: (p: ProjetEspace) => void
-}) {
-  const [ouvert, setOuvert] = useState(false)
-  const adresse = [projet.client_adresse, projet.client_code_postal, projet.client_ville]
-    .filter(Boolean)
-    .join(', ')
-
-  return (
-    <Card className="group relative overflow-hidden py-0 shadow-card transition-shadow hover:shadow-card-hover">
-      <LisereStatut statut={projet.statut} />
-      <EnteteChantier
-        projet={projet}
-        signe={signe}
-        ouvert={ouvert}
-        onToggle={() => setOuvert((v) => !v)}
-      />
-
-      {/* Dernier échange : répond à « où en étais-je avec celui-là ? » sans
-          avoir à ouvrir la fiche. Masqué quand la carte est dépliée, où le
-          fil complet est déjà visible. */}
-      {!ouvert && <ApercuDernierSuivi projet={projet} variante="inline" />}
-
-      {ouvert && (
-        <CorpsChantier
-          projet={projet}
-          signe={signe}
-          adresse={adresse}
-          onChange={onChange}
-          onCreerDevis={onCreerDevis}
-          onMesurer={onMesurer}
-        />
-      )}
-    </Card>
+      </div>
+    </section>
   )
 }
 

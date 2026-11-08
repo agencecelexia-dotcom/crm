@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Send, Check, CalendarIcon, Loader2, Phone, PhoneCall, PhoneMissed, Bell } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Send, Check, CalendarIcon, Loader2, Phone, PhoneCall, PhoneMissed, Bell, Pause, XCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { SUIVI_STATUTS } from '@/lib/constants'
 import { FilDiscussion } from './fil-discussion'
+import { messageErreurSuivi } from './erreur-suivi'
 import type { Suivi } from '@/types/database'
 
 // Parcours principal (dans l'ordre) + statuts secondaires hors parcours.
@@ -42,6 +43,11 @@ export function SuiviArtisan({
   rappelLe,
   montantDevis,
   devisDepose,
+  dateRdv,
+  enAttenteDepuis,
+  montantSigne,
+  devisSigneDepose,
+  commissionEncaissee,
 }: {
   token: string
   suivis: Suivi[]
@@ -53,9 +59,15 @@ export function SuiviArtisan({
   /** Montant du devis déposé : on le nomme avant de le faire disparaître. */
   montantDevis?: number | null
   devisDepose?: boolean
+  dateRdv?: string | null
+  enAttenteDepuis?: string | null
+  montantSigne?: number | null
+  devisSigneDepose?: boolean
+  commissionEncaissee?: boolean
 }) {
   const [note, setNote] = useState('')
   const [envoi, setEnvoi] = useState(false)
+  const envoiEnCours = useRef(false)
   const [rdvMode, setRdvMode] = useState(false)
   const [rdvDate, setRdvDate] = useState<Date | undefined>(undefined)
   const [rdvHeure, setRdvHeure] = useState('')
@@ -74,7 +86,10 @@ export function SuiviArtisan({
   // puis corrigée y resterait pour toujours, laissant « devis signé » en vert
   // alors que le chantier est redescendu à « devis envoyé ».
   const rangCourant = PARCOURS.indexOf(statutActuel as (typeof PARCOURS)[number])
-  const rdvInfo = [...suivis].reverse().find((s) => s.statut === 'rdv_pris' && s.message)?.message
+  const rdvCanonique = dateRdv && Number.isFinite(new Date(dateRdv).getTime()) ? new Date(dateRdv) : null
+  const rdvInfo = rdvCanonique
+    ? format(rdvCanonique, "d MMMM yyyy 'à' HH:mm", { locale: fr })
+    : dateRdv === undefined ? [...suivis].reverse().find((s) => s.statut === 'rdv_pris' && s.message)?.message : null
 
   // UN APPUI NE DOIT PAS SUFFIRE À CHANGER L'ARGENT.
   //
@@ -113,6 +128,13 @@ export function SuiviArtisan({
         bouton: cle === 'termine' ? 'Oui, chantier terminé' : 'Oui, le client a signé',
       }
     }
+    if (rangCourant >= PARCOURS.indexOf('devis_signe') && cible >= 0 && cible < PARCOURS.indexOf('devis_signe')) {
+      return {
+        titre: 'Annuler la signature déclarée ?',
+        texte: `Ce chantier repassera en cours. Le montant signé${montantSigne != null ? ` de ${formatEuros(montantSigne)}` : ''} et le devis signé seront retirés du suivi ; les indicateurs et la commission seront recalculés. Ne confirmez que pour corriger une erreur de déclaration.`,
+        bouton: 'Confirmer la correction',
+      }
+    }
     if (devisEnJeu && cible >= 0 && cible < rangDevisEnvoye) {
       return {
         titre: `Revenir à « ${SUIVI_STATUTS[cle as keyof typeof SUIVI_STATUTS]?.label ?? cle} » ?`,
@@ -125,12 +147,20 @@ export function SuiviArtisan({
 
   /** Aller à une étape, en demandant confirmation quand l'argent est en jeu. */
   function allerA(cle: string, action: () => void) {
+    if (envoiEnCours.current) return
+    const cible = PARCOURS.indexOf(cle as (typeof PARCOURS)[number])
+    if (cible >= 0 && cible < PARCOURS.indexOf('devis_signe') && (devisSigneDepose || commissionEncaissee)) {
+      toast.error(messageErreurSuivi(commissionEncaissee ? 'commission_encaissee' : 'devis_signe_depose'))
+      return
+    }
     const c = confirmationPour(cle)
     if (c) setAConfirmer({ ...c, action })
     else action()
   }
 
   async function poster(statut?: string, message?: string, dateRdv?: string): Promise<boolean> {
+    if (envoiEnCours.current) return false
+    envoiEnCours.current = true
     setEnvoi(true)
     try {
       const { data, error } = await supabase.rpc('add_suivi_by_token', {
@@ -140,15 +170,16 @@ export function SuiviArtisan({
         p_date_rdv: dateRdv ?? null,
       })
       const ok = (data as { ok?: boolean } | null)?.ok
-      if (error || !ok) throw new Error('Échec')
-      if (!statut) setNote('')
+      if (error || !ok) throw error ?? data
+      if (!statut) setNote((actuelle) => actuelle.trim() === message?.trim() ? '' : actuelle)
       toast.success('Mis à jour. Merci !')
       onChange()
       return true
-    } catch {
-      toast.error("Impossible d'enregistrer")
+    } catch (erreur) {
+      toast.error(messageErreurSuivi(erreur))
       return false
     } finally {
+      envoiEnCours.current = false
       setEnvoi(false)
     }
   }
@@ -157,6 +188,8 @@ export function SuiviArtisan({
   // en clair (date_rdv) pour la relance post-RDV automatique.
   /** Pose ou retire la date de rappel. `null` annule. */
   async function enregistrerRappel(quand: Date | null) {
+    if (envoiEnCours.current) return
+    envoiEnCours.current = true
     setEnvoi(true)
     try {
       const { data, error } = await supabase.rpc('definir_rappel_by_token', {
@@ -181,6 +214,7 @@ export function SuiviArtisan({
         description: e instanceof Error ? e.message : undefined,
       })
     } finally {
+      envoiEnCours.current = false
       setEnvoi(false)
     }
   }
@@ -210,6 +244,8 @@ export function SuiviArtisan({
 
   // Logue une tentative d'appel (surtout « pas de réponse » : on saura qu'il a essayé).
   async function loggerAppel(resultat: string) {
+    if (envoiEnCours.current) return
+    envoiEnCours.current = true
     setEnvoi(true)
     try {
       const { data, error } = await supabase.rpc('log_appel_by_token', {
@@ -217,27 +253,28 @@ export function SuiviArtisan({
         p_resultat: resultat,
       })
       const ok = (data as { ok?: boolean } | null)?.ok
-      if (error || !ok) throw new Error('Échec')
+      if (error || !ok) throw error ?? data
       toast.success('Appel enregistré. Merci !')
       onChange()
-    } catch {
-      toast.error("Impossible d'enregistrer l'appel")
+    } catch (erreur) {
+      toast.error(messageErreurSuivi(erreur, "Impossible d'enregistrer l'appel"))
     } finally {
+      envoiEnCours.current = false
       setEnvoi(false)
     }
   }
 
   return (
-    <Card className="shadow-card">
-      <CardHeader>
-        <CardTitle className="font-display text-base tracking-tight">Où en êtes-vous ?</CardTitle>
-        <p className="text-sm text-muted-foreground">
+    <Card className="gap-5 rounded-[10px] border-border bg-card py-4 shadow-none">
+      <CardHeader className="gap-2 px-4">
+        <CardTitle className="text-base font-semibold">Où en êtes-vous ?</CardTitle>
+        <p className="text-sm leading-relaxed text-muted-foreground">
           Cliquez sur l'étape où vous en êtes. Celexia est informé en direct — vous ne serez pas
           relancé inutilement.
         </p>
       </CardHeader>
       <AlertDialog open={!!aConfirmer} onOpenChange={(o) => !o && setAConfirmer(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[10px]">
           <AlertDialogHeader>
             <AlertDialogTitle>{aConfirmer?.titre}</AlertDialogTitle>
             <AlertDialogDescription>{aConfirmer?.texte}</AlertDialogDescription>
@@ -257,9 +294,9 @@ export function SuiviArtisan({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-5 px-4">
         {/* Parcours d'avancement */}
-        <div role="group" aria-label="Avancement du chantier">
+        <div className="space-y-1" role="group" aria-label="Avancement du chantier">
           {PARCOURS.map((cle, idx) => {
             const conf = SUIVI_STATUTS[cle]
             const estRdv = cle === 'rdv_pris'
@@ -267,8 +304,6 @@ export function SuiviArtisan({
             // Franchi = strictement avant l'étape courante. Corriger une étape
             // en arrière éteint donc bien les pastilles au-delà.
             const done = !active && rangCourant > idx
-            const dernier = idx === PARCOURS.length - 1
-            const rempli = active || done
 
             return (
               <div key={cle}>
@@ -277,74 +312,46 @@ export function SuiviArtisan({
                   disabled={envoi}
                   aria-current={active ? 'step' : undefined}
                   onClick={() => {
-                    if (estRdv) setRdvMode((v) => !v)
-                    else if (!active) allerA(cle, () => void poster(cle))
+                    if (estRdv) {
+                      if (!rdvMode) {
+                        setRdvDate(rdvCanonique ?? undefined)
+                        setRdvHeure(rdvCanonique ? format(rdvCanonique, 'HH:mm') : '')
+                      }
+                      setRdvMode((v) => !v)
+                    }
+                    else if (!active || enAttenteDepuis) allerA(cle, () => void poster(cle))
                   }}
                   className={cn(
-                    'group flex w-full items-stretch gap-3 text-left',
-                    'focus-visible:outline-none disabled:opacity-60',
+                    'group flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+                    active ? 'border-primary/20 bg-primary/5' : 'border-transparent hover:bg-muted/60',
                   )}
                 >
-                  {/* Pastille + connecteur */}
-                  <div className="flex flex-col items-center">
-                    <span
-                      className={cn(
-                        'flex size-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-200',
-                        !rempli && 'bg-card text-muted-foreground group-hover:border-primary/50 group-hover:text-primary',
-                      )}
-                      style={
-                        rempli
-                          ? {
-                              backgroundColor: conf.color,
-                              borderColor: conf.color,
-                              color: '#fff',
-                              ...(active ? { boxShadow: `0 0 0 4px ${conf.color}22` } : {}),
-                            }
-                          : { borderColor: 'var(--border)' }
-                      }
-                    >
-                      {done ? <Check className="size-4.5" /> : idx + 1}
-                    </span>
-                    {!dernier && (
-                      <span
-                        className={cn(
-                          'my-1 w-0.5 flex-1 rounded transition-colors',
-                          rempli ? 'bg-primary/30' : 'bg-border',
-                        )}
-                      />
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-medium',
+                      active ? 'bg-primary text-primary-foreground' : done ? 'bg-secondary text-foreground' : 'border border-border text-muted-foreground',
                     )}
-                  </div>
-
-                  {/* Libellé */}
-                  <div className={cn('flex-1', dernier ? 'pb-1' : 'pb-5')}>
-                    <p
-                      className={cn(
-                        'flex items-center gap-2 text-sm leading-10',
-                        active ? 'font-semibold' : done ? 'font-medium' : 'text-muted-foreground',
-                      )}
-                      style={active ? { color: conf.color } : undefined}
-                    >
+                  >
+                    {done ? <Check className="size-4" /> : idx + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={cn('block text-sm', active || done ? 'font-medium text-foreground' : 'text-muted-foreground')}>
                       {conf.label}
-                      {active && (
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-medium leading-normal"
-                          style={{ backgroundColor: `${conf.color}1a`, color: conf.color }}
-                        >
-                          en cours
-                        </span>
-                      )}
-                    </p>
+                    </span>
                     {estRdv && rdvInfo && (
-                      <p className="-mt-2 text-xs text-muted-foreground">{rdvInfo}</p>
+                      <span className="mt-1 block break-words text-xs text-muted-foreground">{rdvInfo}</span>
                     )}
-                  </div>
+                  </span>
+                  {active && <span className="shrink-0 text-xs font-medium text-primary">En cours</span>}
                 </button>
 
                 {/* Panneau date du RDV (obligatoire) */}
                 {estRdv && rdvMode && (
-                  <div className="mb-4 ml-12 space-y-3 rounded-xl border border-violet-400/40 bg-violet-500/5 p-3.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="my-3 space-y-3 rounded-lg border border-border bg-muted/30 p-3 sm:ml-12">
                     <p className="flex items-center gap-1.5 text-sm font-medium">
-                      <CalendarIcon className="size-4 text-violet-600" />
+                      <CalendarIcon className="size-4 text-muted-foreground" />
                       Quelle est la date du rendez-vous ?
                     </p>
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -353,7 +360,7 @@ export function SuiviArtisan({
                           <Button
                             variant="outline"
                             className={cn(
-                              'h-11 flex-1 justify-start bg-card font-normal',
+                              'h-11 min-w-0 flex-1 justify-start bg-card font-normal',
                               !rdvDate && 'text-muted-foreground',
                             )}
                           >
@@ -373,11 +380,11 @@ export function SuiviArtisan({
                         aria-label="Heure du rendez-vous (facultatif)"
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" className="flex-1 bg-card" onClick={() => setRdvMode(false)} disabled={envoi}>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" className="min-h-11 flex-1 bg-card" onClick={() => setRdvMode(false)} disabled={envoi}>
                         Annuler
                       </Button>
-                      <Button className="flex-1" onClick={() => void confirmerRdv()} disabled={envoi || !rdvDate}>
+                      <Button className="min-h-11 flex-1" onClick={() => void confirmerRdv()} disabled={envoi || !rdvDate}>
                         {envoi ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
                         Confirmer le RDV
                       </Button>
@@ -390,47 +397,47 @@ export function SuiviArtisan({
         </div>
 
         {/* Appel client — logguer une tentative (surtout « pas de réponse ») */}
-        <div className="space-y-2.5 rounded-xl border border-border/70 bg-muted/30 p-3.5">
-          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="space-y-3 border-t border-border pt-5">
+          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Phone className="size-3.5" />
-            Appels
+            Journal des appels
           </p>
-          <p className="text-sm font-medium">Vous avez essayé d'appeler le client ?</p>
+          <p className="text-sm text-muted-foreground">Vous avez essayé d'appeler le client ?</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="h-9 rounded-full bg-card" disabled={envoi} onClick={() => void loggerAppel('pas_de_reponse')}>
+            <Button variant="outline" size="sm" className="min-h-11 bg-card" disabled={envoi} onClick={() => void loggerAppel('pas_de_reponse')}>
               <PhoneMissed className="size-4" /> Pas de réponse
             </Button>
-            <Button variant="outline" size="sm" className="h-9 rounded-full bg-card" disabled={envoi} onClick={() => void loggerAppel('repondu')}>
+            <Button variant="outline" size="sm" className="min-h-11 bg-card" disabled={envoi} onClick={() => void loggerAppel('repondu')}>
               <PhoneCall className="size-4" /> Je l'ai eu
             </Button>
-            <Button variant="outline" size="sm" className="h-9 rounded-full bg-card" disabled={envoi} onClick={() => void loggerAppel('rappeler')}>
+            <Button variant="outline" size="sm" className="min-h-11 bg-card" disabled={envoi} onClick={() => void loggerAppel('rappeler')}>
               <Phone className="size-4" /> À rappeler
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Notez chaque tentative — surtout si le client ne décroche pas, pour qu'on sache que vous avez essayé.
+            Ces boutons ajoutent une trace d’appel. Après avoir joint le client, indiquez aussi son étape. Pour un rappel daté, utilisez « Me le rappeler plus tard ».
           </p>
         </div>
 
         {/* Rappel — un CO-statut : le chantier garde son étape, on note juste
             quand le reprendre. « Il signera à son retour le 5 » ne fait pas
             reculer un devis envoyé. */}
-        <div className="rounded-xl border border-border bg-muted/30 p-3">
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
           {rappelLe && !rappelMode ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="flex items-center gap-1.5 text-sm">
-                <Bell className="size-4 shrink-0 text-primary" />
+                <Bell className="size-4 shrink-0 text-muted-foreground" />
                 <span>
                   À reprendre le{' '}
                   <strong>{format(new Date(rappelLe), 'EEEE d MMMM', { locale: fr })}</strong>
                 </span>
               </p>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={envoi}
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" className="min-h-11" disabled={envoi}
                         onClick={() => { setRappelDate(new Date(rappelLe)); setRappelMode(true) }}>
                   Modifier
                 </Button>
-                <Button size="sm" variant="ghost" disabled={envoi}
+                <Button size="sm" variant="ghost" className="min-h-11" disabled={envoi}
                         onClick={() => void enregistrerRappel(null)}>
                   Retirer
                 </Button>
@@ -441,7 +448,7 @@ export function SuiviArtisan({
               type="button"
               disabled={envoi}
               onClick={() => setRappelMode(true)}
-              className="flex w-full items-center gap-2 text-left text-sm text-muted-foreground hover:text-foreground"
+              className="flex min-h-11 w-full items-start gap-3 rounded-md text-left text-sm leading-relaxed text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Bell className="size-4 shrink-0" />
               <span>
@@ -452,7 +459,7 @@ export function SuiviArtisan({
           ) : (
             <div className="space-y-3">
               <p className="flex items-center gap-1.5 text-sm font-medium">
-                <Bell className="size-4 text-primary" />
+                <Bell className="size-4 text-muted-foreground" />
                 Quand faut-il reprendre ce chantier ?
               </p>
               <Popover>
@@ -483,15 +490,15 @@ export function SuiviArtisan({
                   />
                 </PopoverContent>
               </Popover>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
-                  className="flex-1"
+                  className="min-h-11 flex-1"
                   disabled={envoi || !rappelDate}
                   onClick={() => rappelDate && void enregistrerRappel(rappelDate)}
                 >
                   Programmer le rappel
                 </Button>
-                <Button variant="ghost" disabled={envoi}
+                <Button variant="ghost" className="min-h-11" disabled={envoi}
                         onClick={() => { setRappelMode(false); setRappelDate(undefined) }}>
                   Annuler
                 </Button>
@@ -504,37 +511,42 @@ export function SuiviArtisan({
         <div className="flex flex-wrap gap-2">
           {SECONDAIRES.map((cle) => {
             const conf = SUIVI_STATUTS[cle]
-            const active = statutActuel === cle
+            const active = cle === 'en_attente' ? Boolean(enAttenteDepuis) : statutActuel === cle
             return (
               <button
                 key={cle}
                 type="button"
                 disabled={envoi}
                 onClick={() => {
-                  if (active) return
+                  if (active) {
+                    if (cle === 'en_attente') void poster('reprendre')
+                    return
+                  }
                   if (cle === 'perdu') setPerduMode(true)
                   else void poster(cle)
                 }}
                 aria-pressed={active}
+                title={cle === 'en_attente' && active ? 'Reprendre le suivi sans changer d’étape' : undefined}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                  'flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  active ? 'border-transparent text-white' : 'bg-card text-muted-foreground hover:bg-accent',
+                  active ? 'border-foreground/30 bg-secondary text-foreground' : 'border-border bg-card text-muted-foreground hover:bg-muted',
                 )}
-                style={active ? { backgroundColor: conf.color } : { borderColor: `${conf.color}55` }}
               >
-                <span aria-hidden>{conf.emoji}</span>
+                {cle === 'perdu' ? <XCircle className="size-4" aria-hidden /> : <Pause className="size-4" aria-hidden />}
                 {conf.label}
               </button>
             )
           })}
         </div>
 
+        {enAttenteDepuis && <p className="text-xs text-muted-foreground">Ce chantier est en pause. Cliquez sur « En attente » ou sur son étape pour reprendre le suivi.</p>}
+
         {/* Justification OBLIGATOIRE quand on déclare « perdu » */}
         {perduMode && (
-          <div className="space-y-3 rounded-xl border border-rose-300 bg-rose-50 p-3.5 animate-in fade-in slide-in-from-top-1 duration-200">
-            <p className="text-sm font-medium text-rose-800">Pourquoi ce chantier est-il perdu ?</p>
-            <p className="text-xs text-rose-700">
+          <div className="space-y-3 rounded-lg border border-destructive/25 bg-card p-4">
+            <p className="text-sm font-medium text-destructive">Pourquoi ce chantier est-il perdu ?</p>
+            <p className="text-xs text-muted-foreground">
               Une explication est obligatoire (le client a refusé, budget trop élevé, ne répond
               plus, a déjà fait faire ailleurs…). Ça nous aide à comprendre et à mieux vous
               envoyer les bons chantiers.
@@ -546,10 +558,10 @@ export function SuiviArtisan({
               placeholder="Expliquez en quelques mots…"
               aria-label="Raison de la perte du chantier"
             />
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                className="flex-1 bg-card"
+                className="min-h-11 flex-1 bg-card"
                 disabled={envoi}
                 onClick={() => {
                   setPerduMode(false)
@@ -559,7 +571,7 @@ export function SuiviArtisan({
                 Annuler
               </Button>
               <Button
-                className="flex-1"
+                className="min-h-11 flex-1"
                 disabled={envoi || !perduRaison.trim()}
                 onClick={async () => {
                   if (await poster('perdu', perduRaison.trim())) {
@@ -593,7 +605,7 @@ export function SuiviArtisan({
           <Button
             onClick={() => poster(undefined, note.trim())}
             disabled={envoi || !note.trim()}
-            className="w-full"
+            className="min-h-11 w-full"
           >
             {envoi ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
             Envoyer la note
@@ -606,10 +618,10 @@ export function SuiviArtisan({
           <>
             <Separator />
             <div>
-              <p className="mb-2 flex items-center gap-2 text-sm font-medium">
+              <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold">
                 Échanges avec Celexia
                 {nonLus > 0 && (
-                  <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                  <span className="text-xs font-medium text-primary">
                     {nonLus} nouveau{nonLus > 1 ? 'x' : ''}
                   </span>
                 )}

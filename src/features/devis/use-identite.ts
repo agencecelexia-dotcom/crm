@@ -70,7 +70,7 @@ export function useEnregistrerIdentite(token: string | undefined) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['identite', token] })
-      void qc.invalidateQueries({ queryKey: ['espace-artisan', token] })
+      void qc.invalidateQueries({ queryKey: ['espace', token] })
     },
   })
 }

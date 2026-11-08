@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
@@ -17,7 +16,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth/use-auth'
 import { supabaseMisconfigured } from '@/lib/supabase/client'
 
@@ -31,7 +29,12 @@ type FormValues = z.infer<typeof schema>
 export function LoginPage() {
   const { session, signIn } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [submitting, setSubmitting] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
+  const from: unknown = location.state?.from
+  const destination = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && !from.startsWith('/login') ? from : '/'
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -39,37 +42,46 @@ export function LoginPage() {
   })
 
   // Déjà connecté → on file au dashboard
-  if (session) return <Navigate to="/" replace />
+  if (session) return <Navigate to={destination} replace />
 
   async function onSubmit(values: FormValues) {
     setSubmitting(true)
+    setErreur(null)
     try {
       await signIn(values.email, values.password)
-      navigate('/', { replace: true })
+      navigate(destination, { replace: true })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Connexion impossible'
-      toast.error('Échec de la connexion', { description: message })
+      setErreur(err instanceof Error && /invalid login credentials/i.test(err.message)
+        ? 'Email ou mot de passe incorrect. Vérifie tes identifiants.'
+        : 'Connexion impossible pour le moment. Vérifie ta connexion et réessaie.')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-background px-4">
-      {/* Décor violet (purement visuel) */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-violet-100 via-violet-50/60 to-transparent" />
-        <div className="absolute -right-20 -top-16 size-72 rounded-full bg-violet-300/20 blur-3xl" />
-        <div className="absolute -bottom-24 -left-16 size-64 rounded-full bg-violet-400/10 blur-3xl" />
-      </div>
-
-      <div className="mb-8 flex flex-col items-center gap-3">
-        <BrandLogo className="h-10 mix-blend-multiply" />
-        <p className="text-sm text-muted-foreground">CRM — espace associés</p>
-      </div>
-
-      <Card className="w-full max-w-sm rounded-2xl border-border/70 shadow-card animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <CardContent className="pt-6">
+    <main className="min-h-dvh bg-card">
+      <div className="grid min-h-dvh md:grid-cols-[0.9fr_1.1fr]">
+        <section className="flex flex-col justify-between bg-[#202126] p-7 text-white sm:p-10 md:p-12 lg:p-16">
+          <div>
+            <BrandLogo sombre className="h-8" />
+            <p className="mt-4 text-xs text-[#b1b2bd]">Espace de travail Celexia</p>
+          </div>
+          <div className="mt-10 md:my-20">
+            <h1 className="max-w-lg text-3xl font-medium leading-[1.12] tracking-[-0.025em] md:text-5xl lg:text-[56px]">Du premier appel<br />au chantier signé</h1>
+            <p className="mt-6 max-w-sm text-sm leading-7 text-[#b1b2bd]">
+              Clients, artisans et commissions : retrouve les dossiers de l’agence et la prochaine action à mener.
+            </p>
+          </div>
+          <ol className="mt-8 hidden items-center gap-4 border-t border-white/15 pt-6 text-xs text-[#c4c5ce] md:flex" aria-label="Parcours d’un projet">
+            <li>Projet</li><li aria-hidden><ArrowRight className="size-4" /></li>
+            <li>Artisan</li><li aria-hidden><ArrowRight className="size-4" /></li>
+            <li>Devis signé</li>
+          </ol>
+        </section>
+        <section className="mx-auto flex w-full max-w-[460px] flex-col justify-center px-7 py-10 sm:px-10 md:py-16" aria-labelledby="connexion-titre">
+          <h2 id="connexion-titre" className="text-3xl font-medium tracking-tight">Connexion</h2>
+          <p className="mb-9 mt-3 text-[13px] leading-6 text-muted-foreground">Accès réservé à l’équipe Celexia</p>
           {supabaseMisconfigured && (
             <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               Configuration Supabase manquante. Renseigne <code>VITE_SUPABASE_URL</code>{' '}
@@ -78,7 +90,7 @@ export function LoginPage() {
           )}
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" aria-busy={submitting}>
               <FormField
                 control={form.control}
                 name="email"
@@ -89,7 +101,7 @@ export function LoginPage() {
                       <Input
                         type="email"
                         autoComplete="email"
-                        placeholder="associe@celexia.fr"
+                        placeholder="prenom@celexia.fr"
                         className="h-11"
                         {...field}
                       />
@@ -104,21 +116,27 @@ export function LoginPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Mot de passe</FormLabel>
+                    <div className="relative">
                     <FormControl>
                       <Input
-                        type="password"
+                        type={visible ? 'text' : 'password'}
                         autoComplete="current-password"
-                        className="h-11"
+                        className="h-11 pr-12"
                         {...field}
                       />
                     </FormControl>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-11 w-11" aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} aria-pressed={visible} onClick={() => setVisible(!visible)}>
+                      {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              {erreur && <p role="alert" className="rounded-lg bg-destructive/5 p-3 text-sm text-destructive">{erreur}</p>}
               <Button
                 type="submit"
-                className="h-11 w-full shadow-violet transition-transform active:scale-[0.99]"
+                className="h-11 w-full"
                 disabled={submitting || supabaseMisconfigured}
               >
                 {submitting && <Loader2 className="size-4 animate-spin" />}
@@ -126,8 +144,8 @@ export function LoginPage() {
               </Button>
             </form>
           </Form>
-        </CardContent>
-      </Card>
-    </div>
+        </section>
+      </div>
+    </main>
   )
 }

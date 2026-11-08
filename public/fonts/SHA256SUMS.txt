@@ -1,0 +1,3 @@
+e0ec5644c93b04de82f06a076beabfd0e3688ff89655affecf17c92e2747a45d  public/fonts/clash-display-variable.woff2
+0303e02b53b0298fb26a0193941a2e8754f0f9a9fce50d90b178d8da3424873f  public/fonts/plus-jakarta-sans-latin-ext-variable.woff2
+cd8db90cd950e26bc8761f65d323588bd5cd112d326d6d322bc7c8ea86771215  public/fonts/plus-jakarta-sans-latin-variable.woff2

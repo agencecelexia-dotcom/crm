@@ -1,11 +1,25 @@
 # CRM Celexia
 
+> **Revue du 7 novembre 2026** : [audit produit, design et UX](audit/2026-11-07-crm-design-ux.md),
+> [fiabilité](audit/2026-11-07-fiabilite.md) et [validation](audit/2026-11-07-validation.md).
+> L'application gère désormais une équipe avec rôles et plusieurs affectations artisan par projet.
+> Les sections historiques ci-dessous sur l'affectation unique, les deux comptes et les premières migrations sont à actualiser.
+>
+> Vérifier l'interface sans compte ni données de production : `npm run test:interface`.
+> Cette suite lance son serveur isolé sur le port 5180 et simule les réponses Supabase.
+> Les outils React Query de développement sont facultatifs : `VITE_QUERY_DEVTOOLS=true` dans `.env.local`.
+
+> **Espace artisan — 8 novembre 2026** : [audit complet et correctifs](audit/2026-11-08-artisan-audit-complet.md).
+> Vérifier les règles serveur sans projet distant : `npm run test:sql` (PostgreSQL en mémoire, services externes simulés).
+> Les [consignes de déploiement](audit/2026-11-08-artisan-devis-deploiement.md) précisent l’ordre migrations → fonctions → interface et le relais d’envoi confirmé.
+
+
 CRM web **mobile-first** pour la mise en relation **client ↔ artisan**.
-Deux associés (Thomas & Antoine) y gèrent les **artisans**, les **projets/clients**, les **devis/contrats**
-et le **suivi de l'argent** (CA généré, commission 10 %, encaissement). Saisie rapide, utilisable d'une main
+L’équipe y gère les **artisans**, les **projets/clients**, les **devis/contrats**
+et le **suivi de l'argent** (CA généré, commissions au taux contractuel, encaissement). Saisie rapide, utilisable d'une main
 pendant un appel.
 
-> Règle métier : **1 projet = 1 artisan assigné** (pas d'enchères / candidats multiples).
+> Un projet peut comporter plusieurs affectations artisan ; le suivi et les droits du portail sont rattachés à chaque affectation.
 
 ---
 
@@ -13,7 +27,7 @@ pendant un appel.
 
 - **Vite + React 19 + TypeScript** · **react-router-dom v7**
 - **Tailwind CSS v4** (plugin `@tailwindcss/vite`, config CSS-first dans `src/index.css`) + `tw-animate-css`
-- **shadcn/ui** (style *new-york*, base *neutral*, accent **violet #7C3AED**) · icônes **lucide-react**
+- **shadcn/ui** (style *new-york*, base *neutral*, accent **violet #6D4BD1**) · icônes **lucide-react**
 - **@supabase/supabase-js** + **@tanstack/react-query**
 - **react-leaflet + leaflet** (tuiles OpenStreetMap, **gratuit, sans clé**)
 - **recharts** (dashboard) · **sonner** (toasts) · **zod + react-hook-form** · **date-fns**
@@ -23,7 +37,7 @@ pendant un appel.
 
 ## Prérequis
 
-- **Node.js 20+ LTS** et npm. *(Non installé sur la machine de dev initiale — à installer : https://nodejs.org)*
+- **Node.js 22.13+ ou 24 LTS** et npm 10+ (`.nvmrc` utilise Node 22).
 - Un projet **Supabase** (gratuit).
 
 ---

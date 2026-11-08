@@ -116,7 +116,7 @@ export function useRetenirMaison(token: string | undefined, affectationToken: st
     },
     // Ce que le serveur répondra désormais, sans le rappeler : cette maison,
     // confirmée. Rouvrir la feuille la présélectionne aussitôt.
-    onSuccess: (_, p) =>
+    onSuccess: (_, p) => {
       qc.setQueryData<MaisonChantier>(cleMaison(token, affectationToken), (avant) =>
         avant
           ? {
@@ -128,7 +128,12 @@ export function useRetenirMaison(token: string | undefined, affectationToken: st
               message: null,
             }
           : avant,
-      ),
+      )
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: ['photos-facade', token ?? null, p.cleabs] }),
+        qc.invalidateQueries({ queryKey: ['materiaux-toit', token ?? null, p.cleabs] }),
+      ])
+    },
   })
 }
 

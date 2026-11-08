@@ -12,7 +12,7 @@ function Cadrer({ contour }: { contour: Point[] }) {
     const ll = contour.map(([lon, lat]) => [lat, lon] as [number, number])
     const lats = ll.map((p) => p[0]), lons = ll.map((p) => p[1])
     const b: LatLngBoundsExpression = [[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]]
-    carte.fitBounds(b, { padding: [40, 40], maxZoom: 20 })
+    carte.fitBounds(b, { padding: [40, 40], maxZoom: 20, animate: false })
   }, [carte, contour])
   return null
 }

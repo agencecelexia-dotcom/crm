@@ -1,14 +1,15 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Trash2, Phone, Mail, MapPin, Map, UserCheck } from 'lucide-react'
+import { AlertCircle, Pencil, Trash2, Phone, Mail, MapPin, Map, UserCheck } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth/use-auth'
 import { useDroits } from '@/lib/auth/use-droits'
 import { PageHeader } from '@/components/page-header'
+import { EmptyState } from '@/components/empty-state'
 import { StatutBadge } from '@/components/statut-badge'
 import { CardTitre } from '@/components/card-titre'
 import { Button } from '@/components/ui/button'
@@ -40,7 +41,7 @@ import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { CarteMetresProjet } from '@/features/metre/carte-metres-projet'
 import { DossierMetrage } from '@/features/metre/dossier-metrage'
-import { Maison3DProjet } from '@/features/metre/maison-3d-page'
+const Maison3DProjet = lazy(() => import('@/features/metre/maison-3d-page').then((m) => ({ default: m.Maison3DProjet })))
 import { ProjetPhotos } from '../components/projet-photos'
 import { SuiviCard } from '../components/suivi-card'
 import { NotesInternesCard } from '../components/notes-internes-card'
@@ -54,12 +55,13 @@ import { ConfirmStatutDialog } from '../components/confirm-statut-dialog'
 import { BadgePerduPar } from '../components/badge-perdu-par'
 import { useAffectationsCounts } from '../hooks/use-affectations'
 import type { ProjetInput, StatutProjet } from '@/types/database'
+import { invaliderDonneesProjets } from '../lib/invalidation'
 
 // Fiche projet : infos, statut, assignation, montants/commission, documents.
 export function ProjetDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { data: projet, isLoading } = useProjet(id)
+  const { data: projet, isLoading, isError, refetch } = useProjet(id)
   const { data: repreneurs } = useRepreneurs()
   const { estFondateur, session } = useAuth()
   const { peutVoirCommissions } = useDroits()
@@ -74,8 +76,7 @@ export function ProjetDetailPage() {
     },
     onSuccess: () => {
       toast.success('Chantier rendu à l’équipe')
-      void qc.invalidateQueries({ queryKey: ['projets'] })
-      void qc.invalidateQueries({ queryKey: ['a-reattribuer'] })
+      void invaliderDonneesProjets(qc)
     },
     onError: (e) =>
       toast.error('Impossible de rendre ce chantier', {
@@ -86,6 +87,25 @@ export function ProjetDetailPage() {
   const remove = useDeleteProjet()
   const { data: affectationsCounts } = useAffectationsCounts()
   const [statutEnAttente, setStatutEnAttente] = useState<StatutProjet | null>(null)
+
+  if (isError || (!isLoading && !projet)) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <PageHeader titre="Projet indisponible" back />
+        <div role="alert">
+          <EmptyState
+            icon={AlertCircle}
+            titre="Impossible d’ouvrir ce projet"
+            description="Le projet est introuvable, inaccessible à votre compte ou n’a pas pu être chargé."
+            action={<div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" onClick={() => void refetch()}>Réessayer</Button>
+              <Button asChild><Link to="/projets">Voir les projets</Link></Button>
+            </div>}
+          />
+        </div>
+      </div>
+    )
+  }
 
   if (isLoading || !projet) {
     return (
@@ -295,11 +315,13 @@ export function ProjetDetailPage() {
 
         {/* La maison du client en 3D, avec tous ses métrés : dès l'ouverture
             de la fiche, sans attendre l'artisan. */}
+        <Suspense fallback={<Skeleton className="mb-4 h-48 rounded-xl" aria-label="Chargement du bâtiment" />}>
         <Maison3DProjet
           projetId={projet.id}
           titre={projet.client_nom ?? null}
           adresse={[projet.client_adresse, projet.client_ville].filter(Boolean).join(', ') || null}
         />
+        </Suspense>
 
         {/* Le dossier de métrés : ce que dit le client, ce que mesure l'outil,
             ce que l'artisan lira. Il précède le devis, comme au chantier. */}
@@ -324,14 +346,11 @@ export function ProjetDetailPage() {
       {/* Devis générés par l'artisan, rattachés à ce dossier */}
       <DevisProjetCard projetId={projet.id} />
 
-      {/* Argent / commission. La clé suit la dernière modification du projet :
-          sans elle, les champs gardaient la valeur lue à l'ouverture de la
-          fiche, et passer d'une fiche à une autre déjà en cache écrivait les
-          montants de la première sur la seconde. Réservée aux membres qui
-          voient les commissions : un commercial pouvait sinon y déclarer un
-          montant signé et se créer une rétrocession. */}
+      {/* Un brouillon par projet : une actualisation du serveur ne doit pas
+          effacer la saisie en cours. MontantsCard conserve uniquement les
+          champs modifiés ; les autres suivent les données reçues. */}
       {peutVoirCommissions && (
-        <MontantsCard key={`${projet.id}:${projet.updated_at}`} projet={projet} />
+        <MontantsCard key={projet.id} projet={projet} />
       )}
 
       {/* Documents */}

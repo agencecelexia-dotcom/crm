@@ -34,7 +34,8 @@ const COLONNES: { cle: CleColonne; label: string; accent: string }[] = [
  * cran (audit §6). Les colonnes reposent sur `etape` — l'axe monotone du
  * modèle 0073 — et non sur `statut`, qui était écrasable.
  *
- * Les chantiers gagnés ou perdus sont exclus : ils ne sont plus dans le flux.
+ * Le périmètre reste celui des filtres de liste : les dossiers gagnés et
+ * perdus gardent leur étape et restent consultables dans cette vue.
  */
 export function KanbanChantiers({
   projets,
@@ -45,10 +46,8 @@ export function KanbanChantiers({
   signe: boolean
   onOuvrir: (p: ProjetEspace) => void
 }) {
-  const actifs = projets.filter((p) => (p.issue ?? 'en_cours') === 'en_cours')
-
   const parColonne = COLONNES.map((c) => {
-    const items = actifs
+    const items = projets
       .filter((p) => (c.cle === COLONNE_INITIALE ? !p.etape : p.etape === c.cle))
       // Ordre chronologique, comme la liste : les colonnes portent déjà
       // l'information d'étape, un tri par urgence par-dessus rendait la
@@ -62,32 +61,32 @@ export function KanbanChantiers({
   })
 
   return (
-    <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-      <div className="flex min-w-max gap-3">
+    <div className="max-w-full overflow-x-auto overscroll-x-contain pb-3">
+      <div className="flex min-w-max items-start gap-4">
         {parColonne.map((c) => (
           <section
             key={c.cle}
             aria-label={`${c.label} — ${c.items.length} chantier${c.items.length > 1 ? 's' : ''}`}
-            className="w-[260px] shrink-0"
+            className="w-[272px] shrink-0 rounded-[10px] border border-border bg-muted/30 p-3 sm:w-[288px]"
           >
-            <header className="mb-2 flex items-center gap-2">
-              <span aria-hidden className={cn('h-4 w-1 rounded-full', c.accent)} />
-              <span className="text-sm font-semibold">{c.label}</span>
-              <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+            <header className="mb-3 flex items-center gap-2">
+              <span aria-hidden className={cn('size-1.5 rounded-full opacity-70', c.accent)} />
+              <h3 className="flex-1 text-sm font-semibold">{c.label}</h3>
+              <span className="text-xs font-medium tabular-nums text-muted-foreground">
                 {c.items.length}
               </span>
             </header>
 
             {/* Le montant par colonne montre où l'argent stagne. */}
             {c.montant > 0 && (
-              <p className="montant mb-2 text-xs text-muted-foreground">
+              <p className="montant -mt-1 mb-3 text-xs text-muted-foreground">
                 {formatEuros(c.montant)}
               </p>
             )}
 
             <div className="space-y-2">
               {c.items.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+                <p className="py-8 text-center text-sm text-muted-foreground">
                   Aucun chantier
                 </p>
               ) : (
@@ -103,7 +102,7 @@ export function KanbanChantiers({
                         onOuvrir(p)
                       }
                     }}
-                    className="relative cursor-pointer overflow-hidden py-0 shadow-card transition-shadow hover:shadow-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="relative cursor-pointer overflow-hidden rounded-lg border-border bg-card py-0 shadow-none transition-colors hover:border-muted-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <LisereStatut statut={p.statut} />
                     <EnteteChantier projet={p} signe={signe} compact />

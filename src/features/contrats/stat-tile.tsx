@@ -4,58 +4,36 @@ import { cn } from '@/lib/utils'
 
 type Tone = 'default' | 'success' | 'warning' | 'danger' | 'brand'
 
-const TONES: Record<Tone, { carte: string; valeur: string; icone: string }> = {
-  default: { carte: 'border-border/70 bg-card', valeur: '', icone: 'bg-muted text-muted-foreground' },
-  success: {
-    carte: 'border-[#22C55E]/25 bg-[#22C55E]/5',
-    valeur: 'text-[#16A34A]',
-    icone: 'bg-[#22C55E]/15 text-[#16A34A]',
-  },
-  warning: {
-    carte: 'border-[#F59E0B]/25 bg-[#F59E0B]/5',
-    valeur: 'text-[#B45309]',
-    icone: 'bg-[#F59E0B]/15 text-[#B45309]',
-  },
-  danger: {
-    carte: 'border-[#EF4444]/25 bg-[#EF4444]/5',
-    valeur: 'text-[#DC2626]',
-    icone: 'bg-[#EF4444]/15 text-[#DC2626]',
-  },
-  brand: {
-    carte: 'border-primary/25 bg-primary/5',
-    valeur: 'text-primary',
-    icone: 'bg-primary/10 text-primary',
-  },
-}
-
-// Tuile de stat compacte du portail artisan (padding serré, pensée mobile-first).
+/** Une valeur, son périmètre et son libellé ; le contenu porte la hiérarchie. */
 export function StatTile({
-  icon: Icon,
   label,
   valeur,
   sousLabel,
   tone = 'default',
+  grouped = false,
 }: {
   icon: LucideIcon
   label: string
   valeur: string
   sousLabel?: string
   tone?: Tone
+  grouped?: boolean
 }) {
-  const t = TONES[tone]
   return (
-    <div className={cn('rounded-2xl border p-3.5 shadow-card', t.carte)}>
-      <span className={cn('mb-2 flex size-8 items-center justify-center rounded-lg', t.icone)}>
-        <Icon className="size-4" />
-      </span>
-      <p className={cn('montant text-xl font-semibold sm:text-2xl', t.valeur)}>{valeur}</p>
-      <p className="mt-0.5 text-xs leading-tight text-muted-foreground">{label}</p>
-      {sousLabel && <p className="mt-0.5 truncate text-[11px] text-muted-foreground/80">{sousLabel}</p>}
+    <div className={cn(
+      'min-w-0 bg-card px-4 py-5 sm:px-5',
+      grouped
+        ? 'even:border-l even:border-border [&:nth-child(n+3)]:border-t [&:nth-child(n+3)]:border-border lg:[&:nth-child(n+2)]:border-l lg:[&:nth-child(n+2)]:border-border lg:[&:nth-child(n+3)]:border-t-0'
+        : 'rounded-xl border border-border',
+    )}>
+      <p className="text-xs text-muted-foreground sm:text-[13px]">{label}</p>
+      <p className={cn('montant mt-3 break-words text-2xl font-medium leading-none sm:text-[32px]', tone === 'brand' && 'text-primary', tone === 'danger' && 'text-destructive')}>{valeur}</p>
+      {sousLabel && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{sousLabel}</p>}
     </div>
   )
 }
 
-// Barre partagée à deux segments proportionnels (ex : commission à régler / réglée).
+// Barre partagée à deux segments proportionnels, sans animation des dimensions.
 export function SplitBar({
   gauche,
   droite,
@@ -68,21 +46,10 @@ export function SplitBar({
   couleurDroite: string
 }) {
   const total = gauche + droite
-  const pct = total > 0 ? Math.round((gauche / total) * 100) : 0
+  const pct = total > 0 ? Math.max(0, Math.min(100, (gauche / total) * 100)) : 0
   return (
-    <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
-      {total > 0 && (
-        <>
-          <div
-            className="h-full transition-all duration-300"
-            style={{ width: `${Math.max(pct, gauche > 0 ? 4 : 0)}%`, background: couleurGauche }}
-          />
-          <div
-            className="h-full flex-1 transition-all duration-300"
-            style={{ background: droite > 0 ? couleurDroite : 'transparent' }}
-          />
-        </>
-      )}
+    <div className="flex h-1.5 w-full overflow-hidden rounded-sm bg-muted" aria-hidden>
+      {total > 0 && <><div className="h-full" style={{ width: `${pct}%`, background: couleurGauche }} /><div className="h-full flex-1" style={{ background: droite > 0 ? couleurDroite : 'transparent' }} /></>}
     </div>
   )
 }

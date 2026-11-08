@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, HardHat, Mic, Square } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { AlertTriangle, HardHat, Loader2, Mic, ShieldCheck, Square } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
+import { EmptyState } from '@/components/empty-state'
+import { useAuth } from '@/lib/auth/use-auth'
+import { useDroits } from '@/lib/auth/use-droits'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import {
@@ -38,6 +41,26 @@ type Moteur = 'navigateur' | 'deepgram'
 const CLE_MOTEUR = 'crm.appel.moteur'
 
 export function AppelPage() {
+  const { membreEnCours } = useAuth()
+  const { peutCreerLead } = useDroits()
+
+  if (membreEnCours) {
+    return <div role="status" aria-label="Chargement des droits" className="flex justify-center py-12"><Loader2 className="size-6 animate-spin text-primary" /></div>
+  }
+  if (!peutCreerLead) {
+    return <EmptyState
+      icon={ShieldCheck}
+      titre="Prise d’appel non autorisée"
+      description="Ton compte ne dispose pas du droit de création de projets. Un fondateur peut modifier tes accès depuis l’équipe."
+      action={<Button asChild variant="outline"><Link to="/projets">Retour aux projets</Link></Button>}
+    />
+  }
+
+  // Monter les hooks de transcription uniquement après vérification des droits.
+  return <AppelAutorise />
+}
+
+function AppelAutorise() {
   const navigate = useNavigate()
   const [moteur, setMoteur] = useState<Moteur>(
     () => (localStorage.getItem(CLE_MOTEUR) as Moteur) ?? 'deepgram',

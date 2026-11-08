@@ -17,7 +17,9 @@ export function dernierSuiviParlant(p: ProjetEspace): Suivi | null {
 /** Date relative lisible : « aujourd'hui à 12:50 », « 10 août à 12:50 ». */
 export function dateLisible(iso: string): string {
   const d = new Date(iso)
-  const jours = Math.floor((Date.now() - d.getTime()) / 86_400_000)
+  if (!Number.isFinite(d.getTime())) return 'Date inconnue'
+  const aujourdHui = new Date()
+  const jours = Math.round((Date.UTC(aujourdHui.getFullYear(), aujourdHui.getMonth(), aujourdHui.getDate()) - Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 86_400_000)
   const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
   if (jours === 0) return `aujourd'hui à ${heure}`
   if (jours === 1) return `hier à ${heure}`

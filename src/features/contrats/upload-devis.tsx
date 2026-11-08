@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { FileText, Upload, Loader2, CheckCircle2, Check, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase/client'
 import { uploaderDevis } from '@/lib/storage'
 import { extraireMontantDevis } from '@/lib/pdf-extract'
@@ -31,15 +32,17 @@ export function UploadDevis({
   onDone: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const depotEnCours = useRef(false)
+  const montantId = useId()
   const [envoi, setEnvoi] = useState(false)
   const [montant, setMontant] = useState(montantInitial != null ? String(montantInitial) : '')
   const [majMontant, setMajMontant] = useState(false)
 
   async function enregistrerMontant(silencieux = false, valeurOverride?: string) {
     const n = parseFloat((valeurOverride ?? montant).replace(',', '.'))
-    if (isNaN(n)) {
-      if (!silencieux) toast.error('Montant invalide')
-      return
+    if (!Number.isFinite(n) || n < 0 || n > 10_000_000) {
+      if (!silencieux) toast.error('Montant invalide', { description: 'Indiquez un montant entre 0 et 10 000 000 €.' })
+      return false
     }
     setMajMontant(true)
     try {
@@ -51,18 +54,23 @@ export function UploadDevis({
       if (error || !(data as { ok?: boolean })?.ok) throw new Error('Échec')
       if (!silencieux) toast.success('Montant enregistré')
       onDone()
+      return true
     } catch {
       if (!silencieux) toast.error("Impossible d'enregistrer le montant")
+      return false
     } finally {
       setMajMontant(false)
     }
   }
 
   async function traiter(file: File) {
-    if (file.type && !file.type.includes('pdf')) {
+    if (depotEnCours.current) return
+    if ((file.type && file.type !== 'application/pdf') || !/\.pdf$/i.test(file.name)) {
       toast.error('Format PDF uniquement')
       return
     }
+    if (file.size > 10_000_000) { toast.error('PDF trop volumineux', { description: '10 Mo maximum.' }); return }
+    depotEnCours.current = true
     setEnvoi(true)
     // Si aucun montant n'est déjà saisi, on tente de le lire dans le PDF en
     // parallèle de l'upload (échec silencieux — jamais bloquant, jamais d'erreur affichée).
@@ -78,19 +86,22 @@ export function UploadDevis({
       if (error || !(data as { ok?: boolean })?.ok) throw new Error('Envoi impossible')
 
       const montantDetecte = await extraction
+      let montantEnregistre = true
       if (montantDetecte != null && !montant.trim()) {
         // Montant lu automatiquement dans le PDF : pré-rempli et enregistré, comme une saisie manuelle.
-        setMontant(String(montantDetecte).replace('.', ','))
-        await enregistrerMontant(true, String(montantDetecte))
+        setMontant(String(montantDetecte))
+        montantEnregistre = await enregistrerMontant(true, String(montantDetecte))
       } else if (montant.trim()) {
         // Enregistre aussi le montant saisi, le cas échéant (mécaniquement).
-        await enregistrerMontant(true)
+        montantEnregistre = await enregistrerMontant(true)
       }
-      toast.success(`${label} envoyé`)
+      if (montantEnregistre) toast.success(`${label} reçu`)
+      else toast.warning('PDF reçu, montant non enregistré', { description: 'Vérifiez le montant et réessayez son enregistrement. Le PDF est conservé.' })
       onDone()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur')
     } finally {
+      depotEnCours.current = false
       setEnvoi(false)
       if (inputRef.current) inputRef.current.value = ''
     }
@@ -99,24 +110,17 @@ export function UploadDevis({
   const { dragActive, handlers } = useDropzone(traiter)
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border/70 bg-card p-4 shadow-card">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-          <span
-            className={cn(
-              'flex size-8 shrink-0 items-center justify-center rounded-lg',
-              depose ? 'bg-[#22C55E]/15 text-[#16A34A]' : 'bg-primary/10 text-primary',
-            )}
-          >
-            <FileText className="size-4" />
-          </span>
-          <span className="truncate">{label}</span>
+    <div className="min-w-0 space-y-4 rounded-[10px] border border-border bg-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p className="flex min-w-0 flex-1 basis-40 items-start gap-2 text-sm font-semibold">
+          <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <span className="break-words">{label}</span>
         </p>
         <div className="flex shrink-0 items-center gap-1.5">
           {/* Relire le PDF déposé. Sans ce bouton, l'artisan ne pouvait que le
               remplacer à l'aveugle, sans vérifier ce qu'il avait envoyé. */}
           {depose && url && (
-            <Button size="sm" variant="outline" className="h-8 bg-card" asChild>
+            <Button size="sm" variant="outline" className="min-h-11 bg-card" asChild>
               <a href={url} target="_blank" rel="noopener">
                 <Eye className="size-3.5" />
                 Voir
@@ -124,7 +128,7 @@ export function UploadDevis({
             </Button>
           )}
           {depose && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#22C55E]/10 px-2.5 py-1 text-xs font-medium text-[#16A34A]">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
               <CheckCircle2 className="size-3.5" /> Reçu
             </span>
           )}
@@ -132,31 +136,38 @@ export function UploadDevis({
       </div>
 
       {/* Montant TTC */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Input
-            type="number"
-            inputMode="decimal"
-            placeholder="Montant TTC"
-            value={montant}
-            onChange={(e) => setMontant(e.target.value)}
-            className="h-10 pr-7"
-            aria-label={`Montant TTC — ${label}`}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
+      <div className="space-y-2">
+        <Label htmlFor={montantId} className="text-xs text-muted-foreground">Montant TTC</Label>
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Input
+              id={montantId}
+              type="number"
+              min={0}
+              max={10_000_000}
+              disabled={envoi || majMontant}
+              inputMode="decimal"
+              placeholder="Montant TTC"
+              value={montant}
+              onChange={(e) => setMontant(e.target.value)}
+              className="h-11 pr-7"
+              aria-label={`Montant TTC — ${label}`}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">€</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="size-11 shrink-0"
+            onClick={() => void enregistrerMontant()}
+            disabled={envoi || majMontant || !montant.trim()}
+            aria-label="Enregistrer le montant"
+          >
+            {majMontant ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-10"
-          onClick={() => void enregistrerMontant()}
-          disabled={majMontant || !montant.trim()}
-          aria-label="Enregistrer le montant"
-        >
-          {majMontant ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-        </Button>
       </div>
-      <p className="-mt-1.5 text-[11px] leading-snug text-muted-foreground">
+      <p className="-mt-2 text-xs leading-relaxed text-muted-foreground">
         Détecté automatiquement à partir du PDF si possible — modifiable à tout moment. Le PDF n'est
         pas obligatoire si vous connaissez déjà le montant.
       </p>
@@ -165,30 +176,21 @@ export function UploadDevis({
       <div
         {...handlers}
         className={cn(
-          'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-all duration-200',
+          'flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3 transition-colors',
           dragActive
-            ? 'scale-[1.01] border-primary bg-primary/5'
-            : depose
-              ? 'border-[#22C55E]/40 bg-[#22C55E]/5'
-              : 'border-input bg-muted/30 hover:border-primary/50 hover:bg-primary/[0.03]',
+            ? 'border-primary bg-primary/5'
+            : 'border-input bg-muted/20 hover:border-muted-foreground/50',
         )}
       >
-        <span
-          className={cn(
-            'flex size-10 items-center justify-center rounded-full',
-            depose ? 'bg-[#22C55E]/15 text-[#16A34A]' : 'bg-primary/10 text-primary',
-          )}
-        >
-          <FileText className="size-5" />
-        </span>
-        <p className="text-xs text-muted-foreground">
+        <Upload className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+        <p className="min-w-0 flex-1 text-xs leading-relaxed text-muted-foreground">
           {dragActive
             ? 'Déposez le PDF ici…'
             : depose
               ? 'Document reçu par Celexia'
-              : 'Glissez votre PDF ici, ou'}
+              : 'PDF, 10 Mo maximum. Glissez le fichier ici, ou'}
         </p>
-        <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={envoi}>
+        <Button variant="outline" className="min-h-11 w-full bg-card" onClick={() => inputRef.current?.click()} disabled={envoi}>
           {envoi ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
           {depose ? 'Remplacer le document' : 'Choisir un PDF'}
         </Button>

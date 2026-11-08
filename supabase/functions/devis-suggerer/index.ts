@@ -16,10 +16,13 @@
 // vides. Un prix inventé par une IA, c'est un devis à trois fois le marché —
 // exactement ce qui a fait perdre Carole Ledent.
 
+import { preparerSuggestionsCatalogue } from '../_suggestions-catalogue.ts'
+
 const MODELE = 'claude-sonnet-5'
 
 const ORIGINES = [
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://localhost:4173',
   ...(Deno.env.get('SITE_URL') ?? '').split(',').map((o) => o.trim()).filter(Boolean),
 ]
@@ -79,17 +82,9 @@ const OUTIL = {
                 "Estimation à partir du dossier (surface annoncée, longueur, nombre). "
                 + "Mets 1 si rien ne permet de l'estimer — l'artisan corrigera.",
             },
-            prix_unitaire: {
-              type: 'number',
-              description:
-                "UNIQUEMENT si la désignation vient d'un catalogue fourni : recopie son "
-                + "prix. Sinon laisse vide. N'invente JAMAIS un prix, ne le déduis pas "
-                + "d'une autre ligne, ne l'estime pas d'après le budget.",
-            },
-            source: {
+            prix_id: {
               type: 'string',
-              enum: ['bibliotheque', 'reference', 'aucune'],
-              description: "D'où vient le prix, ou 'aucune' s'il n'y en a pas.",
+              description: "Identifiant de la bibliothèque uniquement si la désignation et l’unité correspondent exactement. Sinon omets ce champ. Aucun prix ne doit être proposé.",
             },
             pourquoi: {
               type: 'string',
@@ -98,7 +93,7 @@ const OUTIL = {
                 + "le client a dit. Ex. « il a parlé d'une façade nord en pierre ».",
             },
           },
-          required: ['designation', 'unite', 'quantite', 'source'],
+          required: ['designation', 'unite', 'quantite'],
         },
       },
       manques: {
@@ -125,7 +120,7 @@ Comment travailler :
 
 3. RECOPIE LES DÉSIGNATIONS DU CATALOGUE quand elles correspondent, mot pour mot. C'est ce qui permet de rattacher un prix connu à la ligne. N'invente une désignation que si rien ne convient.
 
-4. LES PRIX NE S'INVENTENT PAS. Tu ne recopies que ceux du catalogue. Pas de règle de trois à partir du budget annoncé, pas de moyenne, pas d'estimation « raisonnable ». Une ligne sans prix est utile ; une ligne au mauvais prix fait perdre l'affaire.
+4. NE FOURNIS AUCUN PRIX. Si tu reprends exactement un ouvrage de la bibliothèque, dans la même unité, indique son prix_id. Le serveur rattache les prix connus après ta réponse. Ne réutilise jamais un identifiant pour un travail différent.
 
 5. LES QUANTITÉS S'ESTIMENT, et tu dis d'où elles viennent. « 88 m² » si le dossier parle de 88 m². Sinon 1, et l'artisan corrigera sur place.
 
@@ -134,6 +129,7 @@ Tu écris pour un artisan pressé, sur un téléphone. Sois concret.`
 Deno.serve(async (req) => {
   const CORS = cors(req.headers.get('origin'))
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+  if (req.method !== 'POST') return json({ ok: false, error: 'methode_invalide' }, 405, CORS)
 
   try {
     const cle = Deno.env.get('ANTHROPIC_API_KEY')
@@ -157,8 +153,11 @@ Deno.serve(async (req) => {
       rpc('reference_by_token', { p_token: token, p_metier: ctx.metier ?? null }),
     ])
 
+    const cataloguesSansPrix = (valeur: unknown) => Array.isArray(valeur)
+      ? valeur.map(({ id, designation, unite }: { id?: string; designation: string; unite: string }) => ({ prix_id: id, designation, unite })) : []
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      signal: AbortSignal.timeout(45_000),
       headers: {
         'content-type': 'application/json',
         'x-api-key': cle,
@@ -176,17 +175,17 @@ Deno.serve(async (req) => {
             type: 'text',
             text:
               `DOSSIER DU CHANTIER\n${JSON.stringify(ctx, null, 1)}\n\n`
-              + `CATALOGUE DE L'ARTISAN (ses prix — à privilégier)\n`
-              + `${JSON.stringify(bibliotheque, null, 1)}\n\n`
-              + `RÉFÉRENTIEL (lignes habituelles du métier ; "prix_median" absent = prix inconnu, laisse vide)\n`
-              + `${JSON.stringify(reference, null, 1)}`,
+              + `CATALOGUE DE L'ARTISAN (ouvrages et identifiants — à privilégier)\n`
+              + `${JSON.stringify(cataloguesSansPrix(bibliotheque), null, 1)}\n\n`
+              + `RÉFÉRENTIEL (lignes habituelles du métier, aucun prix à proposer)\n`
+              + `${JSON.stringify(cataloguesSansPrix(reference), null, 1)}`,
           }],
         }],
       }),
     })
 
     if (!res.ok) {
-      console.error('anthropic', res.status, await res.text())
+      console.error('anthropic devis-suggerer', res.status)
       return json({ ok: false, error: 'suggestion_impossible' }, 502, CORS)
     }
 
@@ -194,7 +193,15 @@ Deno.serve(async (req) => {
     const bloc = (rep.content ?? []).find((c: { type: string }) => c.type === 'tool_use')
     if (!bloc) return json({ ok: false, error: 'suggestion_impossible' }, 502, CORS)
 
-    return json({ ok: true, metier: ctx.metier ?? null, ...bloc.input }, 200, CORS)
+    const preparation = preparerSuggestionsCatalogue(bloc.input, bibliotheque)
+    if (!preparation.lignes.length) return json({ ok: false, error: 'suggestion_impossible' }, 502, CORS)
+    const garnies = await rpc('garnir_lignes_by_token', {
+      p_token: token, p_lignes: preparation.lignes, p_metier: ctx.metier ?? null, p_marge_cible: null,
+    }) as { ok?: boolean; lignes?: { designation: string; unite: string; quantite: number; prix_unitaire: number | null; source: string }[] }
+    if (!garnies?.ok || !Array.isArray(garnies.lignes)) return json({ ok: false, error: 'suggestion_impossible' }, 502, CORS)
+    return json({ ok: true, metier: ctx.metier ?? null, manques: preparation.manques,
+      lignes: garnies.lignes.map((l, i) => ({ ...l, source: l.source === 'a_chiffrer' ? 'aucune' : l.source, pourquoi: preparation.lignes[i]?.pourquoi ?? '' })),
+    }, 200, CORS)
   } catch (e) {
     console.error('devis-suggerer', e)
     return json({ ok: false, error: String(e instanceof Error ? e.message : e) }, 500, CORS)

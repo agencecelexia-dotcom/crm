@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowLeft, Loader2, RotateCcw, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/empty-state'
 import { formatEuros, formatDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase/client'
 import { MOTIF_LABEL } from '@/lib/motifs-perte'
+import { messageErreurSuivi } from './erreur-suivi'
 import { DrawerChantierPerdu } from './drawer-chantier-perdu'
 import type { ProjetPerdu } from '@/types/database'
 
@@ -42,6 +43,7 @@ export function ChantiersPerdus({
   onChange: () => void
 }) {
   const [enCours, setEnCours] = useState<string | null>(null)
+  const restaurationEnCours = useRef(false)
   /** Dossier ouvert en panneau : voir ce qui s'est passé avant de décider
    *  d'une réattribution. */
   const [ouvert, setOuvert] = useState<ProjetPerdu | null>(null)
@@ -49,6 +51,8 @@ export function ChantiersPerdus({
   const totalPerdu = projets.reduce((t, p) => t + (p.montant_devis ?? 0), 0)
 
   async function restaurer(p: ProjetPerdu) {
+    if (restaurationEnCours.current || !signe) return
+    restaurationEnCours.current = true
     setEnCours(p.id)
     try {
       const { data, error } = await supabase.rpc('restaurer_chantier_by_token', {
@@ -62,26 +66,28 @@ export function ChantiersPerdus({
           introuvable: 'Chantier introuvable.',
         }
         throw new Error(
-          (r?.error && messages[r.error]) || "Le chantier n'a pas pu être remis dans votre pipe.",
+          (r?.error && messages[r.error]) || messageErreurSuivi(error ?? r, "Le chantier n'a pas pu être repris."),
         )
       }
       toast.success('Chantier repris', {
         description: 'Celexia a été prévenu.',
       })
+      setOuvert((dossier) => dossier?.id === p.id ? null : dossier)
       onChange()
     } catch (e) {
       toast.error('Restauration impossible', {
         description: e instanceof Error ? e.message : undefined,
       })
     } finally {
+      restaurationEnCours.current = false
       setEnCours(null)
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={onRetour}>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <Button variant="outline" className="min-h-11" onClick={onRetour}>
           <ArrowLeft className="size-4" />
           Mes chantiers
         </Button>
@@ -101,22 +107,27 @@ export function ChantiersPerdus({
           description="Les chantiers que vous retirez ou déclarez perdus apparaîtront ici. Vous pourrez les reprendre si le client vous recontacte."
         />
       ) : (
-        <div className="space-y-3">
+        <div className="overflow-hidden rounded-[10px] border border-border bg-card">
           {projets.map((p) => {
             const metiers = p.metiers?.length ? p.metiers : [p.metier]
             return (
               <Card
                 key={p.id}
-                className="cursor-pointer rounded-2xl border-border/70 p-4 shadow-card transition-colors hover:bg-accent/40"
-                onClick={() => setOuvert(p)}
+                className="gap-0 rounded-none border-0 border-b border-border bg-transparent p-4 shadow-none last:border-b-0 sm:p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-full sm:basis-64">
                     {/* Le nom du client manquait totalement dans cette vue
                         (audit §8), rendant les dossiers non identifiables. */}
-                    <p className="font-display text-base tracking-tight">
-                      {p.client_nom ?? 'Client non communiqué'}
-                    </p>
+                    <button
+                      type="button"
+                      className="-my-2 flex min-h-11 max-w-full items-center rounded-md text-left text-base font-semibold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => setOuvert(p)}
+                    >
+                      <span className="break-words">
+                        {signe && p.client_nom ? p.client_nom : 'Client confidentiel'}
+                      </span>
+                    </button>
                     <p className="mt-0.5 text-sm text-muted-foreground">
                       {metiers.join(', ')}
                       {p.client_ville && ` · ${p.client_ville}`}
@@ -124,7 +135,7 @@ export function ChantiersPerdus({
                     </p>
                     <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       {p.motif_perte && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
+                        <span className="font-medium text-foreground">
                           {MOTIF_LABEL[p.motif_perte] ?? p.motif_perte}
                         </span>
                       )}
@@ -132,25 +143,30 @@ export function ChantiersPerdus({
                         {ORIGINE_LABEL[p.motif]} le {formatDate(p.sorti_le)}
                       </span>
                     </p>
-                    {p.derniere_raison && (
-                      <p className="mt-1.5 rounded-lg bg-muted/50 p-2 text-xs italic text-muted-foreground">
+                    {signe && p.derniere_raison && (
+                      <p className="mt-2 break-words border-l-2 border-border pl-3 text-sm leading-relaxed text-muted-foreground">
                         « {p.derniere_raison} »
                       </p>
                     )}
-                    {(p.suivis?.length ?? 0) > 0 && (
-                      <p className="mt-1.5 text-xs text-primary">
+                    {signe && (p.suivis?.length ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setOuvert(p)}
+                        className="mt-1 min-h-11 rounded-md text-left text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
                         Voir l'historique ({p.suivis!.length} échange
                         {p.suivis!.length > 1 ? 's' : ''})
                         {p.devis_depose && ' · devis déposé'}
-                      </p>
+                      </button>
                     )}
                   </div>
 
-                  {p.restaurable ? (
+                  {p.restaurable && signe ? (
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={enCours === p.id}
+                      className="min-h-11 max-w-full"
+                      disabled={enCours != null}
                       onClick={(e) => {
                         e.stopPropagation()
                         void restaurer(p)
@@ -169,9 +185,9 @@ export function ChantiersPerdus({
                       )}
                     </Button>
                   ) : (
-                    <span className="flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
+                    <span className="flex min-h-11 items-center gap-2 text-xs text-muted-foreground">
                       <Lock className="size-3.5" />
-                      Confié à un autre artisan
+                      {signe ? 'Chantier indisponible pour une reprise' : 'Contrat à signer pour reprendre'}
                     </span>
                   )}
                 </div>
@@ -187,7 +203,6 @@ export function ChantiersPerdus({
         onClose={() => setOuvert(null)}
         enCours={enCours === ouvert?.id}
         onRestaurer={(p) => {
-          setOuvert(null)
           void restaurer(p)
         }}
       />

@@ -6,20 +6,20 @@ import { AppLayout } from './layout/app-layout'
 import { AuthProvider } from '@/lib/auth/auth-provider'
 import { ProtectedRoute } from '@/lib/auth/protected-route'
 import { RouteFondateur } from '@/lib/auth/route-fondateur'
-import { AccueilSelonRole } from '@/features/accueil-selon-role'
-import { EquipePage } from '@/features/equipe/equipe-page'
-import { MonPipePage } from '@/features/commercial/mon-pipe-page'
-import { ReprisesPage } from '@/features/equipe/reprises-page'
-import { BusinessPlanPage } from '@/features/business-plan/business-plan-page'
-import { CreativesPage } from '@/features/creatives/creatives-page'
-import { VueCommercialPage } from '@/features/equipe/vue-commercial-page'
+const AccueilSelonRole = lazy(() => import('@/features/accueil-selon-role').then((m) => ({ default: m.AccueilSelonRole })))
+const EquipePage = lazy(() => import('@/features/equipe/equipe-page').then((m) => ({ default: m.EquipePage })))
+const MonPipePage = lazy(() => import('@/features/commercial/mon-pipe-page').then((m) => ({ default: m.MonPipePage })))
+const ReprisesPage = lazy(() => import('@/features/equipe/reprises-page').then((m) => ({ default: m.ReprisesPage })))
+const BusinessPlanPage = lazy(() => import('@/features/business-plan/business-plan-page').then((m) => ({ default: m.BusinessPlanPage })))
+const CreativesPage = lazy(() => import('@/features/creatives/creatives-page').then((m) => ({ default: m.CreativesPage })))
+const VueCommercialPage = lazy(() => import('@/features/equipe/vue-commercial-page').then((m) => ({ default: m.VueCommercialPage })))
 import { ErrorBoundary } from '@/components/error-boundary'
 import { PageIntrouvable } from '@/features/page-introuvable'
 
 import { LoginPage } from '@/features/auth/login-page'
-import { DefinirMotDePassePage } from '@/features/auth/definir-mot-de-passe-page'
-import { SignerPage } from '@/features/contrats/signer-page'
-import { MissionPage } from '@/features/contrats/mission-page'
+const DefinirMotDePassePage = lazy(() => import('@/features/auth/definir-mot-de-passe-page').then((m) => ({ default: m.DefinirMotDePassePage })))
+const SignerPage = lazy(() => import('@/features/contrats/signer-page').then((m) => ({ default: m.SignerPage })))
+const MissionPage = lazy(() => import('@/features/contrats/mission-page').then((m) => ({ default: m.MissionPage })))
 // Différé : l'espace artisan est une route PUBLIQUE par jeton, que personne de
 // l'agence n'ouvre jamais — et il emmène avec lui tout le générateur de devis
 // (modèles, entretien, identité, jsPDF). Le laisser dans le bundle initial le
@@ -28,7 +28,7 @@ import { MissionPage } from '@/features/contrats/mission-page'
 const EspaceArtisanPage = lazy(() =>
   import('@/features/contrats/espace-artisan-page').then((m) => ({ default: m.EspaceArtisanPage })),
 )
-import { InscriptionArtisanPage } from '@/features/artisans/pages/inscription-artisan-page'
+const InscriptionArtisanPage = lazy(() => import('@/features/artisans/pages/inscription-artisan-page').then((m) => ({ default: m.InscriptionArtisanPage })))
 const CartePage = lazy(() => import('@/features/carte/carte-page').then((m) => ({ default: m.CartePage })))
 const MetragesAVerifierPage = lazy(() =>
   import('@/features/metre/metrages-a-verifier-page').then((m) => ({ default: m.MetragesAVerifierPage })),
@@ -36,26 +36,26 @@ const MetragesAVerifierPage = lazy(() =>
 const Maison3DPage = lazy(() =>
   import('@/features/metre/maison-3d-page').then((m) => ({ default: m.Maison3DPage })),
 )
-import { CommissionsPage } from '@/features/commissions/commissions-page'
-import { TachesPage } from '@/features/taches/taches-page'
+const CommissionsPage = lazy(() => import('@/features/commissions/commissions-page').then((m) => ({ default: m.CommissionsPage })))
+const TachesPage = lazy(() => import('@/features/taches/taches-page').then((m) => ({ default: m.TachesPage })))
 const CouverturePage = lazy(() => import('@/features/couverture/couverture-page').then((m) => ({ default: m.CouverturePage })))
-import { NotesPage } from '@/features/notes/notes-page'
-import { AppelPage } from '@/features/appel/appel-page'
-import { AReattribuerPage } from '@/features/projets/pages/a-reattribuer-page'
-import { ProjetsListPage } from '@/features/projets/pages/projets-list-page'
-import { CorbeillePage } from '@/features/projets/pages/corbeille-page'
-import { ProjetNewPage } from '@/features/projets/pages/projet-new-page'
-import { ProjetEditPage } from '@/features/projets/pages/projet-edit-page'
-import { ProjetDetailPage } from '@/features/projets/pages/projet-detail-page'
-import { ArtisansListPage } from '@/features/artisans/pages/artisans-list-page'
+const NotesPage = lazy(() => import('@/features/notes/notes-page').then((m) => ({ default: m.NotesPage })))
+const AppelPage = lazy(() => import('@/features/appel/appel-page').then((m) => ({ default: m.AppelPage })))
+const AReattribuerPage = lazy(() => import('@/features/projets/pages/a-reattribuer-page').then((m) => ({ default: m.AReattribuerPage })))
+const ProjetsListPage = lazy(() => import('@/features/projets/pages/projets-list-page').then((m) => ({ default: m.ProjetsListPage })))
+const CorbeillePage = lazy(() => import('@/features/projets/pages/corbeille-page').then((m) => ({ default: m.CorbeillePage })))
+const ProjetNewPage = lazy(() => import('@/features/projets/pages/projet-new-page').then((m) => ({ default: m.ProjetNewPage })))
+const ProjetEditPage = lazy(() => import('@/features/projets/pages/projet-edit-page').then((m) => ({ default: m.ProjetEditPage })))
+const ProjetDetailPage = lazy(() => import('@/features/projets/pages/projet-detail-page').then((m) => ({ default: m.ProjetDetailPage })))
+const ArtisansListPage = lazy(() => import('@/features/artisans/pages/artisans-list-page').then((m) => ({ default: m.ArtisansListPage })))
 const ArtisansStatsPage = lazy(() => import('@/features/artisans/pages/artisans-stats-page').then((m) => ({ default: m.ArtisansStatsPage })))
-import { ArtisansEcartesPage } from '@/features/artisans/pages/artisans-ecartes-page'
+const ArtisansEcartesPage = lazy(() => import('@/features/artisans/pages/artisans-ecartes-page').then((m) => ({ default: m.ArtisansEcartesPage })))
 const ArtisansZonesPage = lazy(() => import('@/features/artisans/pages/artisans-zones-page').then((m) => ({ default: m.ArtisansZonesPage })))
-import { ArtisanNewPage } from '@/features/artisans/pages/artisan-new-page'
-import { ArtisanDetailPage } from '@/features/artisans/pages/artisan-detail-page'
-import { ArtisanEditPage } from '@/features/artisans/pages/artisan-edit-page'
-import { ParametresSignaturePage } from '@/features/parametres/signature-page'
-import { AutomatisationsPage } from '@/features/automatisations/automatisations-page'
+const ArtisanNewPage = lazy(() => import('@/features/artisans/pages/artisan-new-page').then((m) => ({ default: m.ArtisanNewPage })))
+const ArtisanDetailPage = lazy(() => import('@/features/artisans/pages/artisan-detail-page').then((m) => ({ default: m.ArtisanDetailPage })))
+const ArtisanEditPage = lazy(() => import('@/features/artisans/pages/artisan-edit-page').then((m) => ({ default: m.ArtisanEditPage })))
+const ParametresSignaturePage = lazy(() => import('@/features/parametres/signature-page').then((m) => ({ default: m.ParametresSignaturePage })))
+const AutomatisationsPage = lazy(() => import('@/features/automatisations/automatisations-page').then((m) => ({ default: m.AutomatisationsPage })))
 
 /**
  * Attente d'un écran chargé à la demande.
@@ -66,8 +66,9 @@ import { AutomatisationsPage } from '@/features/automatisations/automatisations-
  */
 function EcranEnChargement() {
   return (
-    <div className="flex min-h-[50vh] items-center justify-center">
-      <Loader2 className="size-6 animate-spin text-primary" />
+    <div role="status" className="flex min-h-[50vh] items-center justify-center gap-3 text-sm text-muted-foreground">
+      <Loader2 className="size-5 animate-spin" aria-hidden />
+      Chargement de l’écran…
     </div>
   )
 }

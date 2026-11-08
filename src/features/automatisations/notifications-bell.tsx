@@ -12,7 +12,7 @@ import { useNotifications, useMarquerLue, useToutMarquerLu } from './use-notific
 
 // Cloche d'alertes in-app : escalades « à appeler » (artisan qui n'a pas signé / pas avancé).
 export function NotificationsBell() {
-  const { data: notifs } = useNotifications()
+  const { data: notifs, isLoading, isError, refetch } = useNotifications()
   const marquer = useMarquerLue()
   const toutLu = useToutMarquerLu()
   const nonLues = (notifs ?? []).filter((n) => !n.lu).length
@@ -29,7 +29,7 @@ export function NotificationsBell() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0">
+      <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <span className="text-sm font-semibold">Alertes</span>
           {nonLues > 0 && (
@@ -39,8 +39,12 @@ export function NotificationsBell() {
           )}
         </div>
         <div className="max-h-[60dvh] overflow-y-auto">
-          {!notifs || notifs.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">Aucune alerte 🎉</p>
+          {isLoading ? (
+            <p role="status" className="px-4 py-6 text-sm text-muted-foreground">Chargement des alertes…</p>
+          ) : isError ? (
+            <div className="p-4 text-sm"><p>Impossible de charger les alertes</p><Button variant="link" onClick={() => void refetch()}>Réessayer</Button></div>
+          ) : !notifs || notifs.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">Aucune alerte</p>
           ) : (
             notifs.map((n) => {
               const contenu = (

@@ -1,3 +1,5 @@
+import { AlertCircle } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -55,19 +57,28 @@ export function ArtisanDetailPage() {
   const { estFondateur } = useAuth()
   // Le jeton n'est plus lu avec la fiche : la base ne le donne qu'au fondateur.
   const { data: jeton } = useJetonArtisan(id, estFondateur)
-  const { data: artisan, isLoading } = useArtisan(id)
+  const { data: artisan, isLoading, isError, refetch } = useArtisan(id)
   const { data: projets } = useProjetsByArtisan(id)
   const remove = useDeleteArtisan()
   const ecarter = useEcarterArtisan()
   const definirPartenaire = useDefinirPartenaire()
   const [motif, setMotif] = useState('')
 
-  if (isLoading || !artisan) {
+  if (isLoading) {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="size-6 animate-spin text-primary" />
       </div>
     )
+  }
+
+  if (isError || !artisan) {
+    return <EmptyState icon={AlertCircle} titre="Fiche indisponible"
+      description="Ce dossier est introuvable, inaccessible ou n’a pas pu être chargé."
+      action={<div className="flex flex-wrap justify-center gap-2">
+        <Button variant="outline" onClick={() => void refetch()}>Réessayer</Button>
+        <Button variant="ghost" onClick={() => navigate('/artisans')}>Retour aux artisans</Button>
+      </div>} />
   }
 
   // Total rapporté = somme des commissions des devis signés de cet artisan.
