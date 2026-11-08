@@ -21,6 +21,8 @@ export function PanneauCloture({
   onBasculer,
   onEnregistrer,
   enregistrement,
+  erreur,
+  reessayer,
 }: {
   parcelle: Parcelle | null | undefined
   enCours: boolean
@@ -30,6 +32,8 @@ export function PanneauCloture({
   onBasculer: (index: number) => void
   onEnregistrer: () => void
   enregistrement: boolean
+  erreur?: boolean
+  reessayer?: () => void
 }) {
   if (enCours) {
     return (
@@ -39,6 +43,12 @@ export function PanneauCloture({
       </p>
     )
   }
+  if (erreur) return (
+    <div role="alert" className="space-y-2 text-sm">
+      <p>Le cadastre n’a pas pu être chargé. Vous pouvez réessayer ou tracer la clôture manuellement.</p>
+      <Button variant="outline" onClick={reessayer}>Réessayer le cadastre</Button>
+    </div>
+  )
   if (!parcelle) {
     return (
       <p className="text-xs text-[#B45309]">

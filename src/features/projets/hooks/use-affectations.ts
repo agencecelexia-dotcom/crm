@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import type { StatutProjet } from '@/types/database'
+import { invaliderDonneesProjets } from '../lib/invalidation'
 
 // Affectations = couples artisan↔projet (un projet peut être confié à plusieurs
 // artisans en parallèle, chacun avec son état propre).
@@ -79,20 +80,22 @@ export function useAffecterArtisans() {
         .upsert(rows, { onConflict: 'projet_id,artisan_id', ignoreDuplicates: true })
       if (error) throw error
       // Artisan principal (compat) + passage du projet en "artisan assigné"
-      const { data: p } = await supabase
+      const { data: p, error: lectureErreur } = await supabase
         .from('projets')
         .select('artisan_id, statut')
         .eq('id', projetId)
         .single()
+      if (lectureErreur) throw lectureErreur
       const patch: Record<string, unknown> = {}
       if (p && !p.artisan_id) patch.artisan_id = artisanIds[0]
       if (p && p.statut === 'nouveau') patch.statut = 'artisan_assigne'
-      if (Object.keys(patch).length) await supabase.from('projets').update(patch).eq('id', projetId)
+      if (Object.keys(patch).length) {
+        const { error: miseAJourErreur } = await supabase.from('projets').update(patch).eq('id', projetId)
+        if (miseAJourErreur) throw miseAJourErreur
+      }
     },
-    onSuccess: (_d, { projetId }) => {
-      qc.invalidateQueries({ queryKey: ['affectations', 'projet', projetId] })
-      qc.invalidateQueries({ queryKey: ['projets'] })
-    },
+    // Même en cas d'échec partiel, afficher l'état réellement enregistré.
+    onSettled: () => invaliderDonneesProjets(qc),
   })
 }
 
@@ -112,21 +115,22 @@ export function useAffecterProjets() {
         .upsert(rows, { onConflict: 'projet_id,artisan_id', ignoreDuplicates: true })
       if (error) throw error
       // Artisan principal (compat) + passage en "artisan assigné" pour les projets concernés
-      const { data: ps } = await supabase
+      const { data: ps, error: lectureErreur } = await supabase
         .from('projets')
         .select('id, artisan_id, statut')
         .in('id', projetIds)
+      if (lectureErreur) throw lectureErreur
       for (const p of ps ?? []) {
         const patch: Record<string, unknown> = {}
         if (!p.artisan_id) patch.artisan_id = artisanId
         if (p.statut === 'nouveau') patch.statut = 'artisan_assigne'
-        if (Object.keys(patch).length) await supabase.from('projets').update(patch).eq('id', p.id)
+        if (Object.keys(patch).length) {
+          const { error: miseAJourErreur } = await supabase.from('projets').update(patch).eq('id', p.id)
+          if (miseAJourErreur) throw miseAJourErreur
+        }
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['affectations'] })
-      qc.invalidateQueries({ queryKey: ['projets'] })
-    },
+    onSettled: () => invaliderDonneesProjets(qc),
   })
 }
 
@@ -138,24 +142,25 @@ export function useRetirerAffectation() {
       const { error } = await supabase.from('affectations').delete().eq('id', id)
       if (error) throw error
       // Recalcule l'artisan principal du projet (compat)
-      const { data: reste } = await supabase
+      const { data: reste, error: resteErreur } = await supabase
         .from('affectations')
         .select('artisan_id')
         .eq('projet_id', projetId)
         .limit(1)
+      if (resteErreur) throw resteErreur
       const principal = reste && reste.length ? reste[0].artisan_id : null
       const patch: Record<string, unknown> = { artisan_id: principal }
       // Un projet ne recule à « nouveau » que s'il n'avait pas dépassé
       // l'attribution : retirer le dernier artisan d'un chantier SIGNÉ le
       // ramenait à « nouveau » en gardant son montant signé.
-      const { data: p } = await supabase.from('projets').select('statut').eq('id', projetId).single()
+      const { data: p, error: lectureErreur } = await supabase.from('projets').select('statut').eq('id', projetId).single()
+      if (lectureErreur) throw lectureErreur
       if (!principal && p && ['nouveau', 'a_rappeler', 'a_reattribuer', 'artisan_assigne'].includes(p.statut))
         patch.statut = 'nouveau'
-      await supabase.from('projets').update(patch).eq('id', projetId)
+      const { error: miseAJourErreur } = await supabase.from('projets').update(patch).eq('id', projetId)
+      if (miseAJourErreur) throw miseAJourErreur
     },
-    onSuccess: (_d, { projetId }) => {
-      qc.invalidateQueries({ queryKey: ['affectations', 'projet', projetId] })
-      qc.invalidateQueries({ queryKey: ['projets'] })
-    },
+    // Même en cas d'échec partiel, afficher l'état réellement enregistré.
+    onSettled: () => invaliderDonneesProjets(qc),
   })
 }

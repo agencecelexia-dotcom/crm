@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Phone, PhoneOff, Trash2, ListChecks, Loader2, ChevronRight, Check, Clock } from 'lucide-react'
+import { Plus, Phone, PhoneOff, Trash2, ListChecks, Loader2, ChevronRight, Check, Clock, AlertCircle, UserRound, PenTool, CalendarDays, FileText, BadgeEuro, StickyNote, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page-header'
@@ -29,15 +29,15 @@ import {
   type Tache,
 } from './use-taches'
 
-const CAT: Record<string, { emoji: string; label: string; color: string }> = {
-  assignation: { emoji: '👤', label: 'Assignation', color: '#3B82F6' },
-  contrat: { emoji: '✍️', label: 'Contrat', color: '#F59E0B' },
-  rdv: { emoji: '📅', label: 'RDV', color: '#8B5CF6' },
-  devis: { emoji: '📄', label: 'Devis', color: '#0EA5E9' },
-  commission: { emoji: '💰', label: 'Commission', color: '#22C55E' },
-  appel: { emoji: '📞', label: 'Appel', color: '#6366F1' },
-  rappel: { emoji: '⏰', label: 'Rappel', color: '#7C3AED' },
-  autre: { emoji: '📝', label: 'Tâche', color: '#64748B' },
+const CAT: Record<string, { icon: LucideIcon; label: string; color: string }> = {
+  assignation: { icon: UserRound, label: 'Assignation', color: '#3B82F6' },
+  contrat: { icon: PenTool, label: 'Contrat', color: '#F59E0B' },
+  rdv: { icon: CalendarDays, label: 'RDV', color: '#8B5CF6' },
+  devis: { icon: FileText, label: 'Devis', color: '#0EA5E9' },
+  commission: { icon: BadgeEuro, label: 'Commission', color: '#22C55E' },
+  appel: { icon: Phone, label: 'Appel', color: '#6366F1' },
+  rappel: { icon: Clock, label: 'Rappel', color: '#7C3AED' },
+  autre: { icon: StickyNote, label: 'Tâche', color: '#64748B' },
 }
 const PRIO: Record<number, { label: string; color: string }> = {
   1: { label: 'Priorité haute', color: '#EF4444' },
@@ -46,7 +46,7 @@ const PRIO: Record<number, { label: string; color: string }> = {
 }
 
 export function TachesPage() {
-  const { data: taches, isLoading } = useTaches()
+  const { data: taches, isLoading, isError, refetch } = useTaches()
   const ajouter = useAjouterTache()
   const rappeler = useAjouterRappel()
   const [ouvert, setOuvert] = useState(false)
@@ -128,7 +128,7 @@ export function TachesPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         titre="À faire"
-        sousTitre={nbAFaire > 0 ? `${nbAFaire} tâche${nbAFaire > 1 ? 's' : ''} en attente` : 'Tout est à jour'}
+        sousTitre={isLoading ? 'Chargement des tâches…' : isError ? 'Liste indisponible' : nbAFaire > 0 ? `${nbAFaire} tâche${nbAFaire > 1 ? 's' : ''} en attente` : 'Tout est à jour'}
         action={
           <Button size="sm" onClick={() => setOuvert((v) => !v)}>
             <Plus className="size-4" />
@@ -215,10 +215,14 @@ export function TachesPage() {
             <Skeleton key={i} className="h-16 w-full rounded-2xl" />
           ))}
         </div>
+      ) : isError ? (
+        <EmptyState icon={AlertCircle} titre="Impossible de charger les tâches"
+          description="Réessaie avant de considérer le suivi comme à jour."
+          action={<Button variant="outline" onClick={() => void refetch()}>Réessayer</Button>} />
       ) : nbAFaire === 0 && faites.length === 0 ? (
         <EmptyState
           icon={ListChecks}
-          titre="Rien à faire 🎉"
+          titre="Aucune tâche en attente"
           description="Les tâches (leads, contrats, relances, commissions) apparaîtront ici automatiquement."
         />
       ) : (
@@ -228,7 +232,7 @@ export function TachesPage() {
               <section key={p}>
                 <div className="mb-2 flex items-center gap-2 px-1">
                   <span className="size-2.5 rounded-full" style={{ backgroundColor: PRIO[p].color }} />
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <h3 className="text-sm font-medium text-muted-foreground">
                     {PRIO[p].label}
                   </h3>
                   <span className="text-xs text-muted-foreground">· {groupes[p].length}</span>
@@ -298,7 +302,7 @@ function TacheItem({ t, snoozed }: { t: Tache; snoozed: boolean }) {
               style={{ backgroundColor: `${cat.color}1a` }}
               aria-hidden
             >
-              {cat.emoji}
+              <cat.icon className="size-4 text-muted-foreground" strokeWidth={1.5} aria-hidden />
             </span>
             <p className={cn('min-w-0 flex-1 truncate text-sm font-medium', fait && 'line-through')}>
               {t.titre}

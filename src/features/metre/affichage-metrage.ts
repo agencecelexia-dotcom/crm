@@ -24,9 +24,9 @@ export const SOURCE_MESURE: Record<string, string> = {
 
 /** Le statut tel que l'artisan et l'agence le lisent. */
 export const BADGE_METRAGE: Record<StatutMetrage, { texte: string; classe: string }> = {
-  confirme: { texte: '✓ confirmé', classe: 'bg-[#22C55E]/15 text-[#16A34A]' },
-  coherent: { texte: '✓ vérifié', classe: 'bg-[#22C55E]/15 text-[#16A34A]' },
-  mesure: { texte: 'mesuré', classe: 'bg-primary/10 text-primary' },
+  confirme: { texte: '✓ confirmé', classe: 'bg-emerald-50 text-emerald-700' },
+  coherent: { texte: 'cohérent', classe: 'bg-emerald-50 text-emerald-700' },
+  mesure: { texte: 'estimé à distance', classe: 'bg-primary/10 text-primary' },
   declare: { texte: 'dit par le client', classe: 'bg-muted text-muted-foreground' },
   ecart: { texte: 'à vérifier', classe: 'bg-[#F59E0B]/15 text-[#B45309]' },
   sources_desaccord: { texte: 'à vérifier', classe: 'bg-[#F59E0B]/15 text-[#B45309]' },

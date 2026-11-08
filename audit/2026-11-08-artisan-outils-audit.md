@@ -1,0 +1,124 @@
+# Audit de l’espace artisan — outils de métrés, navigation et réseau
+
+Date : 8 novembre 2026. Périmètre : `src/features/metre`, navigation artisan et aide. Audit réalisé avant correctifs de cette phase ; aucun appel à une API de production ni à un moteur IA payant. Les observations de code sont distinguées des reproductions navigateur ci-dessous.
+
+## Conclusion avant correction
+
+L’outil possède de vraies capacités métier : tracé de surfaces/longueurs, relevé LiDAR, façade brute/nette, sélection des pans, parcelle/clôture, correction sur place, photos et export. Il ne s’agit pas de boutons factices. En revanche, trois parcours de données coexistent sans restitution unifiée : le relevé automatique d’un bâtiment, les métrés enregistrés par artisan et les quantités corrigées/validées du chantier. Cette séparation produit des chiffres différents selon que l’on consulte la carte, le dossier ou un export.
+
+La priorité est la fiabilité du résultat et des états, avant l’ajout d’outils. Une panne ne doit pas signifier « aucune donnée », une correction humaine doit être identifiable dans le rapport, et le simple changement de fond de carte ne doit pas relancer un calcul.
+
+## Défauts prioritaires
+
+| ID | Priorité | Déclencheur et comportement constaté | Conséquence | Correction proposée |
+|---|---|---|---|---|
+| M01 | P1 | `FeuilleMetre` ne lit que `data` de `useContexteMetre`. En cas d’erreur réseau ou `{ok:false}`, la carte par défaut et « Aucun bâtiment ici — dessinez » apparaissent ; les actions de dessin/position restent accessibles. | L’artisan croit à une absence de bâtiment ou peut essayer d’enregistrer sur un chantier retiré. | États chargement/erreur/refus explicites avant de monter les outils ; bouton Réessayer pour une panne ; motif métier pour un refus. |
+| M02 | P1 | `useSupprimerMetre` ne vérifie que `error`, pas `data.ok`. La RPC SQL retourne `{ok:false,error:'token_invalide'}` avec succès HTTP. | Toast « Mesure supprimée » alors que la mesure existe toujours. | Valider le résultat métier de la mutation et traduire son motif. |
+| M03 | P1 | `useMetreIA.refaire` est recréé à chaque rendu ; les effets de `FeuilleMetre` et `Maison3D` en dépendent et invalident relevé/photos dès que le statut vaut `fait`. | Requêtes répétées lors d’actions d’interface, risque de boucle si une réponse invalide à son tour les données observées. | Stabiliser le callback ; rafraîchir sur transition/fin d’analyse, pas à chaque rendu. Vérifier la consommation avec compteurs réseau. |
+| M05 | P1 | `FicheMesures` affiche la valeur humaine confirmée de `metrage_chantier`, mais `ExportsMetre`/`rapportMetre` et « Copier les mesures » ne reçoivent pas ces valeurs. | Le rapport peut contredire le chiffre accepté sur place. | Exporter les valeurs retenues avec auteur/statut/note, et conserver le relevé brut dans une section identifiée. |
+| M06 | P1/P2 | Photos de façade : panne de lecture initiale présentée comme « Aucune photo de rue ». Fiche maison : panne présentée comme « Aucune donnée publique ». Parcelle : panne présentée comme absence au cadastre. | L’utilisateur abandonne une source simplement indisponible. | Erreur/absence/chargement distincts et relance locale ; conserver les données précédentes. |
+| M07 | P2 | `useEtatsMetrage` convertit une réponse `{ok:false}` en Map vide. Les corrections n’invalident que `metrage-artisan`, pas la liste `etats-metrage`. | « À mesurer » ou « À vérifier » peut être faux ou rester ancien après confirmation. | Vérifier `ok` ; invalider les indicateurs de liste après correction. |
+| M04 | P2 | Dans le panneau sans bâtiment, deux boutons longs sont placés sur deux colonnes, avec texte non sécable. | Débordement interne reproduit à 320 px : les libellés se chevauchent malgré une largeur de document correcte. | Une colonne sur petit écran, texte adaptable, surface tactile suffisante. |
+| M08 | P2 | La recherche d’adresse retourne `[]` sur erreur HTTP et avale les erreurs réseau ; aucune indication de recherche/absence/erreur. | Saisie sans retour compréhensible ; résultats précédents possibles après panne. | État explicite de recherche et relance, vider les résultats obsolètes. |
+| M09 | P2 | `useReleve` et `useMetreIA` arrêtent le polling après 45/120 mises à jour mais conservent `statut=en_cours`. | Spinner sans fin visible, bien que plus aucune requête ne parte. | État délai dépassé avec reprise ; durée liée à la demande, pas au compteur historique de cache. |
+| M10 | P2 | Saisie sur place sauvegarde quatre à cinq corrections séquentielles. Un échec intermédiaire laisse des valeurs partiellement écrites sans bilan. | L’utilisateur ne sait pas ce qui a été retenu. | Transaction serveur ou bilan des lignes réussies/échouées et reprise idempotente. |
+| M11 | P2 | `FeuilleMetreDifferee` utilise `Suspense fallback={null}` ; pas de retour après appui pendant le chargement du module, ni récupération locale d’un import échoué. | Impression de bouton sans effet sur connexion lente. | Feuille de chargement visible et état d’échec du module. |
+
+Sources principales : `feuille-metre.tsx` (contexte, effets IA, panneau), `use-metres.ts` (suppression/recherche), `use-metre-ia.ts`, `use-releve.ts`, `use-metrage.ts`, `fiche-mesures.tsx`, `exports-metre.tsx`, `rapport-metre.ts`, `photo-facade.tsx`, `panneau-batiment.tsx`, `panneau-cloture.tsx`, `sur-place.tsx`. La réponse métier de suppression est vérifiée dans `supabase/migrations/0145_metres.sql`.
+
+## Inventaire fonctionnel et limites réelles
+
+| Outil / parcours | Ce qui est réellement implémenté | Dépendances / limites | Vérification de cet audit |
+|---|---|---|---|
+| Liste Métrés | Recherche client/adresse/métier, compte, états prêt/à vérifier, ouverture d’un chantier | Aucun filtre métier/état ; dossiers gagnés restent accessibles, ce qui est cohérent pour les travaux | Navigation des six écrans déjà passée en desktop/mobile/320 ; lecture des états réseau |
+| Choix de la maison | Identification serveur, confirmation humaine, recherche d’autre adresse, mémorisation | RNB/BAN/IGN ; timeout 12 s puis une relance et secours navigateur | Code et APIs examinés ; maison fictive dans la nouvelle suite |
+| Carte et fonds | Orthophoto, plan, relief LiDAR, parcellaire, zoom, contours et pans | Tuiles IGN externes ; aucun état de panne des tuiles ; zoom agrandi ne crée pas de précision | Interception complète avec tuile factice : interactions vérifiables, qualité cartographique non évaluée |
+| Surface dessinée | Polygone, aire/périmètre, annulation dernier point, nom et sauvegarde | Au moins trois sommets ; deux sommets en mode surface affichent une longueur et peuvent être enregistrés comme telle | Tracé navigateur, annulation d’un point, nom, sauvegarde fictive et réaffichage de la ligne ; calculs géométriques existants |
+| Longueur dessinée | Ligne de plusieurs points, longueur et sauvegarde | Ne remplace pas une mesure terrain ; aucun export des tracés dans le rapport bâtiment | Tracé navigateur, annulation, sauvegarde fictive et présence dans la liste enregistrée |
+| Tracés enregistrés | Liste, valeur et suppression confirmée | Pas de renommage, édition, réaffichage du tracé, sélection pour export ni transfert au devis | Refus de suppression reproduit par fixture ; opérations réelles non effectuées |
+| Toiture automatique | Deux moteurs : grille altimétrique et relevé LiDAR détaillé ; pente, surface, débord, pans | Couverture IGN, qualité du relevé et date de vol ; réponses basses/non fiables écartées par `releveUtilisable` | Tests géométriques existants inspectés ; appels distants non lancés |
+| Toiture corrigée | Pente/débord saisis, versant/pans sélectionnés, sauvegarde recalculée serveur | Deux représentations (ancienne grille / nouveau relevé) et termes à expliquer | Code des formules, provenance et paramètres RPC inspecté |
+| Façade | Orientation, mur libre/mitoyen, hauteur, surface brute/nette, comptage ouvertures, croquis | Les ouvertures ajoutées à la main utilisent une surface type ; hauteur saisie vs équivalente à distinguer | Tests existants des façades/mitoyenneté inspectés ; pas de prise de cote physique |
+| « Mesuré sur place » | Correction de quantités conservée comme valeur humaine retenue | Saisie immédiate sans confirmer le statut métier ; export déconnecté avant correction M05 | Saisie de 112,5 m², confirmation et téléchargement CSV vérifiant valeur humaine, 104 m² initiaux et relevé brut distinct |
+| Mode « Sur place » | Vue façade par façade, cotes, ouvertures supplémentaires, validation après toutes les façades vues | Lot transactionnel ajouté en 0186 ; pas de brouillon persistant ; dépend d’un relevé disponible | Visite réelle dans le navigateur : chaque façade vue, cote 10×6 m, ouverture ajoutée, lot succès/refus ; SQL rollback vérifié |
+| Parcelle/clôture | Détection parcelle, côtés, longueur cumulée, sauvegarde par tronçon | Accessible par priorité métier ; pas de garantie de bornage ; dépend IGN | Code du calcul et état d’erreur examinés ; pas de parcelle réelle interrogée |
+| Photos façade | Recherche photos rue, upload photo personnelle, analyse ouvertures, retrait/remise d’ouvertures | Panoramax/Mapillary/Storage/vision ; photo personnelle lue automatiquement après upload, quota ; erreurs partielles possibles | Image synthétique générée localement, réduction navigateur, upload Storage simulé, analyse fictive, retrait/remise d’ouverture au clavier ; aucun upload distant |
+| Matériau toiture | Lecture sauvegardée ou analyse aérienne, repli BDNB, confiance | Analyse payante déclenchée par appui ; une phrase affirme « photo à 5 cm » même si résolution différente | Code seulement ; afficher la résolution réelle partout |
+| Analyse IA maison | Lancement explicite, progression, polling, cache et résultat volumes/points à vérifier | IA serveur configurée, quotas, LiDAR préalable ; après `fait`, pas de relance utilisateur proposée | Lancement explicite `action:lire` intercepté, progression, panne simulée, reprise ; aucun moteur IA réel appelé |
+| Vue 3D | Modèle issu du relevé, rotation/zoom, sélection faces, cotes, image et GLB | WebGL ; modèle seulement si plans/origine présents ; aucun équivalent clavier de la sélection de faces | Rendu WebGL réel du navigateur sur relevé local figé, canvas visible, retour carte et captures desktop/mobile ; précision géographique non certifiée |
+| Rapport PDF | Rapport du relevé, pans, façades, plan, sources et vue 3D si prête | Export bâtiment, ne contient pas automatiquement tracés manuels/corrections humaines avant M05 | PDF réellement généré en test unitaire, présence de la correction humaine, source/confiance et estimation initiale ; mise en page PDF non contrôlée par rendu page à page |
+| « Tableau CSV » (anciennement « Tableau Excel ») | Téléchargement CSV avec séparateurs | Ce n’est pas un fichier XLSX ; le libellé doit dire CSV | Téléchargement CSV testé dans le navigateur ; BOM, correction, brut, source et confiance vérifiés |
+| Copier / partager | Web Share si disponible, sinon presse-papiers | Le bouton dit Copier mais ouvre parfois la feuille de partage ; annuler le partage renvoie actuellement « échec » et déclenche un toast d’erreur | Code examiné, défaut sémantique identifié |
+| Passage au devis | Bouton devis dans la fiche chantier et outil métré séparé | Pas d’action pour injecter les quantités retenues dans les lignes de devis ; copie manuelle nécessaire | Flux des props `DevisInitial` vérifié ; priorité produit après fiabilisation |
+
+## Navigation, mobile et compréhension
+
+- Les six rubriques sont désormais accessibles ; l’URL conserve la vue et le retour fonctionne entre écrans. La feuille Métrés ajoute une entrée d’historique pour que Retour la ferme : test dédié de conservation de la vue.
+- Les filtres/recherche de la liste Métrés vivent uniquement en mémoire et sont perdus en quittant la rubrique. Contrairement à la vue, le chantier ouvert n’a pas de lien partageable. Ce n’est pas bloquant, mais pénalise une reprise de travail.
+- « Métré », « relevé », « mesures », « métrage », « valeurs retenues » désignent des objets différents sans explication centrale. Recommandation : un parcours lisible « Estimer à distance → vérifier sur place → retenir les quantités → utiliser dans le devis ».
+- Sur mobile, le métré est une feuille quasi plein écran avec carte et panneau défilant. La recherche d’adresse, trois fonds, cadastre, 3D, confirmation de maison et IA concurrencent le geste principal. Garder la carte utile, puis ranger les réglages avancés dans un volet ; ne retirer aucun outil métier.
+- Le bloc IA apparaît avant les mesures existantes et répète la confirmation de maison déjà proposée par le bandeau. Sa promesse est plus large que le besoin courant de lire deux cotes. Placer les mesures/valeurs retenues d’abord et l’analyse en option.
+- L’aide explique quatre étapes commerciales mais pas les métrés, la confiance, la validation des assurances, la différence brouillon/envoyé ou le traitement d’une panne. Ajouter une aide contextuelle courte, avec liens vers les actions.
+- Les contrôles de carte font 36 px et plusieurs corrections 36–40 px ; les actions principales de terrain devraient atteindre 44 px. Des rectangles SVG de photo ont `role=button` sans focus clavier ni gestion Entrée/Espace.
+- Le statut « Contrat signé » mène à l’entreprise, ce qui fonctionne ; son aspect de simple badge rend l’action discrète. Un libellé accessible explicite aiderait.
+
+## Fonctions à faible utilité dans leur état actuel
+
+1. « Déjà enregistré » est un historique de valeurs avec suppression ; impossible de retrouver le tracé sur la carte, le modifier ou l’envoyer au devis. C’est une sauvegarde technique, pas encore un carnet de métrés exploitable.
+2. Un export automatique qui ignore la correction humaine n’est pas utilisable comme pièce de décision après visite. Le conserver comme relevé brut, mais présenter séparément et en premier les valeurs retenues.
+3. Un modèle 3D inaccessible faute de WebGL ou LiDAR ne doit pas bloquer les valeurs et la saisie manuelle. Le message de repli existe ; l’initialisation WebGL qui échoue après le test de capacité laisse encore une zone vide.
+4. La proposition IA avant toute lecture des chiffres ajoute du temps et de la complexité pour un simple contrôle de surface. Elle reste utile pour les volumes complexes et les ouvertures ; elle doit être présentée comme une option motivée.
+
+## Accès aux photos et isolation : constat initial et correction
+
+`facade-photo` valide un artisan actif, puis charge/modifie les objets par identifiant de bâtiment/photo. Aucune vérification d’affectation au chantier n’est visible dans les branches examinées. Les photos personnelles et ouvertures écartées sont enregistrées dans un cache commun par bâtiment. Cela mérite une décision explicite : quels contenus sont partageables entre artisans, et quels contenus doivent rester privés ? Aucun test d’accès croisé n’a été tenté sur une infrastructure réelle. L’analyse ne conclut pas à une fuite observée ; elle identifie une frontière d’accès à vérifier en environnement isolé.
+
+Ce point est corrigé dans le complément de cette phase : migration `0188_photos_chantiers_autorises.sql` et garde commune `_acces-photo.ts`. Chaque action exige un bâtiment relié à un chantier actif de l’artisan sous contrat ; pour une action sur un identifiant de photo, le bâtiment provient de la ligne stockée. Les photos personnelles sont filtrées par leur propriétaire avant toute signature d’URL. Les anciennes photos personnelles sans propriétaire identifiable restent accessibles à l’agence uniquement, sans suppression. Les nouvelles clés de dépôt intègrent l’acteur, et l’enregistrement refuse une clé appartenant à quelqu’un d’autre. Le cache navigateur des photos et matériaux inclut le token.
+
+Les chemins indirects ont été relus : `_photos-serveur` ne cherche que des photos de rue ; `_metre-ia-serveur` demande les photos à `facade-photo` au nom de l’appelant avant lecture des octets autorisés ; sa réponse persistée ne contient ni photo ni chemin ni URL signée. `_releve` ne renvoie pas d’image personnelle. `_dossier-serveur` conserve les quantités dérivées par bâtiment, sans image ; le partage du relevé géographique demeure volontaire. Cette conclusion repose sur le code et les tests isolés, pas sur un essai d’intrusion en production.
+
+## Preuves et limites des tests
+
+Nouvelle suite : `tests/artisan-outils-audit.spec.ts`, backend local fictif greffé par `page.route` sans modifier le helper partagé. Tests avant correction : panne contexte, refus chantier, suppression refusée, cache après IA terminée, retour de feuille, largeur 320 px. Les anomalies attendues utilisent `test.fail`, ce qui signale un succès inattendu après correction et oblige à retirer le marqueur.
+
+Les tuiles et données IGN sont simulées ; aucun appel vision, aucun upload réel ni lien privé réel. Cela prouve les contrats de l’interface, pas la disponibilité géographique ni la précision des fournisseurs. Les fonctions géométriques bénéficient déjà de tests unitaires locaux sur jeux figés ; cette couverture ne vaut pas validation de tous les outils sur tous les bâtiments.
+
+Le résultat chiffré des reproductions et les correctifs réalisés sont consignés ci-dessous après exécution.
+
+## Suivi de cette phase
+
+- Audit de code terminé avant correction.
+- Baseline avant correctifs conservée sous `test-results/audit-outils` et `test-results/audit-outils-mobile` : cinq échecs attendus sur mobile, retour navigateur réussi. Desktop confirme les quatre erreurs de données/réseau ; l’assertion responsive a été renforcée après examen de la capture pour mesurer le débordement interne du bouton.
+- M01/M02/M03/M04 corrigés puis passés sur les deux supports : contexte explicite, refus métier respecté, suppression fidèle au serveur, callback IA stable et boutons adaptés à 320 px.
+- M05 reproduit par test unitaire avant correction, puis corrigé : PDF/CSV/copie contiennent les valeurs confirmées du chantier, les valeurs initiales, auteur, note, provenance et confiance. Le relevé géométrique original demeure intact ; les quantités ne sont pas artificiellement réparties entre ses pans/murs. L’échec de récupération des corrections bloque l’export au lieu de les omettre.
+- M06/M07/M08 : chargement, absence et erreur distingués pour le dossier, les photos, les données publiques, la parcelle et l’adresse ; boutons de reprise. Une correction invalide aussi l’état de la liste. « cohérent » ne prétend plus être une vérification humaine ; « estimé à distance » distingue l’outil d’une valeur confirmée.
+- M10 : migration `0186_metres_confirmation_atomique.sql`, confirmation de la visite dans une transaction. Le test SQL reproduit d’abord l’ancien problème, puis vérifie rollback, réussite du lot, conservation du brut, refus sans signature, propriétaire différent, retrait et projet clos. La correction unitaire hérite également de la garde d’accès.
+- M11 : feuille visible dès le chargement différé, historique posé avant le téléchargement et état local d’échec avec fermeture/rechargement.
+- M09 est fermé dans le complément : le délai LiDAR de 3 minutes et IA de 6 minutes laisse un message explicite et une reprise. La vérification IA ne déclenche pas une nouvelle analyse payante. Le temps est attaché à la demande, sans dépendance au nombre historique de lectures du cache. Les tests navigateur avancent l’horloge, constatent l’arrêt des requêtes et récupèrent le résultat terminé après appui.
+- UX : panneau latéral sur grand écran, carte au-dessus sur téléphone ; les mesures passent avant l’analyse IA dépliable. Rectangles d’ouvertures accessibles avec Tab/Entrée/Espace, recherche et correction nommées pour les lecteurs d’écran, commandes carte 44 px. Annuler le partage ne produit plus de faux échec.
+- Vérification intermédiaire : 23 fichiers de tests métrés, 468 réussites et 1 ignoré ; 3 tests d’audit export dont génération PDF ensuite réussis. SQL local : 186 migrations chargées et 4 suites artisan réussies, dont `artisan_metres_audit.sql`. Les résultats finaux navigateur sont ajoutés après le dernier run.
+
+## Limites restantes après cette phase
+
+- Le carnet des tracés manuels reste limité à la liste/suppression, sans édition ni réaffichage du tracé. Les mesures retenues sont copiables et exportées ; aucune injection automatique dans le devis n’est annoncée.
+- Photo personnelle : aucun bouton de suppression de la photo n’existe dans ce parcours. Le retrait/remise testé porte sur les ouvertures détectées. La frontière d’accès serveur est désormais couverte par 17 cas unitaires et une suite SQL locale, notamment autre artisan, photo personnelle, bâtiment non attribué, absence de contrat et chantier retiré/clos.
+- Fournisseurs réels IGN/BAN/RNB, vision, quotas, vraie livraison Storage, disponibilité LiDAR et précision du modèle ne sont pas validés par ces tests isolés. Le mode parcelle/clôture a été inspecté et ses calculs sont couverts par les tests existants, mais n’a pas été piloté bout en bout avec une vraie parcelle. Aucun service payant n’a été sollicité.
+- L’impression/lecture humaine de chaque page PDF et le partage natif sur un vrai téléphone restent à contrôler. Le PDF est généré et son contenu métier testé ; cela ne prouve pas sa mise en page dans tous les cas. Le GLB est maintenant réellement téléchargé en desktop/mobile depuis la vue 3D : extension, signature `glTF`, version 2 et longueur binaire vérifiées, sans validation par un logiciel CAO externe.
+
+## Résultat final vérifié
+
+- `ARTISAN_AUDIT_SHARED_SERVER=1 npx playwright test --config tests/interface.config.ts tests/artisan-outils-audit.spec.ts --workers=2 --output=test-results/audit-outils-valide` : **30 tests réussis** (15 scénarios × ordinateur/téléphone), 40,3 s. Les réponses réseau et les images sont entièrement fictives ; le WebSocket HMR local est neutralisé pour éviter les rechargements dus aux éditions parallèles.
+- `npx vitest run tests/unit/metre*.test.ts tests/unit/artisan-outils-audit.test.ts` : **470 tests réussis, 1 ignoré**, 23 fichiers.
+- TypeScript global et ESLint du périmètre métrés/tests : réussis après les dernières corrections.
+- `node tests/sql/run.mjs` : **186 migrations chargées, 4 suites SQL réussies** lors de la vérification du lot 0186. Ce banc PostgreSQL WASM est local ; HTTP/auth/storage/cron externes sont simulés.
+- Captures examinées : `test-results/artisan-review/metres-3d-desktop.png` et `test-results/artisan-review/metres-3d-mobile.png`. La 3D est réellement rendue par WebGL ; les cartes de fond sont des tuiles fictives, pas une validation de cartographie IGN.
+- Dernière régression détectée pendant la mise au point : une tentative de nettoyage Leaflet après démontage utilisait une carte déjà détruite. Ce nettoyage a été supprimé ; le cadrage initial n’anime plus la carte éphémère et le parcours IA vérifie l’absence d’erreur navigateur.
+- Déploiement requis : appliquer 0186 avant d’exposer le bouton de confirmation groupée. En cas de réponse métier refusée, aucune valeur du lot n’est modifiée. Si la connexion tombe après envoi, le message demande de recharger les mesures pour connaître l’état effectivement enregistré ; il ne prétend pas que rien n’a été écrit.
+
+## Complément final : photos, délais et GLB
+
+- Suite `artisan-outils-audit.spec.ts` relancée après ces corrections : **34/34 tests réussis** (17 scénarios × ordinateur/téléphone), 45,1 s, résultats sous `test-results/audit-outils-final`. Les cas de délai contrôlent aussi qu’aucune requête ne continue silencieusement après expiration et que la reprise IA conserve exactement un appel de lancement payant fictif.
+- Suite unitaire métrés + audit + délais + accès photo : **491 réussites, 1 ignoré**, 25 fichiers. TypeScript global et ESLint du périmètre réussis.
+- SQL local : **188 migrations et 6 suites artisan réussies**, dont `artisan_photos_audit.sql`. Les scénarios refusent les accès à un autre bâtiment/artisan, sans signature, après retrait, masquage, suppression, clôture ou exclusion de l’artisan.
+- Les captures 3D desktop/mobile ont été actualisées. Le téléchargement GLB est vérifié sur les deux supports ; aucune donnée géographique réelle n’a été sollicitée pour cette vérification.
+- Déploiement de ce complément : appliquer **0188 avant `facade-photo`**. L’absence de la RPC fait échouer l’accès ; elle ne désactive pas la garde. Les photos de rue et la géométrie restent partagées par bâtiment, les images personnelles restent privées à l’artisan déposant et à l’agence. Les bâtiments choisis manuellement doivent être associés au chantier via « Utiliser pour ce chantier » ; le lancement IA associe aussi le choix avant de demander l’analyse.

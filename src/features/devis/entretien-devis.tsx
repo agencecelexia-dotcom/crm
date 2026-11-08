@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { ArrowLeft, ArrowRight, Loader2, MessageSquareText, Sparkles, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -51,6 +51,7 @@ export function EntretienDevis({
   onAnnuler: () => void
 }) {
   const entretien = useEntretienDevis(token)
+  const questionId = useId()
   // La marge visée recalcule un prix de vente À PARTIR D'UN DÉBOURSÉ. Sans
   // aucun déboursé en bibliothèque, le champ ne peut rien faire : l'afficher
   // laisse croire à un réglage qui agit.
@@ -151,6 +152,7 @@ export function EntretienDevis({
           variant="ghost"
           className="size-9 shrink-0"
           aria-label="Retour"
+          disabled={entretien.isPending}
           onClick={() =>
             etape === 'description'
               ? onAnnuler()
@@ -183,6 +185,7 @@ export function EntretienDevis({
             <Textarea
               autoFocus
               rows={8}
+              aria-label="Description du chantier"
               placeholder="Ex. Maison de plain-pied des années 70, le crépi est décollé sur la façade sud et fissuré ailleurs. Le client veut tout refaire en enduit gratté ton pierre. Accès facile."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -198,7 +201,7 @@ export function EntretienDevis({
           <>
             {questions.map((q) => (
               <div key={q.cle} className="space-y-1.5">
-                <Label className="text-sm font-medium">{q.libelle}</Label>
+                <Label htmlFor={`${questionId}-${q.cle}`} className="text-sm font-medium">{q.libelle}</Label>
                 {q.pourquoi && <p className="text-xs text-muted-foreground">{q.pourquoi}</p>}
 
                 {q.type === 'choix' && q.options?.length ? (
@@ -223,6 +226,7 @@ export function EntretienDevis({
                   <div className="relative">
                     <Input
                       className={cn('h-11', q.unite && 'pr-12')}
+                      id={`${questionId}-${q.cle}`}
                       inputMode={q.type === 'nombre' ? 'decimal' : 'text'}
                       value={reponses[q.cle] ?? ''}
                       onChange={(e) => setReponses((r) => ({ ...r, [q.cle]: e.target.value }))}

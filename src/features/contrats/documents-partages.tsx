@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Eye, File, FileText, Image as ImageIcon, Loader2, Music, Video } from 'lucide-react'
+import { AlertCircle, Download, Eye, File, FileText, Image as ImageIcon, Loader2, Music, Video } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -31,8 +31,9 @@ async function urlPiece(token: string, documentId: string, download = false) {
   const { data, error } = await supabase.functions.invoke('document-signe', {
     body: { token, document_id: documentId, download },
   })
-  if (error) return null
-  return (data as { ok?: boolean; url?: string })?.url ?? null
+  const r = data as { ok?: boolean; url?: string } | null
+  if (error || !r?.ok || !r.url || !/^https:\/\//i.test(r.url)) return null
+  return r.url
 }
 
 function useDocumentsPartages(token: string) {
@@ -57,13 +58,24 @@ function useDocumentsPartages(token: string) {
  * montrer : une section vide sur chaque dossier serait du bruit.
  */
 export function DocumentsPartages({ token }: { token: string }) {
-  const { data: documents, isLoading, isError } = useDocumentsPartages(token)
+  const { data: documents, isLoading, isError, refetch, isFetching } = useDocumentsPartages(token)
 
-  if (isLoading) return <Skeleton className="h-16 w-full rounded-xl" />
-  if (isError || !documents?.length) return null
+  if (isLoading) return <Skeleton className="h-16 w-full rounded-lg" />
+  if (isError) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-4" role="alert">
+        <AlertCircle className="size-4 shrink-0 text-muted-foreground" />
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">Les documents n’ont pas pu être chargés.</p>
+        <Button variant="outline" className="min-h-11" disabled={isFetching} onClick={() => void refetch()}>
+          Réessayer
+        </Button>
+      </div>
+    )
+  }
+  if (!documents?.length) return null
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" aria-label="Documents partagés par Celexia">
       {documents.map((doc) => (
         <LigneDocument key={doc.id} doc={doc} token={token} />
       ))}
@@ -78,10 +90,10 @@ export function DocumentsPartages({ token }: { token: string }) {
  */
 export function DocumentsPartagesCard({ token }: { token: string }) {
   const { data: documents, isLoading, isError } = useDocumentsPartages(token)
-  if (isLoading || isError || !documents?.length) return null
+  if (isLoading || (!isError && !documents?.length)) return null
 
   return (
-    <Card className="shadow-card">
+    <Card className="rounded-[10px] border-border bg-card shadow-none">
       <CardHeader>
         <CardTitle className="text-base">Documents du chantier</CardTitle>
       </CardHeader>
@@ -112,6 +124,9 @@ function LigneDocument({ doc, token }: { doc: DocumentPartage; token: string }) 
       }
       if (onglet) onglet.location.href = url
       else window.location.href = url
+    } catch {
+      onglet?.close()
+      toast.error('Document indisponible. Réessayez.')
     } finally {
       setOuverture(false)
     }
@@ -131,17 +146,19 @@ function LigneDocument({ doc, token }: { doc: DocumentPartage; token: string }) 
       document.body.appendChild(a)
       a.click()
       a.remove()
+    } catch {
+      toast.error('Téléchargement indisponible. Réessayez.')
     } finally {
       setTelechargement(false)
     }
   }
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-3 shadow-card">
-      <div className="flex items-center gap-3">
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <ApercuPiece doc={doc} categorie={categorie} Icone={Icone} token={token} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{doc.nom}</p>
+        <div className="min-w-0 flex-1 basis-24">
+          <p className="break-words text-sm font-medium">{doc.nom}</p>
           <p className="text-xs text-muted-foreground">
             {formatDate(doc.created_at)}
             {doc.taille_octets != null && ` · ${formatTaille(doc.taille_octets)}`}
@@ -151,6 +168,7 @@ function LigneDocument({ doc, token }: { doc: DocumentPartage; token: string }) 
           <Button
             size="icon"
             variant="ghost"
+            className="size-11"
             aria-label={`Ouvrir ${doc.nom}`}
             disabled={ouverture}
             onClick={() => void consulter()}
@@ -160,6 +178,7 @@ function LigneDocument({ doc, token }: { doc: DocumentPartage; token: string }) 
           <Button
             size="icon"
             variant="ghost"
+            className="size-11"
             aria-label={`Télécharger ${doc.nom}`}
             disabled={telechargement}
             onClick={() => void telecharger()}
@@ -202,7 +221,7 @@ function ApercuPiece({
     let vivant = true
     void urlPiece(token, doc.id).then((url) => {
       if (vivant) setApercu(url)
-    })
+    }).catch(() => undefined)
     return () => {
       vivant = false
     }
@@ -213,12 +232,12 @@ function ApercuPiece({
       <img
         src={apercu}
         alt=""
-        className="size-12 shrink-0 rounded-lg border border-border object-cover"
+        className="size-10 shrink-0 rounded-md border border-border object-cover"
       />
     )
   }
   return (
-    <span className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-muted text-primary">
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
       <Icone className="size-5" />
     </span>
   )

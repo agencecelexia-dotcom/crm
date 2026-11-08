@@ -1,7 +1,5 @@
 import { useEffect } from 'react'
 import {
-  Building2,
-  HardHat,
   Phone,
   Calendar,
   FileText,
@@ -96,14 +94,14 @@ export function FilDiscussion({
 
   if (suivis.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border bg-card/50 p-4 text-center text-sm text-muted-foreground">
+      <p className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
         Aucun échange pour l'instant.
       </p>
     )
   }
 
   return (
-    <ol className="space-y-2.5">
+    <ol className="space-y-3">
       {suivis.map((s, i) => {
         const Icone = iconeDe(s)
         const estAgence = s.auteur === 'agence'
@@ -113,23 +111,23 @@ export function FilDiscussion({
           <li
             key={s.id ?? `${s.created_at}-${i}`}
             className={cn(
-              'flex gap-2.5 rounded-xl border p-3',
+              'flex gap-3 rounded-lg border p-3',
               consigne
-                ? 'border-[#F59E0B]/40 bg-[#F59E0B]/5'
+                ? 'border-amber-200 bg-amber-50/50'
                 : estAgence
-                  ? 'border-primary/25 bg-primary/5'
+                  ? 'border-border bg-muted/30'
                   : 'border-border bg-card',
             )}
           >
             <span
               aria-hidden
               className={cn(
-                'flex size-8 shrink-0 items-center justify-center rounded-lg',
+                'flex size-7 shrink-0 items-center justify-center rounded-md',
                 consigne
-                  ? 'bg-[#F59E0B]/15 text-[#B45309]'
+                  ? 'text-amber-700'
                   : estAgence
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-muted text-muted-foreground',
+                    ? 'text-foreground'
+                    : 'text-muted-foreground',
               )}
             >
               <Icone className="size-4" />
@@ -138,33 +136,23 @@ export function FilDiscussion({
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="flex items-center gap-1 text-sm font-semibold">
-                  {estAgence ? (
-                    <>
-                      <Building2 className="size-3.5 text-primary" />
-                      Celexia
-                    </>
-                  ) : (
-                    <>
-                      <HardHat className="size-3.5" />
-                      Vous
-                    </>
-                  )}
+                  {estAgence ? 'Celexia' : 'Vous'}
                 </span>
                 {consigne && (
-                  <span className="rounded-full bg-[#F59E0B]/15 px-2 py-0.5 text-xs font-medium text-[#B45309]">
+                  <span className="text-xs font-medium text-amber-700">
                     À traiter
                   </span>
                 )}
                 <time
                   dateTime={s.created_at}
-                  className="text-xs text-muted-foreground tabular-nums"
+                  className="w-full text-xs tabular-nums text-muted-foreground sm:w-auto"
                 >
                   {formatDateHeure(s.created_at)}
                 </time>
               </p>
 
               {s.message && (
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm">{s.message}</p>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed">{s.message}</p>
               )}
             </div>
           </li>

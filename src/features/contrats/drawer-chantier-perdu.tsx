@@ -2,7 +2,6 @@ import { Eye, FileText, Lock, MapPin, RotateCcw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { cn } from '@/lib/utils'
 import { formatDate, formatEuros } from '@/lib/format'
 import { MOTIF_LABEL } from '@/lib/motifs-perte'
 import { dateLisible } from './dernier-suivi'
@@ -44,22 +43,23 @@ export function DrawerChantierPerdu({
   if (!projet) return null
 
   const metiers = projet.metiers?.length ? projet.metiers : [projet.metier]
-  const suivis = projet.suivis ?? []
+  const suivis = signe ? projet.suivis ?? [] : []
   const montant = projet.montant_devis_signe ?? projet.montant_devis
 
   return (
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
-        className="w-full overflow-y-auto sm:max-w-xl"
+        className="h-dvh max-h-dvh w-full gap-0 overflow-hidden bg-background sm:max-w-[640px]"
         aria-describedby={undefined}
       >
-        <SheetHeader className="space-y-2 text-left">
-          <SheetTitle className="font-display text-xl tracking-tight">
+        <SheetHeader className="shrink-0 space-y-2 border-b border-border bg-card p-5 pr-14 text-left sm:px-6 sm:pr-14">
+          <p className="text-xs font-medium text-muted-foreground">Chantier perdu · Dossier archivé</p>
+          <SheetTitle className="break-words text-xl font-semibold leading-tight">
             {signe && projet.client_nom ? (
               projet.client_nom
             ) : (
-              <span className="flex items-center gap-1.5 italic text-muted-foreground">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
                 <Lock className="size-4" /> Client confidentiel
               </span>
             )}
@@ -75,11 +75,11 @@ export function DrawerChantierPerdu({
           </p>
         </SheetHeader>
 
-        <div className="space-y-5 px-4 pb-8">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">
           {/* Ce qui permet de juger : jusqu'où c'est allé, et pourquoi ça
               s'est arrêté. */}
-          <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm">
-            <dl className="space-y-1.5">
+          <div className="rounded-[10px] border border-border bg-card px-4 py-1 text-sm">
+            <dl className="divide-y divide-border">
               {projet.recu_le && (
                 <Ligne label="Reçu le" valeur={formatDate(projet.recu_le)} />
               )}
@@ -104,23 +104,23 @@ export function DrawerChantierPerdu({
 
           {projet.description && (
             <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-sm font-semibold text-foreground">
                 Demande initiale
               </p>
-              <p className="whitespace-pre-wrap text-sm">{projet.description}</p>
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{projet.description}</p>
             </div>
           )}
 
           {/* Les devis qui ont circulé : un chantier déjà chiffré se
               réattribue différemment d'un chantier jamais travaillé. */}
-          {(projet.devis_url || projet.devis_signe_url) && (
+          {signe && (projet.devis_url || projet.devis_signe_url) && (
             <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-3 text-sm font-semibold text-foreground">
                 Devis déposés
               </p>
               <div className="flex flex-wrap gap-2">
                 {projet.devis_url && (
-                  <Button variant="outline" size="sm" asChild>
+                  <Button variant="outline" className="min-h-11" asChild>
                     <a href={projet.devis_url} target="_blank" rel="noopener">
                       <FileText className="size-3.5" />
                       Devis
@@ -128,7 +128,7 @@ export function DrawerChantierPerdu({
                   </Button>
                 )}
                 {projet.devis_signe_url && (
-                  <Button variant="outline" size="sm" asChild>
+                  <Button variant="outline" className="min-h-11" asChild>
                     <a href={projet.devis_signe_url} target="_blank" rel="noopener">
                       <Eye className="size-3.5" />
                       Devis signé
@@ -141,38 +141,30 @@ export function DrawerChantierPerdu({
 
           {/* Le fil complet : c'est lui qui raconte ce qui s'est passé. */}
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="mb-3 text-sm font-semibold text-foreground">
               Historique {suivis.length > 0 && `(${suivis.length})`}
             </p>
             {suivis.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Aucun échange enregistré sur ce chantier.
+                {signe ? 'Aucun échange enregistré sur ce chantier.' : 'Signez votre contrat pour consulter les échanges et les documents de ce chantier.'}
               </p>
             ) : (
               <ul className="space-y-2.5">
                 {[...suivis].reverse().map((s, i) => (
                   <li
                     key={s.id ?? i}
-                    className={cn(
-                      'rounded-xl border p-2.5 text-sm',
-                      s.auteur === 'agence'
-                        ? 'border-primary/25 bg-primary/5'
-                        : 'border-border bg-card',
-                    )}
+                    className="rounded-lg border border-border bg-card p-3 text-sm"
                   >
-                    <p className="mb-0.5 flex items-baseline gap-1.5 text-xs">
+                    <p className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
                       <span
-                        className={cn(
-                          'font-semibold',
-                          s.auteur === 'agence' ? 'text-primary' : 'text-foreground',
-                        )}
+                        className="font-semibold text-foreground"
                       >
                         {s.auteur === 'agence' ? 'Celexia' : 'Vous'}
                       </span>
                       <span className="text-muted-foreground">{dateLisible(s.created_at)}</span>
                     </p>
                     {s.message ? (
-                      <p className="whitespace-pre-wrap">{s.message}</p>
+                      <p className="whitespace-pre-wrap break-words leading-relaxed">{s.message}</p>
                     ) : (
                       <p className="text-muted-foreground">
                         {s.statut ? `Étape : ${ETAPE_LABEL[s.statut] ?? s.statut}` : '—'}
@@ -184,17 +176,20 @@ export function DrawerChantierPerdu({
             )}
           </div>
 
-          {onRestaurer && (
+          {signe && onRestaurer && (
+            <div className="space-y-3">
+            {projet.restaurable && <p className="text-sm leading-relaxed text-muted-foreground">Le chantier reprendra à l’étape conservée, avec ses devis et son historique. Les anciens rappels et rendez-vous dépassés seront effacés.</p>}
             <Button
-              className="w-full"
+              className="min-h-11 w-full"
               disabled={!projet.restaurable || enCours}
               onClick={() => onRestaurer(projet)}
             >
               <RotateCcw className="size-4" />
               {projet.restaurable
-                ? 'Remettre dans mon pipe'
-                : 'Repris par un autre artisan'}
+                ? enCours ? 'Reprise en cours…' : 'Remettre dans mon pipe'
+                : 'Chantier indisponible pour une reprise'}
             </Button>
+            </div>
           )}
         </div>
       </SheetContent>
@@ -204,9 +199,9 @@ export function DrawerChantierPerdu({
 
 function Ligne({ label, valeur }: { label: string; valeur: string }) {
   return (
-    <div className="flex justify-between gap-3">
+    <div className="flex justify-between gap-4 py-3">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-right font-medium">{valeur}</dd>
+      <dd className="min-w-0 break-words text-right font-medium">{valeur}</dd>
     </div>
   )
 }

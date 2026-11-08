@@ -9,6 +9,7 @@ import { nomDeFichier, telechargerRapport } from './rapport-pdf'
 import type { Releve } from './releve'
 import { requeteMateriauxToit, requetePhotosFacade } from './use-photos-facade'
 import type { OutilsVue3D } from './vue-3d'
+import { requeteMetrageArtisan } from './use-metrage'
 
 function telecharger(blob: Blob, nom: string) {
   const url = URL.createObjectURL(blob)
@@ -35,6 +36,7 @@ export function ExportsMetre({
   adresse,
   bdnb,
   outils3d,
+  affectationToken,
 }: {
   token: string
   cleabs: string | null
@@ -44,17 +46,21 @@ export function ExportsMetre({
   adresse: string | null
   bdnb: { toit?: string | null; murs?: string | null } | null
   outils3d?: RefObject<OutilsVue3D | null>
+  affectationToken?: string
 }) {
   const qc = useQueryClient()
   const [enCours, setEnCours] = useState<'pdf' | 'csv' | 'glb' | null>(null)
 
   async function rapport() {
     // Les photos et le matériau du toit, déjà en cache le plus souvent.
-    const [photos, materiaux] = await Promise.all([
+    const [photos, materiaux, metrage] = await Promise.all([
       cleabs ? qc.fetchQuery(requetePhotosFacade(token, cleabs)).catch(() => []) : [],
       cleabs ? qc.fetchQuery(requeteMateriauxToit(token, cleabs)).catch(() => null) : null,
+      // Ne pas exporter silencieusement les anciennes estimations lorsque
+      // les corrections du chantier sont momentanément inaccessibles.
+      affectationToken ? qc.fetchQuery(requeteMetrageArtisan(token, affectationToken)) : [],
     ])
-    return rapportMetre({ titre, adresse, date: new Date(), releve, pans, photos, materiaux, bdnb })
+    return rapportMetre({ titre, adresse, date: new Date(), releve, pans, photos, materiaux, bdnb, metrage })
   }
 
   async function lancer(quoi: 'pdf' | 'csv' | 'glb') {
@@ -80,18 +86,18 @@ export function ExportsMetre({
   const icone = (quoi: typeof enCours, I: typeof FileText) =>
     enCours === quoi ? <Loader2 className="size-4 animate-spin" /> : <I className="size-4" />
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid gap-2 sm:grid-cols-2">
       <Button variant="outline" className="min-h-11" disabled={!!enCours} onClick={() => lancer('pdf')}>
         {icone('pdf', FileText)}
         Rapport PDF
       </Button>
       <Button variant="outline" className="min-h-11" disabled={!!enCours} onClick={() => lancer('csv')}>
         {icone('csv', FileSpreadsheet)}
-        Tableau Excel
+        Tableau CSV
       </Button>
       {/* Passés seulement quand la vue 3D est prête. */}
       {outils3d && (
-        <Button variant="outline" className="col-span-2 min-h-11" disabled={!!enCours} onClick={() => lancer('glb')}>
+        <Button variant="outline" className="min-h-11 sm:col-span-2" disabled={!!enCours} onClick={() => lancer('glb')}>
           {icone('glb', Box)}
           Modèle 3D (.glb)
         </Button>

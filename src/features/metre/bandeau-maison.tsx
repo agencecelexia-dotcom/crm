@@ -32,17 +32,24 @@ export function BandeauMaison({
   onOui: () => void
   onAutre: () => void
 }) {
-  if (!maison) return null
-  const cible = maison.principal?.cleabs ?? null
+  if (!maison && !choisi) return null
+  const cible = maison?.principal?.cleabs ?? null
   const surLaCible = !!choisi?.cleabs && choisi.cleabs === cible
 
-  if (choisi?.cleabs && (choisi.cleabs === retenue || (surLaCible && maison.confiance === 'confirmee'))) {
+  if (choisi?.cleabs && (choisi.cleabs === retenue || (surLaCible && maison?.confiance === 'confirmee' && !cherchee))) {
     return <Repere texte="Maison confirmée" />
   }
-  if (surLaCible && maison.confiance === 'officielle') {
+  if (choisi?.cleabs && (!surLaCible || cherchee)) return (
+    <div className="space-y-2 rounded-xl border border-border p-3 text-sm">
+      <p className="font-medium">Associer ce bâtiment au chantier ?</p>
+      <p className="text-xs text-muted-foreground">Confirmez votre choix pour consulter ou ajouter les photos de ce bâtiment.</p>
+      <Button className="min-h-11 w-full" disabled={enCours} onClick={onOui}>Utiliser pour ce chantier</Button>
+    </div>
+  )
+  if (surLaCible && maison?.confiance === 'officielle') {
     return <Repere texte={`${cherchee ? 'Maison reliée à l’adresse cherchée' : 'Maison reliée à l’adresse du chantier'}${preuveDuLien(maison)}`} />
   }
-  if (surLaCible && maison.confiance === 'a_confirmer') {
+  if (surLaCible && maison?.confiance === 'a_confirmer') {
     return (
       <div className="space-y-2 rounded-xl border border-[#F59E0B]/40 bg-[#F59E0B]/5 p-2.5">
         <div className="flex items-start gap-2">
@@ -65,7 +72,7 @@ export function BandeauMaison({
       </div>
     )
   }
-  if (!choisi && maison.message) {
+  if (!choisi && maison?.message) {
     return (
       <div className="flex items-start gap-2 rounded-xl border border-[#F59E0B]/30 bg-[#F59E0B]/5 p-2.5">
         <MapPin className="mt-0.5 size-4 shrink-0 text-[#B45309]" />

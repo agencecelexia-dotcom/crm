@@ -34,6 +34,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import {
   chercherAdresse,
+  messageMetre,
   useContexteMetre,
   useCorrigerPosition,
   useEnregistrerMetre,
@@ -83,26 +84,10 @@ export function FeuilleMetre({
   titre?: string | null
   onClose: () => void
 }) {
-  // LE BOUTON RETOUR DU TÉLÉPHONE FERME LA FEUILLE. Sans entrée d'historique,
-  // il changeait d'écran — voire quittait l'espace — en laissant la feuille
-  // ouverte par-dessus. On en pose une à l'ouverture ; « retour » la consomme
-  // et ferme. Fermer par la croix la retire, pour ne pas laisser d'entrée morte.
-  const fermer = useRef(onClose)
-  useEffect(() => {
-    fermer.current = onClose
-  })
-  useEffect(() => {
-    window.history.pushState({ feuilleMetre: true }, '')
-    const surRetour = () => fermer.current()
-    window.addEventListener('popstate', surRetour)
-    return () => window.removeEventListener('popstate', surRetour)
-  }, [])
-  function fermerFeuille() {
-    if (window.history.state?.feuilleMetre) window.history.back()
-    else onClose()
-  }
+  const fermerFeuille = onClose
 
-  const { data: ctx } = useContexteMetre(token, affectationToken)
+  const contexte = useContexteMetre(token, affectationToken)
+  const ctx = contexte.data
   const enregistrer = useEnregistrerMetre(token)
   const supprimer = useSupprimerMetre(token)
   const corriger = useCorrigerPosition(token)
@@ -121,6 +106,8 @@ export function FeuilleMetre({
   const [nom, setNom] = useState('')
   const [recherche, setRecherche] = useState('')
   const [resultats, setResultats] = useState<Adresse[]>([])
+  const [etatRecherche, setEtatRecherche] = useState<'repos' | 'chargement' | 'erreur' | 'vide'>('repos')
+  const [essaiRecherche, setEssaiRecherche] = useState(0)
   const [chercheOuverte, setChercheOuverte] = useState(false)
   const centreCarte = useRef<Point | null>(null)
 
@@ -279,7 +266,7 @@ export function FeuilleMetre({
   // côtés à cocher. Les côtés cochés sont gardés par maison : changer de
   // maison ne reporte pas les choix de l'autre.
   const terrain = vue === 'terrain'
-  const { data: parcelle, isLoading: parcelleEnCours } = useQuery({
+  const { data: parcelle, isLoading: parcelleEnCours, isError: parcelleErreur, refetch: rechargerParcelle } = useQuery({
     queryKey: ['parcelle', choisi?.id],
     enabled: terrain && !!choisi?.centre,
     staleTime: 1000 * 60 * 60,
@@ -378,14 +365,22 @@ export function FeuilleMetre({
     // Tout passe par le délai, y compris l'effacement : écrire l'état
     // directement dans l'effet déclencherait un rendu en cascade.
     const t = setTimeout(() => {
-      if (q.length < 3) return setResultats([])
-      void chercherAdresse(q, ctrl.signal).then(setResultats).catch(() => undefined)
+      if (q.length < 3) { setResultats([]); setEtatRecherche('repos'); return }
+      setResultats([])
+      setEtatRecherche('chargement')
+      void chercherAdresse(q, ctrl.signal).then((adresses) => {
+        if (ctrl.signal.aborted) return
+        setResultats(adresses)
+        setEtatRecherche(adresses.length ? 'repos' : 'vide')
+      }).catch(() => {
+        if (!ctrl.signal.aborted) setEtatRecherche('erreur')
+      })
     }, 300)
     return () => {
       clearTimeout(t)
       ctrl.abort()
     }
-  }, [recherche])
+  }, [recherche, essaiRecherche])
 
   // Le tracé à main levée — le recours, quand il n'y a pas de bâtiment : un
   // terrain, une terrasse, une clôture.
@@ -432,6 +427,36 @@ export function FeuilleMetre({
     )
   }
 
+  // Ne jamais transformer une panne ou un refus d'accès en carte vide.
+  // Les hooks restent dans un ordre constant ; les outils ne sont montés
+  // qu'une fois le contexte du chantier réellement disponible.
+  if (contexte.isPending || contexte.isError || !ctx?.ok) {
+    return (
+      <Sheet open onOpenChange={(o) => !o && fermerFeuille()}>
+        <SheetContent side="bottom" className="flex h-[95dvh] flex-col p-5 sm:p-8">
+          <SheetHeader className="pr-8">
+            <SheetTitle>{titre || 'Métré'}</SheetTitle>
+            <SheetDescription>Les mesures de votre chantier</SheetDescription>
+          </SheetHeader>
+          <div className="m-auto w-full max-w-md space-y-4 text-center" role={contexte.isPending ? 'status' : 'alert'}>
+            {contexte.isPending ? (
+              <><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /><p>Chargement du chantier…</p></>
+            ) : (
+              <>
+                <p className="font-medium">{contexte.isError ? 'Impossible de charger les mesures du chantier.' : messageMetre(ctx?.error)}</p>
+                {contexte.isError && <p className="text-sm text-muted-foreground">Vérifiez votre connexion puis réessayez. Aucune donnée n’a été modifiée.</p>}
+                <div className="flex flex-wrap justify-center gap-2">
+                  {contexte.isError && <Button onClick={() => void contexte.refetch()} disabled={contexte.isFetching}>Réessayer</Button>}
+                  <Button variant="outline" onClick={fermerFeuille}>Fermer</Button>
+                </div>
+              </>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    )
+  }
+
   // LA CLÉ N'EST PAS DÉCORATIVE. Sans elle, React réutilise le même panneau
   // d'un bâtiment à l'autre et garde son état : la pente saisie pour la maison
   // A restait affichée sur la maison B, ainsi que le débord, le mur choisi et
@@ -466,8 +491,9 @@ export function FeuilleMetre({
           </SheetDescription>
         </SheetHeader>
 
-        {/* La carte occupe tout ce qui reste au-dessus du panneau. */}
-        <div className="relative min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* Carte et mesures restent visibles ensemble sur grand écran. */}
+        <div className="relative min-h-0 min-w-0 flex-1">
           <CarteMetre
             centre={centre}
             zoom={zoom}
@@ -553,7 +579,7 @@ export function FeuilleMetre({
             <Button
               size="icon"
               variant="secondary"
-              className={cn('size-9 shadow-card', vue3d && modele && 'hidden')}
+              className={cn('size-11 shadow-card', vue3d && modele && 'hidden')}
               aria-label={fond === 'plan' ? 'Passer à la photo' : 'Passer au plan'}
               onClick={() => setFond((f) => (f === 'plan' ? 'ortho' : 'plan'))}
             >
@@ -562,7 +588,7 @@ export function FeuilleMetre({
             <Button
               size="icon"
               variant={cadastre ? 'default' : 'secondary'}
-              className={cn('size-9 shadow-card', vue3d && modele && 'hidden')}
+              className={cn('size-11 shadow-card', vue3d && modele && 'hidden')}
               aria-label="Limites de parcelle"
               onClick={() => setCadastre((c) => !c)}
             >
@@ -573,7 +599,7 @@ export function FeuilleMetre({
             <Button
               size="icon"
               variant={fond === 'relief' ? 'default' : 'secondary'}
-              className={cn('size-9 shadow-card', vue3d && modele && 'hidden')}
+              className={cn('size-11 shadow-card', vue3d && modele && 'hidden')}
               aria-label="Relief des toits (LiDAR)"
               onClick={() => setFond((f) => (f === 'relief' ? 'ortho' : 'relief'))}
             >
@@ -584,7 +610,7 @@ export function FeuilleMetre({
               <Button
                 size="icon"
                 variant={vue3d ? 'default' : 'secondary'}
-                className="size-9 shadow-card"
+                className="size-11 shadow-card"
                 aria-label={vue3d ? 'Revenir à la carte' : 'Voir la maison en 3D'}
                 aria-pressed={vue3d}
                 onClick={() => {
@@ -609,10 +635,14 @@ export function FeuilleMetre({
                     autoFocus
                     className="h-9 pl-8"
                     placeholder="Adresse du chantier…"
+                    aria-label="Rechercher une adresse"
                     value={recherche}
-                    onChange={(e) => setRecherche(e.target.value)}
+                    onChange={(e) => { setRecherche(e.target.value); setResultats([]); setEtatRecherche('repos') }}
                   />
                 </div>
+                {etatRecherche === 'chargement' && <p role="status" className="p-2 text-xs">Recherche en cours…</p>}
+                {etatRecherche === 'vide' && <p role="status" className="p-2 text-xs">Aucune adresse trouvée. Précisez le numéro et la commune.</p>}
+                {etatRecherche === 'erreur' && <div role="alert" className="space-y-1 p-2 text-xs"><p>La recherche d’adresse est indisponible.</p><Button variant="outline" size="sm" onClick={() => setEssaiRecherche((n) => n + 1)}>Réessayer la recherche</Button></div>}
                 {resultats.map((a) => (
                   <button
                     key={a.label}
@@ -648,25 +678,11 @@ export function FeuilleMetre({
             d'enregistrement — sortait de l'écran sans qu'on puisse l'atteindre. */}
         <div
           className={cn(
-            'shrink-0 space-y-3 overflow-y-auto overscroll-contain border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+            'shrink-0 space-y-3 overflow-y-auto overscroll-contain border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:w-[460px] lg:max-h-none lg:border-l lg:border-t-0 lg:p-5',
             // En 3D, la maison prend plus de place : on la tourne, on la touche.
             vue3d && modele ? 'max-h-[42dvh]' : 'max-h-[62dvh]',
           )}
         >
-          {/* « Mesurer avec l'IA » : confirmer la maison, lancer, lire ce que l'IA a compris. */}
-          {choisi?.cleabs && (
-            <div className="-mx-3 -mt-3">
-              <PanneauMetreIA
-                etat={ia.etat.data}
-                enCours={ia.enCours}
-                onLancer={() => ia.lancer.mutate()}
-                erreur={ia.lancer.data?.ok === false ? (ia.lancer.data.error ?? 'echec') : ia.lancer.isError ? 'echec' : null}
-                contour={choisi.contour}
-                adresse={null}
-              />
-            </div>
-          )}
-
           {/* Ce qu'on sait — ou pas — de l'endroit où l'on est. */}
           {secours && situation?.message && (
             <div
@@ -720,6 +736,8 @@ export function FeuilleMetre({
               <PanneauCloture
                 parcelle={parcelle}
                 enCours={parcelleEnCours}
+                erreur={parcelleErreur}
+                reessayer={() => void rechargerParcelle()}
                 adresse={maison && maison.confiance !== 'confirmee' ? maison.point : null}
                 choisis={cotesChoisis}
                 onBasculer={basculerCote}
@@ -766,6 +784,7 @@ export function FeuilleMetre({
                 <Input
                   className="h-10 flex-1"
                   placeholder={dessin.surface != null ? 'Terrain, terrasse…' : 'Clôture, gouttière…'}
+                  aria-label="Nom du métré"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
                 />
@@ -812,12 +831,12 @@ export function FeuilleMetre({
                   ? 'Touchez la maison du chantier pour lire ses mesures.'
                   : 'Aucun bâtiment ici — dessinez, ou cherchez l’adresse.'}
               </p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => setMode('surface')}>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button variant="outline" className="h-auto min-h-11 whitespace-normal" onClick={() => setMode('surface')}>
                   <Pencil className="size-4" />
                   Dessiner une surface
                 </Button>
-                <Button variant="outline" onClick={() => setMode('longueur')}>
+                <Button variant="outline" className="h-auto min-h-11 whitespace-normal" onClick={() => setMode('longueur')}>
                   <Ruler className="size-4" />
                   Mesurer une longueur
                 </Button>
@@ -870,6 +889,26 @@ export function FeuilleMetre({
             </>
           )}
 
+          {/* « Mesurer avec l'IA » : confirmer la maison, lancer, lire ce que l'IA a compris. */}
+          {choisi?.cleabs && (
+            <details open={!!ia.statut} className="rounded-xl border border-border">
+              <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">Analyse IA de la maison<span className="mt-1 block text-xs font-normal text-muted-foreground">Optionnelle · aide à lire les photos et les volumes</span></summary>
+              <PanneauMetreIA
+                etat={ia.etat.data}
+                enCours={ia.enCours}
+                erreurEtat={ia.etat.isError}
+                onVerifierEtat={() => void ia.reprendre()}
+                onLancer={() => {
+                  if (manuelle || choisi.cleabs !== cible) retenirMaison(choisi, () => ia.lancer.mutate())
+                  else ia.lancer.mutate()
+                }}
+                erreur={ia.lancer.data?.ok === false ? (ia.lancer.data.error ?? 'echec') : ia.lancer.isError ? 'echec' : null}
+                contour={choisi.contour}
+                adresse={null}
+              />
+            </details>
+          )}
+
           {/* Les métrés déjà pris sur ce chantier — TOUJOURS visibles : ils
               étaient masqués dès qu'une maison était sélectionnée, c'est-à-dire
               à chaque ouverture. */}
@@ -914,9 +953,10 @@ export function FeuilleMetre({
           )}
 
           <p className="text-center text-[11px] leading-snug text-muted-foreground">
-            Mesures relevées sur photo aérienne : bonnes pour chiffrer, pas pour commander du
-            sur-mesure.
+            Les tracés, relevés LiDAR et lectures IA sont des estimations à distance.
+            Vérifiez les dimensions sur place avant commande et renseignez les valeurs confirmées.
           </p>
+        </div>
         </div>
       </SheetContent>
     </Sheet>

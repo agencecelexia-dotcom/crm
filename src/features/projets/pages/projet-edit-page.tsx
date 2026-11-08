@@ -1,3 +1,6 @@
+import { Button } from '@/components/ui/button'
+import { AlertCircle } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
@@ -9,15 +12,24 @@ import { useProjet, useUpdateProjet } from '../hooks/use-projets'
 export function ProjetEditPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { data: projet, isLoading } = useProjet(id)
+  const { data: projet, isLoading, isError, refetch } = useProjet(id)
   const update = useUpdateProjet()
 
-  if (isLoading || !projet) {
+  if (isLoading) {
     return (
       <div className="flex justify-center py-12">
         <Loader2 className="size-6 animate-spin text-primary" />
       </div>
     )
+  }
+
+  if (isError || !projet) {
+    return <EmptyState icon={AlertCircle} titre="Fiche indisponible"
+      description="Ce dossier est introuvable, inaccessible ou n’a pas pu être chargé."
+      action={<div className="flex flex-wrap justify-center gap-2">
+        <Button variant="outline" onClick={() => void refetch()}>Réessayer</Button>
+        <Button variant="ghost" onClick={() => navigate('/projets')}>Retour aux projets</Button>
+      </div>} />
   }
 
   return (

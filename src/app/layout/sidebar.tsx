@@ -1,143 +1,42 @@
-import { NavLink } from 'react-router-dom'
-import {
-  Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap, LogOut,
-  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase, Compass, Sparkles, Box,
-  type LucideIcon,
-} from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ArrowUpRight, LogOut, Search } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
-import { NotificationsBell } from '@/features/automatisations/notifications-bell'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/use-auth'
-
-// Navigation latérale — affichée uniquement sur écrans larges (md+).
-// Liens regroupés par usage pour une lecture rapide.
-type Item = {
-  to: string
-  label: string
-  icon: LucideIcon
-  end: boolean
-  /** Réservé aux fondateurs. Le masquage n'est qu'un confort de lecture : le
-   *  vrai cloisonnement est appliqué par la RLS (migration 0100). */
-  fondateurSeul?: boolean
-  /** Réservé aux commerciaux : un fondateur suit les reprises depuis l'écran
-   *  Reprises, qui les montre toutes plutôt que les siennes. */
-  commercialSeul?: boolean
-}
-
-const GROUPES: { titre: string; items: Item[] }[] = [
-  {
-    titre: 'Pilotage',
-    items: [
-      { to: '/', label: 'Accueil', icon: Home, end: true },
-      // Réservé au fondateur : les tâches suivent le pipe artisan, dont le
-      // commercial n'a pas la charge. Son travail est la pile de reprise.
-      { to: '/taches', label: 'À faire', icon: ListChecks, end: false, fondateurSeul: true },
-      { to: '/commissions', label: 'Commissions', icon: BadgeEuro, end: false, fondateurSeul: true },
-      { to: '/business-plan', label: 'Business Plan', icon: Compass, end: false, fondateurSeul: true },
-    ],
-  },
-  {
-    titre: 'Activité',
-    items: [
-      // Deux entrées distinctes, volontairement : le pipe en cours se consulte,
-      // les chantiers à réattribuer se travaillent. C'est sur les seconds que
-      // le commercial est commissionné — les confondre lui ferait perdre du
-      // temps sur des dossiers qui ne lui rapportent rien.
-      { to: '/projets', label: 'Tout le pipe', icon: FolderKanban, end: true },
-      { to: '/projets/a-reattribuer', label: 'À réattribuer', icon: RotateCcw, end: false },
-      // Ce que CE commercial a repris. Le fondateur suit les reprises depuis
-      // l'écran Reprises, qui les montre toutes.
-      { to: '/mon-pipe', label: 'Mon pipe', icon: Briefcase, end: false, commercialSeul: true },
-      { to: '/artisans', label: 'Artisans', icon: Users, end: false },
-      { to: '/carte', label: 'Carte', icon: Map, end: false },
-      { to: '/maison-3d', label: 'Maison 3D', icon: Box, end: false },
-      { to: '/couverture', label: 'Couverture', icon: Target, end: false, fondateurSeul: true },
-    ],
-  },
-  {
-    titre: 'Outils',
-    items: [
-      { to: '/notes', label: 'Notes', icon: StickyNote, end: false, fondateurSeul: true },
-      { to: '/parametres/automatisations', label: 'Automatisations', icon: Zap, end: false, fondateurSeul: true },
-      { to: '/creatives', label: 'Créatives', icon: Sparkles, end: false, fondateurSeul: true },
-      { to: '/parametres/signature', label: 'Ma signature', icon: PenTool, end: false },
-      { to: '/equipe', label: 'Équipe', icon: UserCog, end: false, fondateurSeul: true },
-      { to: '/reprises', label: 'Reprises', icon: RotateCcw, end: false, fondateurSeul: true },
-    ],
-  },
-]
+import { useDroits } from '@/lib/auth/use-droits'
+import { NavigationLinks } from './navigation-links'
 
 export function Sidebar() {
   const { session, signOut, estFondateur } = useAuth()
+  const { peutCreerLead } = useDroits()
+  const email = session?.user.email ?? ''
 
-  // Un groupe dont tous les liens sont réservés disparaît entièrement plutôt
-  // que de laisser un titre orphelin.
-  const groupes = GROUPES.map((g) => ({
-    ...g,
-    items: g.items.filter((i) =>
-      estFondateur ? !i.commercialSeul : !i.fondateurSeul,
-    ),
-  })).filter((g) => g.items.length > 0)
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border/70 bg-card md:flex">
-      <div className="flex h-16 items-center justify-between border-b border-border/70 px-5">
-        <BrandLogo className="h-7" />
-        <NotificationsBell />
+    <aside className="crm-sidebar fixed inset-y-0 left-0 z-30 hidden w-60 flex-col md:flex">
+      <div className="px-6 pb-5 pt-7">
+        <Link to="/" aria-label="Celexia — tableau de bord" className="inline-flex rounded-md focus-visible:outline-offset-4">
+          <BrandLogo sombre className="h-7" />
+        </Link>
+        <p className="mt-2.5 text-xs text-[#a5a5af]">L’espace de votre agence</p>
       </div>
-
-      <nav className="flex-1 space-y-5 overflow-y-auto p-3">
-        {groupes.map((groupe) => (
-          <div key={groupe.titre}>
-            <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-              {groupe.titre}
-            </p>
-            <div className="space-y-0.5">
-              {groupe.items.map(({ to, label, icon: Icon, end }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  className={({ isActive }) =>
-                    cn(
-                      'relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
-                      isActive
-                        ? 'bg-primary/8 font-medium text-primary'
-                        : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-                    )
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <span
-                          aria-hidden
-                          className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-primary"
-                        />
-                      )}
-                      <Icon className="size-5" />
-                      {label}
-                    </>
-                  )}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        ))}
+      <Link to="/projets" className="mx-4 mb-6 flex min-h-9 items-center gap-2.5 rounded-lg border border-white/10 px-3 text-xs text-[#c5c5ce] transition-colors hover:border-white/20 hover:bg-white/5">
+        <Search className="size-4" strokeWidth={1.5} aria-hidden />
+        Rechercher un projet
+        <ArrowUpRight className="ml-auto size-3.5 text-[#8a8b96]" aria-hidden />
+      </Link>
+      <nav aria-label="Navigation principale" className="min-h-0 flex-1 overflow-y-auto px-3 pb-5">
+        <NavigationLinks estFondateur={estFondateur} peutCreerLead={peutCreerLead} appearance="dark" />
       </nav>
-
-      <div className="border-t border-border/70 p-3">
-        <p className="mb-2 truncate rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          {session?.user.email}
-        </p>
-        <Button
-          variant="ghost"
-          className="w-full justify-start text-muted-foreground transition-colors hover:text-[#DC2626]"
-          onClick={() => void signOut()}
-        >
-          <LogOut className="size-4" />
-          Se déconnecter
-        </Button>
+      <div className="mx-4 shrink-0 border-t border-white/10 py-4">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-sm font-medium text-white" aria-hidden>{email.slice(0, 1).toUpperCase() || 'C'}</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-[#ededf1]">{estFondateur ? 'Espace fondateur' : 'Espace commercial'}</p>
+            <p className="mt-1 truncate text-[11px] text-[#a5a5af]" title={email}>{email}</p>
+          </div>
+          <button type="button" title="Se déconnecter" aria-label="Se déconnecter" onClick={() => void signOut()} className="grid size-8 shrink-0 place-items-center rounded-md text-[#a5a5af] transition-colors hover:bg-white/10 hover:text-white">
+            <LogOut className="size-4" strokeWidth={1.5} aria-hidden />
+          </button>
+        </div>
       </div>
     </aside>
   )

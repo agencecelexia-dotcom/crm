@@ -41,11 +41,18 @@ export function FicheMesures({
   affectationToken: string
   cartes: CarteMesure[]
 }) {
-  const { data: metrage } = useMetrageArtisan(token, affectationToken)
+  const { data: metrage, isPending, isError, refetch } = useMetrageArtisan(token, affectationToken)
   if (!cartes.length) return null
+  if (isPending) return <p role="status" className="py-3 text-sm text-muted-foreground">Chargement des valeurs du chantier…</p>
+  if (isError) return (
+    <div role="alert" className="space-y-2 rounded-xl border border-border p-3 text-sm">
+      <p>Les valeurs confirmées n’ont pas pu être chargées. Les relevés automatiques ci-dessous restent des estimations.</p>
+      <Button variant="outline" onClick={() => void refetch()}>Réessayer les valeurs du chantier</Button>
+    </div>
+  )
   const parCle = new Map((metrage ?? []).map((l) => [l.cle, l]))
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid gap-2 sm:grid-cols-2">
       {cartes.map((c) => (
         <Carte key={c.cle} token={token} affectationToken={affectationToken} carte={c} ligne={parCle.get(c.cle) ?? null} />
       ))}
@@ -100,7 +107,7 @@ function Carte({
   return (
     <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-2.5">
       <button type="button" onClick={carte.onToucher} className="text-left" disabled={!carte.onToucher}>
-        <span className="flex items-start justify-between gap-1">
+        <span className="flex flex-wrap items-start justify-between gap-1">
           <span className="text-xs text-muted-foreground">{carte.libelle}</span>
           <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium', badge.classe)}>{badge.texte}</span>
         </span>
@@ -124,6 +131,7 @@ function Carte({
             inputMode="decimal"
             className="h-9 min-w-0 flex-1"
             placeholder={UNITE_LISIBLE[carte.unite]}
+            aria-label={`Valeur mesurée sur place : ${carte.libelle}`}
             value={saisie}
             onChange={(e) => setSaisie(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && valider()}

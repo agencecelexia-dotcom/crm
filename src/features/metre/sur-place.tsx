@@ -9,7 +9,7 @@ import { formatM, formatM2 } from './geometrie'
 import type { Releve } from './releve'
 import { correctionsSurPlace, facadesSurPlace, noteSurPlace, type SaisieFacade } from './calcul-sur-place'
 import { usePhotosFacade } from './use-photos-facade'
-import { useCorrigerMetrageArtisan } from './use-metrage'
+import { useConfirmerMetragesArtisan } from './use-metrage'
 
 const nombre = (t: string) => {
   const v = parseFloat(t.replace(',', '.'))
@@ -38,7 +38,7 @@ export function SurPlace({
   onChoisir: (o: string) => void
 }) {
   const { data: photos } = usePhotosFacade(token, cleabs, true)
-  const corriger = useCorrigerMetrageArtisan(token, affectationToken)
+  const corriger = useConfirmerMetragesArtisan(token, affectationToken)
   const [saisies, setSaisies] = useState<Record<string, SaisieFacade>>({})
   const [textes, setTextes] = useState<Record<string, { longueur: string; hauteur: string }>>({})
   const [envoi, setEnvoi] = useState(false)
@@ -56,10 +56,10 @@ export function SurPlace({
     setEnvoi(true)
     const note = noteSurPlace(facades, saisies, new Date())
     try {
-      for (const c of corrections) await corriger.mutateAsync({ ...c, note })
+      await corriger.mutateAsync({ corrections, note })
       toast.success('Façades confirmées sur place', { description: 'L’agence retient ces chiffres pour ce chantier.' })
     } catch (e) {
-      toast.error('Non enregistré', { description: e instanceof Error ? e.message : undefined })
+      toast.error('Confirmation non enregistrée', { description: e instanceof Error ? e.message : 'Rechargez les mesures pour vérifier leur état.' })
     } finally {
       setEnvoi(false)
     }

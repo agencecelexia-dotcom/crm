@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./styles/fonts.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,49 +51,52 @@
   /* Polices : Plus Jakarta Sans (corps/UI) + Clash Display (titres, KPIs, montants) */
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-display: "Clash Display", "Plus Jakarta Sans", sans-serif;
-  /* Ombres reprises de la DA agencecelexia.fr */
-  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-card-hover: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-violet: 0 4px 20px rgba(124, 58, 237, 0.15);
+  /* Surfaces calmes : la couleur accompagne les actions et les statuts. */
+  --shadow-soft: 0 1px 2px rgb(24 24 27 / 0.04);
+  --shadow-card: 0 1px 2px rgb(24 24 27 / 0.04);
+  --shadow-card-hover: 0 2px 6px rgb(24 24 27 / 0.06);
+  --shadow-violet: 0 1px 2px rgb(24 24 27 / 0.08);
 }
 
 :root {
   --radius: 0.625rem;
   /* Background & Text */
-  --background: oklch(0.99 0.002 293);
-  --foreground: oklch(0.145 0.005 293);
+  --background: #f7f8fa;
+  --foreground: #20232b;
   /* Cards */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0.005 293);
+  --card-foreground: #20232b;
   /* Popovers */
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.005 293);
-  /* Primary — Violet 600 #7C3AED */
-  --primary: oklch(0.541 0.243 293.4);
+  --popover-foreground: #20232b;
+  /* Accent Celexia : réservé aux actions et aux données mises en avant. */
+  --primary: #6d4bd1;
   --primary-foreground: oklch(0.985 0 0);
-  /* Secondary — Violet 50 */
-  --secondary: oklch(0.969 0.016 293);
-  --secondary-foreground: oklch(0.371 0.211 293);
+  --secondary: #f1f2f5;
+  --secondary-foreground: #4a4f5d;
   /* Muted */
-  --muted: oklch(0.965 0.012 293);
-  --muted-foreground: oklch(0.55 0.01 293);
-  /* Accent — Violet 100 */
-  --accent: oklch(0.943 0.029 293);
-  --accent-foreground: oklch(0.371 0.211 293);
+  --muted: #f3f4f6;
+  --muted-foreground: #686c78;
+  --accent: #eeeff3;
+  --accent-foreground: #20232b;
   /* Destructive */
   --destructive: oklch(0.577 0.245 27.325);
-  /* Borders & Input — subtle violet tint */
-  --border: oklch(0.91 0.008 293);
-  --input: oklch(0.91 0.008 293);
-  /* Ring — Violet 600 */
-  --ring: oklch(0.541 0.243 293.4);
+  --border: #e6e7eb;
+  --input: #d9dce3;
+  --ring: #6d4bd1;
   /* Charts — Violet spectrum */
-  --chart-1: oklch(0.541 0.243 293.4);
+  --chart-1: #6d4bd1;
   --chart-2: oklch(0.585 0.225 293);
   --chart-3: oklch(0.655 0.174 293);
   --chart-4: oklch(0.486 0.247 293);
   --chart-5: oklch(0.432 0.232 293);
+}
+
+.crm-sidebar {
+  background: #202126;
+  color: #ededf1;
+  scrollbar-color: #50505c transparent;
+  scrollbar-width: thin;
 }
 
 @layer base {
@@ -104,9 +108,37 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  ::selection {
+    background: #ede9fe;
+    color: #4c1d95;
+  }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
   /* Titres en police display par défaut */
   h1, h2, h3 {
     font-family: var(--font-display);
+  }
+}
+
+/* Respecte les préférences système, y compris pour les composants Radix. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Les petits contrôles restent faciles à utiliser pendant un appel. */
+@media (pointer: coarse) {
+  [data-slot="button"], [data-slot="select-trigger"], [data-slot="tabs-trigger"] {
+    min-height: 44px;
+  }
+  [data-slot="button"][data-size^="icon"] {
+    min-width: 44px;
   }
 }
 

@@ -45,3 +45,14 @@ verify_jwt = false
 # membre. L'accès est vérifié DANS la fonction ; elle est payante à l'usage.
 [functions.metre-ia]
 verify_jwt = false
+
+# Le portail utilise un jeton artisan vérifié par les RPC côté serveur.
+# La clé publique Supabase peut être une publishable key (non JWT).
+[functions.devis-envoyer]
+verify_jwt = false
+
+[functions.devis-suggerer]
+verify_jwt = false
+
+[functions.document-signe]
+verify_jwt = false

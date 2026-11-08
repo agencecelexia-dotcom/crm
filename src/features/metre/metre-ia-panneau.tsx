@@ -89,6 +89,8 @@ export function PanneauMetreIA({
   erreur,
   contour,
   adresse,
+  erreurEtat,
+  onVerifierEtat,
 }: {
   etat: ReponseMetreIA | undefined
   enCours: boolean
@@ -97,9 +99,20 @@ export function PanneauMetreIA({
   /** Le contour de la maison retenue, pour la reconnaître sur la photo. */
   contour: Point[] | null
   adresse: string | null
+  erreurEtat?: boolean
+  onVerifierEtat?: () => void
 }) {
   const fait = etat?.statut === 'fait' && etat.scene
   const echec = etat?.statut === 'echec' || !!erreur
+
+  if (etat?.delaiDepasse || erreurEtat) return (
+    <div role="status" className="space-y-3 border-b border-border p-4 text-sm">
+      <h3 className="font-medium">Mesurer avec l’IA</h3>
+      <p>{etat?.delaiDepasse ? 'L’analyse prend plus de temps que prévu.' : 'L’avancement de l’analyse n’a pas pu être vérifié.'}</p>
+      <p className="text-muted-foreground">Le traitement peut continuer sur le serveur. Vérifiez son état sans lancer une nouvelle analyse.</p>
+      <Button variant="outline" onClick={onVerifierEtat} disabled={!onVerifierEtat}>Réessayer la vérification</Button>
+    </div>
+  )
 
   return (
     <div className="space-y-3 border-b border-border p-4">

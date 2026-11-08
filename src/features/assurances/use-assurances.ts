@@ -111,7 +111,10 @@ export function useDeposerAssurance(token: string | undefined) {
       if (!r?.ok) throw new Error(MESSAGES[r?.error ?? ''] ?? r?.error ?? 'Dépôt impossible')
       return r
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['chiffrage', token] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['chiffrage', token] })
+      void qc.invalidateQueries({ queryKey: ['identite', token] })
+    },
   })
 }
 

@@ -44,6 +44,7 @@ export function QuickProspectDialog() {
   }
 
   function creer() {
+    if (create.isPending) return
     if (!tel.trim()) return toast.error('Le numéro de téléphone est requis')
     const input: ProjetInput = {
       client_nom: nom.trim() || tel.trim(), // sans nom, on affiche le numéro
@@ -89,7 +90,7 @@ export function QuickProspectDialog() {
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="size-4" />
-          Nouveau
+          Nouveau projet
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -101,12 +102,15 @@ export function QuickProspectDialog() {
           </DialogDescription>
         </DialogHeader>
 
+        <form onSubmit={(event) => { event.preventDefault(); creer() }} className="min-w-0 space-y-4">
         <div className="space-y-3 py-1">
           <div className="space-y-1.5">
             <Label htmlFor="qp-tel">Téléphone *</Label>
             <Input
               id="qp-tel"
               type="tel"
+              autoComplete="tel"
+              required
               className="h-11"
               placeholder="06 12 34 56 78"
               value={tel}
@@ -125,9 +129,9 @@ export function QuickProspectDialog() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Statut</Label>
+            <Label htmlFor="qp-statut">Statut</Label>
             <Select value={statut} onValueChange={(v) => setStatut(v as StatutProjet)}>
-              <SelectTrigger className="h-11 w-full">
+              <SelectTrigger id="qp-statut" className="h-11 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -157,14 +161,14 @@ export function QuickProspectDialog() {
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-col">
-          <Button onClick={creer} disabled={create.isPending} className="w-full">
+          <Button type="submit" disabled={create.isPending} className="w-full">
             {create.isPending && <Loader2 className="size-4 animate-spin" />}
             Ajouter
           </Button>
           <Button
             type="button"
             variant="ghost"
-            className="w-full text-muted-foreground"
+            className="h-auto min-h-11 w-full whitespace-normal text-muted-foreground"
             onClick={() => {
               setOpen(false)
               navigate('/projets/new')
@@ -173,6 +177,7 @@ export function QuickProspectDialog() {
             Saisie complète (métier, adresse, budget…)
           </Button>
         </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )

@@ -126,6 +126,9 @@ export function ContratCard({ artisan }: { artisan: Artisan }) {
             {lienEspace}
           </div>
           <div className="grid grid-cols-2 gap-2">
+            <Button asChild className="col-span-2" size="sm">
+              <a href={lienEspace} target="_blank" rel="noopener noreferrer">Ouvrir l’espace artisan</a>
+            </Button>
             <Button variant="outline" size="sm" onClick={copierEspace}>
               <Copy className="size-4" />
               Copier

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2 } from 'lucide-react'
+import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2, AlertCircle, X, LockKeyhole, MoreHorizontal, List, Columns3, SlidersHorizontal } from 'lucide-react'
 
 import { PageHeader } from '@/components/page-header'
 import { Box, Mic, RotateCcw, UserCheck } from 'lucide-react'
@@ -8,7 +8,6 @@ import { EmptyState } from '@/components/empty-state'
 import { StatutBadge } from '@/components/statut-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -18,8 +17,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useAuth } from '@/lib/auth/use-auth'
 import { useDroits } from '@/lib/auth/use-droits'
-import { cn } from '@/lib/utils'
 import { METIERS, relegueEnBas, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets, useRepreneurs } from '../hooks/use-projets'
@@ -31,11 +31,13 @@ import { KanbanProjets } from '../components/kanban-projets'
 
 // Liste des projets : recherche + filtres statut / métier / ville.
 export function ProjetsListPage() {
-  const { data: projets, isLoading } = useProjets()
+  const { data: projets, isLoading, isError, refetch } = useProjets()
+  const [filtresOuverts, setFiltresOuverts] = useState(false)
   const { data: repreneurs } = useRepreneurs()
   // Masquer plutôt que laisser échouer : la RLS (0112) refuserait l'insertion,
   // mais après que la personne a rempli tout le formulaire.
   const { peutCreerLead } = useDroits()
+  const { session } = useAuth()
   const { data: artisansSignes } = useArtisansSignes()
   const { data: affectationsCounts } = useAffectationsCounts()
   // Filtres conservés dans l'URL (?q=…&statut=…&metier=…&tri=…&vue=…) : ils
@@ -44,8 +46,8 @@ export function ProjetsListPage() {
   const recherche = params.get('q') ?? ''
   const statut = params.get('statut') ?? 'tous'
   const metier = params.get('metier') ?? 'tous'
-  const tri = (params.get('tri') as 'recent' | 'statut' | 'a_signer' | 'gros') || 'recent'
-  const vue = (params.get('vue') as 'liste' | 'pipeline') || 'liste'
+  const tri = params.get('tri') ?? 'recent'
+  const vue = params.get('vue') === 'pipeline' ? 'pipeline' : 'liste'
 
   // Met à jour un paramètre (valeur par défaut → on le retire pour garder l'URL propre).
   function setParam(cle: string, valeur: string, defaut: string) {
@@ -68,24 +70,36 @@ export function ProjetsListPage() {
   // n'est commissionné que sur « reprise » ; confondre les deux lui ferait
   // travailler des dossiers qui ne lui rapportent rien.
   const pipe = params.get('pipe') ?? 'tous'
+  const aAttribuer = params.get('file') === 'attribution'
   const setPipe = (v: string) => setParam('pipe', v, 'tous')
+
+  const filtresActifs = Boolean(recherche || statut !== 'tous' || metier !== 'tous' || pipe !== 'tous' || aAttribuer)
+  function reinitialiser() {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev)
+      for (const key of ['q', 'statut', 'metier', 'pipe', 'file']) next.delete(key)
+      return next
+    }, { replace: true })
+  }
 
   // Filet de sécurité : on garde les derniers filtres en sessionStorage. Si on
   // revient sur une liste « nue » (flèche logiciel, menu, retour navigateur qui
   // perd la query…), on les ré-applique automatiquement.
-  const STORAGE_KEY = 'projets-filtres'
+  const stockageFiltres = `projets-filtres:${session?.user.id ?? 'sans-session'}`
   const restaure = useRef(false)
   useEffect(() => {
     if (restaure.current) return
     restaure.current = true
     if (params.toString() === '') {
-      const saved = sessionStorage.getItem(STORAGE_KEY)
-      if (saved) setParams(new URLSearchParams(saved), { replace: true })
+      try {
+        const saved = sessionStorage.getItem(stockageFiltres)
+        if (saved) setParams(new URLSearchParams(saved), { replace: true })
+      } catch { /* Les filtres URL fonctionnent même si le stockage est bloqué. */ }
     }
-  }, [params, setParams])
+  }, [params, setParams, stockageFiltres])
   useEffect(() => {
-    sessionStorage.setItem(STORAGE_KEY, params.toString())
-  }, [params])
+    try { sessionStorage.setItem(stockageFiltres, params.toString()) } catch { /* Stockage facultatif. */ }
+  }, [params, stockageFiltres])
 
   // Recherche + métier (communs aux 2 vues)
   const base = useMemo(() => {
@@ -94,6 +108,8 @@ export function ProjetsListPage() {
     const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
     return projets.filter((p) => {
       const matchPipe = pipe === 'tous' || p.origine === pipe
+      // Même périmètre que a_traiter(), migration 0173.
+      const matchAttribution = !aAttribuer || (p.origine === 'neuf' && !['mort', 'devis_signe', 'termine', 'artisan_demarche', 'demarchage'].includes(p.statut))
       const matchMetier = metier === 'tous' || p.metiers.includes(metier)
       const telDigits = (p.client_telephone ?? '').replace(/\D/g, '')
       const matchTel = qDigits.length >= 2 && telDigits.includes(qDigits)
@@ -103,9 +119,9 @@ export function ProjetsListPage() {
         [p.client_nom, p.client_ville, p.metiers.join(' '), p.artisan?.societe, p.artisan?.nom]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
-      return matchPipe && matchMetier && matchTexte
+      return matchAttribution && matchPipe && matchMetier && matchTexte
     })
-  }, [projets, recherche, metier, pipe])
+  }, [projets, recherche, metier, pipe, aAttribuer])
 
   // Vue liste : on applique aussi le filtre statut, puis le tri choisi.
   const resultats = useMemo(() => {
@@ -151,226 +167,149 @@ export function ProjetsListPage() {
     <div>
       <PageHeader
         titre="Projets"
+        sousTitre="Les dossiers clients, de la première demande au chantier signé"
         action={
           <div className="flex items-center gap-2">
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              title="Chantiers rendus ou perdus par un artisan, à réattribuer"
-            >
-              <Link to="/projets/a-reattribuer">
-                <RotateCcw className="size-4" />
-                <span className="hidden sm:inline">À réattribuer</span>
-              </Link>
-            </Button>
-            {/* Une adresse, la maison en 3D : aussi au téléphone, où la barre du bas n'a pas la place. */}
-            <Button asChild variant="outline" size="sm" title="Une adresse : la maison en 3D et ses métrés">
-              <Link to="/maison-3d">
-                <Box className="size-4" />
-                <span className="hidden sm:inline">Maison 3D</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" title="Prendre un appel avec assistance">
-              <Link to="/appel">
-                <Mic className="size-4" />
-                <span className="hidden sm:inline">Appel</span>
-              </Link>
-            </Button>
-            <Button asChild variant="ghost" size="icon" aria-label="Corbeille" title="Corbeille">
-              <Link to="/projets/corbeille">
-                <Trash2 className="size-5" />
-              </Link>
-            </Button>
-            <QuickProspectDialog />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-10 gap-2 bg-card" aria-label="Actions des projets">
+                  <MoreHorizontal className="size-4" aria-hidden /> Actions
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 rounded-[10px] p-1.5" aria-label="Actions des projets">
+                <nav className="grid text-sm" aria-label="Outils des projets">
+                  <Link to="/projets/a-reattribuer" className="flex min-h-10 items-center gap-3 rounded-md px-3 py-2 hover:bg-muted"><RotateCcw className="size-4 text-muted-foreground" />À réattribuer</Link>
+                  <Link to="/maison-3d" className="flex min-h-10 items-center gap-3 rounded-md px-3 py-2 hover:bg-muted"><Box className="size-4 text-muted-foreground" />Maison 3D</Link>
+                  {peutCreerLead && <Link to="/appel" className="flex min-h-10 items-center gap-3 rounded-md px-3 py-2 hover:bg-muted"><Mic className="size-4 text-muted-foreground" />Prendre un appel</Link>}
+                  <div className="my-1 border-t border-border" />
+                  <Link to="/projets/corbeille" className="flex min-h-10 items-center gap-3 rounded-md px-3 py-2 hover:bg-muted"><Trash2 className="size-4 text-muted-foreground" />Corbeille</Link>
+                </nav>
+              </PopoverContent>
+            </Popover>
+            {peutCreerLead && <div className="[&>button]:h-10 [&>button]:px-4"><QuickProspectDialog /></div>}
           </div>
         }
       />
 
-      {/* Bascule Liste / Pipeline (Kanban) */}
-      <Tabs value={vue} onValueChange={(v) => setVue(v as 'liste' | 'pipeline')} className="mb-3">
-        <TabsList>
-          <TabsTrigger value="liste">Liste</TabsTrigger>
-          <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* Deux pipes, pas trois. « Tout le pipe » est la vue de travail
-          quotidienne ; « À reprendre » isole la zone de commission du
-          commercial — un chantier qu'aucun artisan ne travaille plus.
-          Découper davantage obligerait à changer d'onglet sans cesse. */}
-      <Tabs value={pipe} onValueChange={setPipe} className="mb-3">
-        <TabsList>
-          <TabsTrigger value="tous">Tout le pipe</TabsTrigger>
-          <TabsTrigger value="reprise">À reprendre</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      <div className="mb-4 space-y-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-11 pl-9"
-            placeholder="Rechercher (nom, n° de tél, ville, artisan)…"
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-          />
-        </div>
-        <div className={cn('grid gap-2', vue === 'liste' ? 'grid-cols-2' : 'grid-cols-1')}>
-          {/* Le filtre statut n'a de sens qu'en vue liste (en pipeline, ce sont les colonnes) */}
-          {vue === 'liste' && (
-            <Select value={statut} onValueChange={setStatut}>
-              <SelectTrigger className="h-11 w-full">
-                <SelectValue placeholder="Statut" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tous">Tous statuts</SelectItem>
-                {STATUTS_ORDRE.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {STATUTS[s].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Select value={metier} onValueChange={setMetier}>
-            <SelectTrigger className="h-11 w-full">
-              <SelectValue placeholder="Métier" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tous">Tous métiers</SelectItem>
-              {METIERS.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {/* Tri (vue liste) : regrouper par statut, contrat à signer, ou récent */}
-        {vue === 'liste' && (
-          <Select value={tri} onValueChange={(v) => setTri(v as typeof tri)}>
-            <SelectTrigger className="h-11 w-full">
-              <SelectValue placeholder="Trier" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Trier : plus récents</SelectItem>
-              <SelectItem value="gros">Trier : plus gros projets (€)</SelectItem>
-              <SelectItem value="statut">Trier : par statut (groupé)</SelectItem>
-              <SelectItem value="a_signer">Trier : contrat à signer d'abord</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-
-      {/* Valeur totale (potentiel 🔒) des projets affichés — discret, tout en haut */}
-      {vue === 'liste' && resultats.length > 0 && (
-        <p className="mb-2 text-xs text-muted-foreground">
-          {resultats.length} projet{resultats.length > 1 ? 's' : ''} · 🔒{' '}
-          {formatEuros(resultats.reduce((s, p) => s + (p.estimation_interne ?? 0), 0))} de potentiel
-        </p>
-      )}
-
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
-          ))}
-        </div>
-      ) : vue === 'pipeline' ? (
-        <KanbanProjets projets={base} />
-      ) : resultats.length === 0 ? (
-        <EmptyState
-          icon={FolderKanban}
-          titre="Aucun projet"
-          description="Crée un projet pendant l'appel pour démarrer le suivi."
-          action={
-            peutCreerLead ? (
-              <Button asChild>
-                <Link to="/projets/new">
-                  <Plus className="size-4" />
-                  Nouveau projet
-                </Link>
+      <section className="overflow-hidden rounded-[10px] border border-border bg-card" aria-label="Liste et filtres des projets">
+        <div className="space-y-3 border-b border-border p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex w-full min-w-0 items-center gap-2 xl:w-auto xl:flex-1">
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input className="h-10 bg-card pl-9" placeholder="Rechercher un client, une ville, un artisan…" aria-label="Rechercher un projet" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+              </div>
+              <Button variant="outline" size="sm" className="h-10 gap-2 bg-card px-3 xl:hidden" aria-expanded={filtresOuverts} aria-controls="filtres-projets" onClick={() => setFiltresOuverts((ouvert) => !ouvert)}>
+                <span className="relative"><SlidersHorizontal className="size-4" aria-hidden />{filtresActifs && <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-primary" aria-hidden />}</span>
+                Filtres{filtresActifs && <span className="sr-only"> actifs</span>}
               </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
-          {resultats.map((p) => (
-            <li key={p.id} className="min-w-0">
-              <Link to={`/projets/${p.id}`} className="block h-full">
-                <Card className="flex h-full flex-row items-center gap-3 overflow-hidden rounded-2xl border-border/70 p-3 shadow-card transition-all duration-200 hover:shadow-card-hover active:scale-[0.99]">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate font-medium">{p.client_nom}</p>
-                      <StatutBadge statut={p.statut} />
+            </div>
+            <Tabs value={vue} onValueChange={setVue}>
+              <TabsList className="h-10 border border-border bg-muted/50" aria-label="Présentation des projets">
+                <TabsTrigger value="liste" className="gap-2 px-3"><List className="size-4" aria-hidden />Liste</TabsTrigger>
+                <TabsTrigger value="pipeline" className="gap-2 px-3"><Columns3 className="size-4" aria-hidden />Par étape</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          <div id="filtres-projets" className={`${filtresOuverts ? 'grid' : 'hidden'} grid-cols-1 gap-2 min-[400px]:grid-cols-2 xl:flex xl:flex-wrap xl:items-center`}>
+            <div className="min-w-0 xl:w-48">
+              <Select value={pipe} onValueChange={setPipe}>
+                <SelectTrigger className="h-9 w-full bg-card" aria-label="Filtrer par origine"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Toutes les origines</SelectItem>
+                  <SelectItem value="neuf">Nouveaux dossiers</SelectItem>
+                  <SelectItem value="reprise">Issus d’une reprise</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {vue === 'liste' && <div className="min-w-0 xl:w-44">
+              <Select value={statut} onValueChange={setStatut}>
+                <SelectTrigger className="h-9 w-full bg-card" aria-label="Filtrer par statut"><SelectValue placeholder="Statut" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Tous statuts</SelectItem>
+                  {STATUTS_ORDRE.map((s) => <SelectItem key={s} value={s}>{STATUTS[s].label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>}
+            <div className="min-w-0 xl:w-48">
+              <Select value={metier} onValueChange={setMetier}>
+                <SelectTrigger className="h-9 w-full bg-card" aria-label="Filtrer par métier"><SelectValue placeholder="Métier" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Tous métiers</SelectItem>
+                  {METIERS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {vue === 'liste' && <div className="min-w-0 xl:w-60">
+              <Select value={tri} onValueChange={setTri}>
+                <SelectTrigger className="h-9 w-full bg-card" aria-label="Trier les projets"><SelectValue placeholder="Trier" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Plus récents</SelectItem>
+                  <SelectItem value="gros">Plus gros projets (€)</SelectItem>
+                  <SelectItem value="statut">Par statut</SelectItem>
+                  <SelectItem value="a_signer">Contrat à signer d’abord</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>}
+            {filtresActifs && <Button variant="ghost" size="sm" className="justify-start px-2 text-muted-foreground xl:ml-auto" onClick={reinitialiser}><X className="size-3.5" aria-hidden />Effacer les filtres</Button>}
+          </div>
+        </div>
+
+        {aAttribuer && <p className="border-b border-border bg-muted/30 px-5 py-3 text-xs text-muted-foreground">File d’attribution · nouveaux dossiers ouverts, hors projets clos et démarchage</p>}
+        {!isLoading && !isError && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3 text-xs text-muted-foreground" role="status">
+          <span><span className="font-medium tabular-nums text-foreground">{vue === 'liste' ? resultats.length : base.length}</span> projet{(vue === 'liste' ? resultats.length : base.length) > 1 ? 's' : ''}</span>
+          {vue === 'liste' && resultats.length > 0 && <span className="flex items-center gap-1.5"><LockKeyhole className="size-3" aria-hidden />Potentiel estimé <span className="font-medium tabular-nums text-foreground">{formatEuros(resultats.reduce((s, p) => s + (p.estimation_interne ?? 0), 0))}</span></span>}
+        </div>}
+
+        {isLoading ? (
+          <div className="divide-y divide-border" aria-label="Chargement des projets">{Array.from({ length: 5 }, (_, i) => <div key={i} className="px-5 py-5"><Skeleton className="h-10 w-full rounded-md" /></div>)}</div>
+        ) : isError ? (
+          <div className="p-4"><EmptyState icon={AlertCircle} titre="Impossible de charger les projets" description="La liste n’est pas disponible. Réessaie pour récupérer les dossiers." action={<Button variant="outline" onClick={() => void refetch()}>Réessayer</Button>} /></div>
+        ) : (vue === 'pipeline' ? base.length : resultats.length) === 0 && filtresActifs ? (
+          <div className="p-4"><EmptyState icon={Search} titre="Aucun résultat avec ces filtres" description="Modifie ta recherche ou efface les filtres pour retrouver tous les projets." action={<Button variant="outline" onClick={reinitialiser}>Effacer les filtres</Button>} /></div>
+        ) : vue === 'pipeline' ? (
+          <div className="p-4"><KanbanProjets projets={base} /></div>
+        ) : resultats.length === 0 ? (
+          <div className="p-4"><EmptyState icon={FolderKanban} titre="Aucun projet" description="Crée un projet pendant l'appel pour démarrer le suivi." action={peutCreerLead ? <Button asChild><Link to="/projets/new"><Plus className="size-4" />Nouveau projet</Link></Button> : undefined} /></div>
+        ) : (
+          <>
+            <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1fr)_16px] gap-5 border-b border-border bg-muted/40 px-5 py-3 text-xs font-medium text-muted-foreground xl:grid" aria-hidden>
+              <span>Client</span><span>Métier</span><span>Artisan</span><span>Avancement</span><span className="text-right">Montant · création</span><span />
+            </div>
+            <ul className="divide-y divide-border" aria-label="Projets">
+              {resultats.map((p) => (
+                <li key={p.id}>
+                  <Link to={`/projets/${p.id}`} className="group grid grid-cols-2 items-start gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary sm:px-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1fr)_16px] xl:gap-5 xl:py-5">
+                    <div className="col-span-2 min-w-0 xl:col-span-1">
+                      <p className="break-words text-sm font-semibold leading-5">{p.client_nom}</p>
+                      <p className="mt-1 break-words text-xs text-muted-foreground">{p.client_ville || 'Ville non renseignée'}</p>
+                      {p.client_telephone && <p className="mt-2 flex items-center gap-1.5 text-xs tabular-nums text-muted-foreground"><Phone className="size-3 shrink-0" aria-hidden /><span>{formatTel(p.client_telephone)}</span></p>}
                     </div>
-                    <BadgePerduPar nb={affectationsCounts?.[p.id]?.perdus ?? 0} />
-                    {/* Qui a repris ce chantier. Sans cette pastille, deux
-                        commerciaux peuvent rappeler le même client. */}
-                    {p.assigne_a && repreneurs?.[p.assigne_a] && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                        <UserCheck className="size-3" />
-                        {repreneurs[p.assigne_a]}
-                      </span>
-                    )}
-                    {p.client_telephone && (
-                      <p className="flex items-center gap-1.5 text-sm font-medium text-primary">
-                        <Phone className="size-3.5 shrink-0" />
-                        <span className="truncate">{formatTel(p.client_telephone)}</span>
-                      </p>
-                    )}
-                    <p className="truncate text-xs text-muted-foreground">
-                      {p.metiers.join(', ') || '—'}
-                      {p.client_ville && ` · ${p.client_ville}`}
-                    </p>
-                    {p.artisan && (
-                      <p className="flex items-center gap-1 text-xs">
-                        {artisansSignes?.has(p.artisan_id ?? '') ? (
-                          <BadgeCheck className="size-3.5 shrink-0 text-[#16A34A]" />
-                        ) : (
-                          <Clock className="size-3.5 shrink-0 text-[#B45309]" />
-                        )}
-                        <span className="min-w-0 truncate text-muted-foreground">
-                          {p.artisan.societe ?? p.artisan.nom}
-                        </span>
-                        <span
-                          className={cn(
-                            'shrink-0 font-medium',
-                            artisansSignes?.has(p.artisan_id ?? '')
-                              ? 'text-[#16A34A]'
-                              : 'text-[#B45309]',
-                          )}
-                        >
-                          · {artisansSignes?.has(p.artisan_id ?? '') ? 'signé' : 'non signé'}
-                        </span>
-                        {(affectationsCounts?.[p.id]?.total ?? 0) > 1 && (
-                          <span className="shrink-0 text-primary">
-                            +{(affectationsCounts?.[p.id]?.total ?? 0) - 1}
-                          </span>
-                        )}
-                      </p>
-                    )}
-                    <p className="flex items-center gap-2 truncate text-xs text-muted-foreground">
-                      <span>{formatDate(p.created_at)}</span>
-                      {p.montant_devis_signe != null && (
-                        <span>· {formatEuros(p.montant_devis_signe)}</span>
-                      )}
-                      {p.estimation_interne != null && (
-                        <span className="shrink-0 font-medium text-primary">
-                          · 🔒 {formatEuros(p.estimation_interne)}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
-                </Card>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+                    <div className="min-w-0"><p className="mb-1 text-[11px] text-muted-foreground xl:sr-only">Métier</p><p className="break-words text-sm leading-5">{p.metiers.join(', ') || 'Métier à préciser'}</p></div>
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[11px] text-muted-foreground xl:sr-only">Artisan</p>
+                      {p.artisan ? <>
+                        <p className="break-words text-sm leading-5">{p.artisan.societe ?? p.artisan.nom}{(affectationsCounts?.[p.id]?.total ?? 0) > 1 && <span className="ml-1 text-xs text-muted-foreground">+{(affectationsCounts?.[p.id]?.total ?? 0) - 1}</span>}</p>
+                        <p className="mt-1.5 flex items-start gap-1 text-xs text-muted-foreground">{artisansSignes?.has(p.artisan_id ?? '') ? <BadgeCheck className="mt-0.5 size-3.5 shrink-0 text-emerald-700" aria-hidden /> : <Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden />}<span>{artisansSignes?.has(p.artisan_id ?? '') ? 'Contrat signé' : 'Contrat à signer'}</span></p>
+                      </> : <span className="text-sm text-muted-foreground">Non attribué</span>}
+                      {p.assigne_a && repreneurs?.[p.assigne_a] && <p className="mt-2 flex items-start gap-1 text-xs text-muted-foreground"><UserCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden /><span>Repris par {repreneurs[p.assigne_a]}</span></p>}
+                    </div>
+                    <div className="col-span-2 flex min-w-0 flex-wrap items-start gap-2 xl:col-span-1 xl:flex-col [&_[data-slot=badge]]:whitespace-normal [&_[data-slot=badge]]:text-left">
+                      <StatutBadge statut={p.statut} />
+                      <BadgePerduPar nb={affectationsCounts?.[p.id]?.perdus ?? 0} className="max-w-full shrink whitespace-normal rounded-md border-transparent bg-transparent px-0 font-normal" />
+                    </div>
+                    <div className="col-span-2 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3 text-xs xl:col-span-1 xl:block xl:border-0 xl:pt-0 xl:text-right">
+                      <div>{p.montant_devis_signe != null && <p className="font-medium tabular-nums text-foreground">{formatEuros(p.montant_devis_signe)} <span className="font-normal text-muted-foreground">signés</span></p>}{p.estimation_interne != null && <p className="mt-1 tabular-nums text-muted-foreground">Est. {formatEuros(p.estimation_interne)}</p>}{p.montant_devis_signe == null && p.estimation_interne == null && <p className="text-muted-foreground">Non chiffré</p>}</div>
+                      <p className="mt-1.5 tabular-nums text-muted-foreground"><span className="xl:sr-only">Créé le </span>{formatDate(p.created_at)}</p>
+                    </div>
+                    <ChevronRight className="hidden size-4 self-center text-muted-foreground/60 xl:block" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
     </div>
   )
 }

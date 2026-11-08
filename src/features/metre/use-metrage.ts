@@ -97,8 +97,8 @@ export function useTrancherMetrage(projetId: string) {
 }
 
 /** Le dossier, vu de l'artisan : par son jeton. */
-export function useMetrageArtisan(token: string | undefined, affectationToken: string) {
-  return useQuery({
+export function requeteMetrageArtisan(token: string | undefined, affectationToken: string) {
+  return {
     queryKey: ['metrage-artisan', token ?? null, affectationToken],
     enabled: !!token,
     queryFn: async (): Promise<LigneMetrage[]> => {
@@ -111,7 +111,11 @@ export function useMetrageArtisan(token: string | undefined, affectationToken: s
       if (!r.ok) throw new Error(messageMetre(r.error))
       return r.metrage ?? []
     },
-  })
+  }
+}
+
+export function useMetrageArtisan(token: string | undefined, affectationToken: string) {
+  return useQuery(requeteMetrageArtisan(token, affectationToken))
 }
 
 /** « Mesuré sur place » : la valeur de l'artisan devient celle qu'on retient. */
@@ -131,7 +135,28 @@ export function useCorrigerMetrageArtisan(token: string | undefined, affectation
       const r = data as { ok: boolean; error?: string }
       if (!r.ok) throw new Error(messageMetre(r.error))
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['metrage-artisan', token ?? null, affectationToken] }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['metrage-artisan', token ?? null, affectationToken] }),
+      qc.invalidateQueries({ queryKey: ['etats-metrage', token ?? null] }),
+    ]),
+  })
+}
+
+/** Une visite entière : toutes les corrections réussissent, ou aucune n'est écrite. */
+export function useConfirmerMetragesArtisan(token: string | undefined, affectationToken: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (p: { corrections: { cle: string; unite: Unite; valeur: number }[]; note: string }) => {
+      const { data, error } = await supabase.rpc('corriger_metrages_by_token', {
+        p_token: token, p_affectation_token: affectationToken, p_corrections: p.corrections, p_note: p.note,
+      })
+      if (error) throw new Error('La confirmation n’a pas pu être vérifiée. Rechargez les mesures avant de réessayer.')
+      if (!data?.ok) throw new Error(`Aucune valeur de ce lot n’a été modifiée. ${messageMetre(data?.error)}`)
+    },
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['metrage-artisan', token ?? null, affectationToken] }),
+      qc.invalidateQueries({ queryKey: ['etats-metrage', token ?? null] }),
+    ]),
   })
 }
 
@@ -146,9 +171,11 @@ export function useEtatsMetrage(token: string | undefined) {
       if (error) throw error
       const r = data as {
         ok: boolean
+        error?: string
         chantiers?: { affectation_token: string; retenues: number; a_verifier: number }[]
       }
-      return new Map((r.ok ? (r.chantiers ?? []) : []).map((c) => [c.affectation_token, c]))
+      if (!r.ok) throw new Error(messageMetre(r.error))
+      return new Map((r.chantiers ?? []).map((c) => [c.affectation_token, c]))
     },
   })
 }

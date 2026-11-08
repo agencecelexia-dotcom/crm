@@ -2,6 +2,8 @@ import { debordLisible, LIGNES, moisDuVol } from './affichage-releve'
 import { formatM, formatM2 } from './geometrie'
 import { LIBELLES_TOIT, materiauDeBdnb, type MateriauxGardes } from './materiaux'
 import { photoDeLaFacade, resultatRetenu, type PhotoLue } from './ouvertures'
+import { QUANTITES } from './catalogue-metrage'
+import type { LigneMetrage } from './use-metrage'
 import {
   facadeRetenue,
   lignesRetenues,
@@ -36,6 +38,8 @@ export interface EntreeRapport {
   materiaux: MateriauxGardes | null
   /** Ce que la BDNB déclare, faute de lecture. */
   bdnb?: { toit?: string | null; murs?: string | null } | null
+  /** Corrections et déclarations du chantier, séparées du relevé brut. */
+  metrage?: LigneMetrage[]
 }
 
 export interface FacadeRapport {
@@ -64,6 +68,7 @@ export interface LigneRapport {
   /** Ce que la quantité ne dit pas (« 3 fenêtres, 1 porte »), ou le texte d'une ligne sans nombre. */
   detail: string
   source: string
+  validation?: string
 }
 
 export interface RapportMetre {
@@ -87,11 +92,32 @@ export interface RapportMetre {
   hauteurs: { gouttiere: number | null; gouttiereMin: number | null; gouttiereMax: number | null; faitage: number | null }
   materiaux: { toit: { libelle: string; provenance: string } | null; murs: { libelle: string; provenance: string } | null }
   lignes: LigneRapport[]
+  dossier: LigneRapport[]
+  confiance: string
   sources: string[]
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 const LICENCE = (l: string | null) => (l === 'CC-BY-SA-4.0' ? 'CC BY-SA 4.0' : (l ?? ''))
+
+/** Une correction humaine n'efface ni la mesure initiale ni la déclaration. */
+export function lignesDuDossier(metrage: LigneMetrage[]): LigneRapport[] {
+  return metrage.flatMap((m) => {
+    const element = QUANTITES[m.cle]?.libelle ?? m.cle
+    const unite: LigneRapport['unite'] = ({ m2: 'm²', ml: 'ml', m: 'm', pct: '%', u: 'u', oui_non: '' } as const)[m.unite]
+    const ligne = (rubrique: string, quantite: number, detail: string, source: string, validation: string): LigneRapport => ({
+      rubrique, element, quantite, unite, detail: m.unite === 'oui_non' ? `${quantite ? 'Oui' : 'Non'}${detail ? ` · ${detail}` : ''}` : detail, source, validation,
+    })
+    const lignes: LigneRapport[] = []
+    if (m.statut === 'confirme' && m.valeur_retenue != null) {
+      const auteur = m.retenue_par === 'artisan' ? 'l’artisan' : m.retenue_par === 'agence' ? 'l’agence' : 'auteur non renseigné'
+      lignes.push(ligne('Valeurs confirmées', m.valeur_retenue, m.note ?? '', `Confirmé par ${auteur}`, 'Confirmé dans le dossier'))
+    }
+    if (m.valeur_mesuree != null) lignes.push(ligne('Mesures initiales du dossier', m.valeur_mesuree, '', m.mesure_source ?? 'Source non renseignée', 'Estimation à vérifier'))
+    if (m.valeur_declaree != null) lignes.push(ligne('Déclarations', m.valeur_declaree, m.citation ?? '', `Déclaré par ${m.declaree_par ?? 'auteur non renseigné'}`, 'Déclaration, non vérifiée'))
+    return lignes
+  })
+}
 
 export function rapportMetre(e: EntreeRapport): RapportMetre {
   const r = e.releve
@@ -242,8 +268,8 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
     lignes.push({ rubrique: 'Hauteurs', element: 'Au faîtage', quantite: r.hauteurs.faitage, unite: 'm', detail: 'au-dessus du sol au centre de la maison', source: LIDAR })
   }
   if (materiauToit) lignes.push({ rubrique: 'Matériaux', element: 'Couverture', quantite: null, unite: '', detail: materiauToit.libelle, source: materiauToit.provenance })
-  if (lu?.fenetres_toit != null) lignes.push({ rubrique: 'Matériaux', element: 'Fenêtres de toit', quantite: lu.fenetres_toit, unite: 'u', detail: '', source: 'photo aérienne IGN 5 cm, lue par IA' })
-  if (lu?.cheminees != null) lignes.push({ rubrique: 'Matériaux', element: 'Cheminées', quantite: lu.cheminees, unite: 'u', detail: '', source: 'photo aérienne IGN 5 cm, lue par IA' })
+  if (lu?.fenetres_toit != null) lignes.push({ rubrique: 'Matériaux', element: 'Fenêtres de toit', quantite: lu.fenetres_toit, unite: 'u', detail: '', source: `photo aérienne IGN ${e.materiaux!.resolution_cm} cm, lue par IA` })
+  if (lu?.cheminees != null) lignes.push({ rubrique: 'Matériaux', element: 'Cheminées', quantite: lu.cheminees, unite: 'u', detail: '', source: `photo aérienne IGN ${e.materiaux!.resolution_cm} cm, lue par IA` })
   if (materiauMurs) lignes.push({ rubrique: 'Matériaux', element: 'Murs', quantite: null, unite: '', detail: materiauMurs.libelle, source: materiauMurs.provenance })
 
   // LES SOURCES, à citer (les photos de rue sont sous licence libre, avec leur auteur).
@@ -260,6 +286,10 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
         : `Façade ${f.orientation} : photo ${p.source === 'panoramax' ? 'Panoramax' : 'Mapillary'}, ${p.auteur ?? 'auteur anonyme'}, ${LICENCE(p.licence)}${p.pris_le ? `, ${moisDuVol(p.pris_le.slice(0, 10))}` : ''}.`,
     )
   }
+  const dossier = lignesDuDossier(e.metrage ?? [])
+  const confiance = r.confiance === 'haute' ? 'haute' : r.confiance === 'moyenne' ? 'moyenne' : r.confiance === 'basse' ? 'basse' : 'non renseignée'
+  sources.push(`Confiance du relevé automatique : ${confiance}. Elle ne vaut pas validation sur place.`)
+  if (dossier.some((l) => l.rubrique === 'Valeurs confirmées')) sources.push('Les valeurs confirmées du chantier figurent séparément ; le relevé géométrique initial est conservé ci-dessous sans remplacement.')
   sources.push('Mesures à distance, à confirmer sur place avant commande.')
 
   return {
@@ -286,7 +316,9 @@ export function rapportMetre(e: EntreeRapport): RapportMetre {
       faitage: r.hauteurs.faitage,
     },
     materiaux: { toit: materiauToit, murs: materiauMurs },
-    lignes,
+    dossier,
+    confiance,
+    lignes: [...dossier, ...lignes.map((l) => ({ ...l, validation: `Estimation à distance · confiance du relevé ${confiance}` }))],
     sources,
   }
 }
@@ -305,9 +337,9 @@ const champ = (s: string) => (/[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : 
 
 /** Le tableau, pour Excel : UTF-8 avec BOM (les accents), séparateur « ; » (Excel français). */
 export function csvDuRapport(r: RapportMetre): string {
-  const tete = ['Rubrique', 'Élément', 'Quantité', 'Unité', 'Détail', 'Source']
+  const tete = ['Rubrique', 'Élément', 'Quantité', 'Unité', 'Détail', 'Source', 'Validation']
   const corps = r.lignes.map((l) =>
-    [l.rubrique, l.element, l.quantite == null ? '' : nombreCsv(l.quantite), l.unite, l.detail, l.source].map(champ).join(';'),
+    [l.rubrique, l.element, l.quantite == null ? '' : nombreCsv(l.quantite), l.unite, l.detail, l.source, l.validation ?? 'Non renseignée'].map(champ).join(';'),
   )
   const entete = [
     [champ(`Métré${r.titre ? ` — ${r.titre}` : ''}`)],

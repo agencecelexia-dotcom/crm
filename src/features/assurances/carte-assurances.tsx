@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { FileCheck2, Loader2, ShieldCheck, TriangleAlert, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -38,7 +38,8 @@ interface Brouillon {
  * bloquer quoi que ce soit, l'artisan remplit alors les champs lui-même.
  */
 export function CarteAssurances({ token }: { token: string }) {
-  const { data: etat, isLoading } = useEtatChiffrage(token)
+  const { data: etat, isLoading, isError, refetch } = useEtatChiffrage(token)
+  const champId = useId()
   const lire = useLireAssurance(token)
   const deposer = useDeposerAssurance(token)
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null)
@@ -47,10 +48,16 @@ export function CarteAssurances({ token }: { token: string }) {
     rc_pro: null,
   })
 
-  if (isLoading || !etat) return null
+  if (isLoading) return <div className="h-56 animate-pulse rounded-xl border border-border bg-muted" aria-label="Chargement des assurances" />
+  if (isError || !etat) return <div role="alert" className="rounded-xl border border-border bg-card p-5"><p className="text-sm">Les assurances sont indisponibles</p><Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>Réessayer</Button></div>
 
   async function choisir(type: TypeAssurance, file: File | null) {
-    if (!file) return
+    if (!file || lire.isPending || deposer.isPending) return
+    if (!['application/pdf', 'image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      toast.error('Format non pris en charge', { description: 'Choisissez un PDF, JPEG, PNG ou WebP.' })
+      return
+    }
+    if (file.size > 6_000_000) { toast.error('Attestation trop volumineuse', { description: '6 Mo maximum.' }); return }
     setBrouillon({ type, file, assureur: '', police: '', echeance: '' })
 
     // Échec silencieux : le formulaire reste saisissable à la main.
@@ -83,34 +90,27 @@ export function CarteAssurances({ token }: { token: string }) {
   }
 
   return (
-    <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
-      <CardContent className="space-y-4 py-5">
-        <div className="flex items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-            {etat.peut_chiffrer ? (
-              <ShieldCheck className="size-5" />
-            ) : (
-              <FileCheck2 className="size-5" />
-            )}
-          </span>
-          <div className="min-w-0">
-            <p className="font-display text-lg font-medium">
-              {etat.peut_chiffrer ? 'Chiffrage activé' : 'Activez le chiffrage'}
-            </p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {etat.peut_chiffrer
-                ? `Vos attestations sont validées${etat.validees_le ? ` depuis le ${formatDate(etat.validees_le)}` : ''}. Vous pouvez établir vos devis depuis votre espace.`
-                : 'Déposez vos deux attestations d’assurance pour débloquer le générateur de devis. Nous les vérifions, puis l’outil s’ouvre.'}
-            </p>
+    <Card className="gap-0 rounded-xl border-border py-0 shadow-none">
+      <CardContent className="space-y-0 px-0">
+        <div className="border-b border-border p-5">
+          <div className="flex items-center gap-2">
+            {etat.peut_chiffrer ? <ShieldCheck className="size-4 text-muted-foreground" aria-hidden /> : <FileCheck2 className="size-4 text-muted-foreground" aria-hidden />}
+            <h2 className="text-base font-medium">Assurances</h2>
           </div>
+          <p className="mt-2 text-[13px] font-medium">{etat.peut_chiffrer ? 'Chiffrage activé' : 'Deux attestations requises'}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{etat.peut_chiffrer
+            ? `Vos attestations sont validées${etat.validees_le ? ` depuis le ${formatDate(etat.validees_le)}` : ''}. Vous pouvez établir vos devis depuis votre espace.`
+            : 'Déposez vos attestations décennale et RC professionnelle. Le générateur de devis sera disponible après leur validation par Celexia.'}</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <p className="px-5 pt-4 text-xs text-muted-foreground">PDF, JPEG, PNG ou WebP · 6 Mo maximum par attestation.</p>
+        <div className="divide-y divide-border">
           {(['decennale', 'rc_pro'] as TypeAssurance[]).map((type) => (
             <Piece
               key={type}
               type={type}
               piece={etat[type]}
+              busy={deposer.isPending || lire.isPending}
               onChoisir={(f) => choisir(type, f)}
               inputRef={(el) => (champs.current[type] = el)}
             />
@@ -118,8 +118,8 @@ export function CarteAssurances({ token }: { token: string }) {
         </div>
 
         {brouillon && (
-          <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
-            <p className="text-sm font-medium">
+          <div className="space-y-4 border-t border-border bg-muted/30 p-5">
+            <p className="break-words text-sm font-medium">
               {LIBELLES[brouillon.type]} — {brouillon.file.name}
             </p>
             {lire.isPending ? (
@@ -130,12 +130,13 @@ export function CarteAssurances({ token }: { token: string }) {
             ) : (
               <>
                 <p className="text-xs text-muted-foreground">
-                  Vérifiez ces informations avant d’envoyer.
+                  Vérifiez ces informations avant d’envoyer. Le remplacement d’une attestation nécessite une nouvelle validation par Celexia.
                 </p>
-                <div className="grid gap-2 sm:grid-cols-3">
+                <div className="grid gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Assureur</Label>
+                    <Label className="text-xs" htmlFor={`${champId}-assureur`}>Assureur</Label>
                     <Input
+                      id={`${champId}-assureur`}
                       value={brouillon.assureur}
                       onChange={(e) =>
                         setBrouillon({ ...brouillon, assureur: e.target.value })
@@ -144,15 +145,17 @@ export function CarteAssurances({ token }: { token: string }) {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">N° de police</Label>
+                    <Label className="text-xs" htmlFor={`${champId}-police`}>N° de police</Label>
                     <Input
+                      id={`${champId}-police`}
                       value={brouillon.police}
                       onChange={(e) => setBrouillon({ ...brouillon, police: e.target.value })}
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Valable jusqu’au</Label>
+                    <Label className="text-xs" htmlFor={`${champId}-echeance`}>Valable jusqu’au</Label>
                     <Input
+                      id={`${champId}-echeance`}
                       type="date"
                       value={brouillon.echeance}
                       onChange={(e) =>
@@ -163,7 +166,7 @@ export function CarteAssurances({ token }: { token: string }) {
                 </div>
               </>
             )}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
                 disabled={deposer.isPending || lire.isPending}
@@ -192,7 +195,7 @@ export function CarteAssurances({ token }: { token: string }) {
                 {deposer.isPending && <Loader2 className="size-4 animate-spin" />}
                 Envoyer
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setBrouillon(null)}>
+              <Button size="sm" variant="ghost" disabled={deposer.isPending} onClick={() => setBrouillon(null)}>
                 Annuler
               </Button>
             </div>
@@ -208,16 +211,19 @@ function Piece({
   piece,
   onChoisir,
   inputRef,
+  busy,
 }: {
   type: TypeAssurance
   piece: PieceAssurance
+  busy: boolean
   onChoisir: (f: File | null) => void
   inputRef: (el: HTMLInputElement | null) => void
 }) {
-  const id = `assurance-${type}`
+  const id = useId()
+  const fichier = useRef<HTMLInputElement | null>(null)
   return (
-    <div className="rounded-xl border border-border/70 p-3">
-      <p className="text-sm font-medium">{LIBELLES[type]}</p>
+    <div className="p-5">
+      <p className="text-[13px] font-medium">{LIBELLES[type]}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">
         {!piece.deposee ? (
           'Aucune attestation déposée'
@@ -235,17 +241,16 @@ function Piece({
       </p>
       <input
         id={id}
-        ref={inputRef}
+        ref={(el) => { fichier.current = el; inputRef(el) }}
         type="file"
         accept="application/pdf,image/jpeg,image/png,image/webp"
-        className="sr-only"
-        onChange={(e) => onChoisir(e.target.files?.[0] ?? null)}
+        className="hidden"
+        disabled={busy}
+        onChange={(e) => { onChoisir(e.target.files?.[0] ?? null); e.target.value = '' }}
       />
-      <Button asChild size="sm" variant="outline" className="mt-2.5 w-full cursor-pointer">
-        <label htmlFor={id}>
-          <Upload className="size-4" />
-          {piece.deposee ? 'Remplacer' : 'Déposer'}
-        </label>
+      <Button type="button" size="sm" variant="outline" className="mt-3" disabled={busy} onClick={() => fichier.current?.click()} aria-label={`${piece.deposee ? 'Remplacer' : 'Déposer'} : ${LIBELLES[type]}`}>
+        <Upload className="size-3.5" aria-hidden />
+        {piece.deposee ? 'Remplacer' : 'Déposer l’attestation'}
       </Button>
     </div>
   )

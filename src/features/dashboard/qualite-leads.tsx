@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { Target } from 'lucide-react'
 
 import { CardTitre } from '@/components/card-titre'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -75,27 +74,28 @@ export function QualiteLeads() {
     <Card className="mb-4 rounded-2xl border-border/70 shadow-card">
       <CardHeader>
         <CardTitre>
-          <Target className="mr-1.5 inline size-4 text-primary" />
           Qualité des leads
         </CardTitre>
       </CardHeader>
       <CardContent className="space-y-5">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="mb-2 text-sm font-medium text-muted-foreground">
             Par métier
           </p>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Qualité des demandes par métier, tableau défilant">
             <table className="w-full min-w-[420px] text-sm">
+              <caption className="sr-only">Qualité des demandes par métier, tout l’historique</caption>
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="pb-1.5 font-medium">Métier</th>
-                  <th className="pb-1.5 text-right font-medium">Transmis</th>
-                  <th className="pb-1.5 text-right font-medium">Gagnés</th>
-                  <th className="pb-1.5 text-right font-medium">Signature</th>
-                  <th className="pb-1.5 text-right font-medium">Panier moyen</th>
+                  <th scope="col" className="pb-1.5 font-medium">Métier</th>
+                  <th scope="col" className="pb-1.5 text-right font-medium">Transmis</th>
+                  <th scope="col" className="pb-1.5 text-right font-medium">Gagnés</th>
+                  <th scope="col" className="pb-1.5 text-right font-medium">Signature</th>
+                  <th scope="col" className="pb-1.5 text-right font-medium">Panier moyen</th>
                 </tr>
               </thead>
               <tbody>
+                {metiers.length === 0 && <tr><td colSpan={5} className="py-4 text-muted-foreground">Aucune demande transmise à analyser</td></tr>}
                 {metiers.map((m) => (
                   <tr key={m.metier} className="border-b border-border/50 last:border-0">
                     <td className="py-1.5 pr-2">{m.metier}</td>
@@ -120,10 +120,11 @@ export function QualiteLeads() {
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="mb-2 text-sm font-medium text-muted-foreground">
             Départements où les leads ne sont pas traités
           </p>
           <div className="flex flex-wrap gap-2">
+            {deps.length === 0 && <p className="text-sm text-muted-foreground">Aucun département à analyser</p>}
             {deps.map((d) => (
               <span
                 key={d.dep}

@@ -17,7 +17,7 @@ export function PageHeader({
 }) {
   const navigate = useNavigate()
   return (
-    <div className="mb-5 flex items-start gap-2">
+    <div className="mb-7 flex flex-wrap items-start gap-x-4 gap-y-4">
       {back && (
         <Button
           variant="ghost"
@@ -29,13 +29,13 @@ export function PageHeader({
           <ChevronLeft className="size-5" />
         </Button>
       )}
-      <div className="min-w-0 flex-1">
-        <h1 className="truncate font-display text-2xl tracking-tight sm:text-3xl">{titre}</h1>
+      <div className="min-w-0 flex-1 basis-48">
+        <h1 className="break-words font-display text-[28px] font-medium leading-tight tracking-[-0.02em] sm:text-[32px]">{titre}</h1>
         {sousTitre && (
-          <p className="mt-0.5 truncate text-sm text-muted-foreground">{sousTitre}</p>
+          <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">{sousTitre}</p>
         )}
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="w-full min-w-0 [&>div]:flex-wrap sm:ml-auto sm:w-auto">{action}</div>}
     </div>
   )
 }

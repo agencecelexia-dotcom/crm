@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import { AuthContext } from './auth-context'
 import type { Membre } from '@/types/database'
+import { creerIsolationSession, membrePourSession, type FicheMembreChargee } from './isolation-session'
 
 /**
  * Provider d'authentification : suit la session Supabase et charge la fiche
@@ -22,12 +24,11 @@ import type { Membre } from '@/types/database'
  *    à quelqu'un dont la session est parfaitement valide.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
+  const [isolerSession] = useState(() => creerIsolationSession(queryClient))
   const [session, setSession] = useState<Session | null>(null)
-  const [membre, setMembre] = useState<Membre | null>(null)
-  // Distinct de `membre === null`, qui ne dit pas si la requête a répondu.
-  // Vrai au départ : au premier rendu la fiche n'a pas encore été cherchée.
-  // Repasse à false dès que la requête répond, quel que soit son résultat.
-  const [membreEnCours, setMembreEnCours] = useState(true)
+  const [fiche, setFiche] = useState<FicheMembreChargee | null>(null)
+  const { membre, membreEnCours } = membrePourSession(session?.user.id, fiche)
   const [isLoading, setIsLoading] = useState(true)
 
   // --- Session : synchrone, sans aucun appel réseau dans le callback.
@@ -41,11 +42,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     //
     // On ne peut donc pas se contenter d'attendre : on borne l'attente.
     let fini = false
+    const appliquerSession = (s: Session | null) => {
+      // Aucun appel Supabase ici : le callback d'auth détient son verrou.
+      // Effacer le cache avant la nouvelle session empêche le compte suivant
+      // de voir les données privées du précédent, même pendant un chargement.
+      if (isolerSession(s?.user.id ?? null)) setFiche(null)
+      setSession(s)
+      setIsLoading(false)
+    }
     const relacher = (s: Session | null) => {
       if (fini) return
       fini = true
-      setSession(s)
-      setIsLoading(false)
+      appliquerSession(s)
     }
 
     const secours = setTimeout(() => {
@@ -77,15 +85,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Une vraie réponse d'auth prime toujours sur le délai de secours.
       fini = true
       clearTimeout(secours)
-      setSession(newSession)
-      setIsLoading(false)
+      appliquerSession(newSession)
     })
 
     return () => {
       clearTimeout(secours)
       sub.subscription.unsubscribe()
     }
-  }, [])
+  }, [isolerSession])
 
   // --- Fiche membre : effet séparé, déclenché par le changement de session.
   useEffect(() => {
@@ -105,16 +112,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .select('*')
           .eq('user_id', userId)
           .maybeSingle()
-        if (!annule) setMembre((data as Membre | null) ?? null)
+        if (!annule) setFiche({ userId, membre: (data as Membre | null) ?? null })
       } catch {
         // Une panne réseau ne doit pas fermer le CRM à quelqu'un dont la
         // session est valide : on le traite comme « pas de fiche », donc avec
         // le périmètre le plus restreint.
-        if (!annule) setMembre(null)
-      } finally {
-        // Posé dans TOUS les cas — réponse vide, erreur réseau, refus RLS.
-        // C'est ce qui garantit que l'écran de chargement se termine.
-        if (!annule) setMembreEnCours(false)
+        if (!annule) setFiche({ userId, membre: null })
       }
     })()
 
@@ -136,11 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         session,
-        // Déduit plutôt que stocké : effacer la fiche dans un effet
-        // déclencherait un rendu en cascade au moment de la déconnexion.
-        membre: session ? membre : null,
-        // Sans session, il n'y a rien à charger.
-        membreEnCours: Boolean(session) && membreEnCours,
+        membre,
+        membreEnCours,
         // Un compte sans fiche membre n'est pas fondateur : le défaut est le
         // périmètre le plus restreint, jamais l'inverse.
         estFondateur: Boolean(session) && membre?.role === 'fondateur' && membre.actif,

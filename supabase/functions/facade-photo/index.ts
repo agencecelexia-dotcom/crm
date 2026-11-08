@@ -20,6 +20,7 @@
 // Accès par le jeton de l'artisan, comme les autres fonctions du métré, ou
 // par la session d'un membre actif de l'agence (`_membre.ts`).
 
+import { cheminDepotPhoto, depotPhotoAutorise, photoVisiblePourArtisan, verifierAccesPhoto } from '../_acces-photo.ts'
 import Anthropic from 'npm:@anthropic-ai/sdk@0.129.0'
 import { reporterAuDossier } from '../_dossier-serveur.ts'
 import { JETON_AGENCE, jetonDe, membreActif } from '../_membre.ts'
@@ -137,10 +138,11 @@ interface LignePhoto {
   lecture: unknown
   lu_le: string | null
   ecartees: number[]
+  deposee_par: string | null
 }
 
 const COLONNES =
-  'id,cleabs,orientation,source,photo_ref,chemin,auteur,licence,page,pris_le,largeur,hauteur,note,distance_m,incidence,colonnes,lecture,lu_le,ecartees'
+  'id,cleabs,orientation,source,photo_ref,chemin,auteur,licence,page,pris_le,largeur,hauteur,note,distance_m,incidence,colonnes,lecture,lu_le,ecartees,deposee_par'
 
 async function photosGardees(cleabs: string): Promise<LignePhoto[]> {
   return await rest<LignePhoto[]>(`facade_photo?cleabs=eq.${encodeURIComponent(cleabs)}&select=${COLONNES}&order=cree_le.desc`)
@@ -264,14 +266,27 @@ Deno.serve(async (req) => {
     const cleabs = typeof b.cleabs === 'string' && /^BATIMENT\d{16}$/.test(b.cleabs) ? b.cleabs : null
     const orientation = typeof b.orientation === 'string' && /^[a-z-]{3,12}$/.test(b.orientation) ? b.orientation : null
 
+    // Vérification commune AVANT signature d'URL, quota, vision ou écriture.
+    // Pour un id de photo, son bâtiment vient de la ligne stockée, jamais du corps reçu.
+    const acces = await verifierAccesPhoto(acteur, b.action, b, {
+      photo: async (id) => (await rest<LignePhoto[]>(`facade_photo?id=eq.${id}&select=${COLONNES}`))[0] ?? null,
+      batiment: async (batiment) => {
+        const r = await rest<{ ok: boolean; error?: string }>('rpc/autoriser_photos_batiment', {
+          method: 'POST', body: JSON.stringify({ p_token: b.token, p_cleabs: batiment }),
+        })
+        return r.ok ? null : r.error ?? 'acces_refuse'
+      },
+    })
+    if (!acces.ok) return json({ ok: false, error: acces.error }, acces.status, CORS)
+
     if (b.action === 'chercher') {
       if (!cleabs) return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
-      return json({ ok: true, photos: await avecLiens(await chercher(cleabs)) }, 200, CORS)
+      return json({ ok: true, photos: await avecLiens((await chercher(cleabs)).filter((p) => photoVisiblePourArtisan(p, acteur.artisan))) }, 200, CORS)
     }
 
     if (b.action === 'deposer') {
       if (!cleabs || !orientation) return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
-      const chemin = `${cleabs}/artisan-${crypto.randomUUID()}.jpg`
+      const chemin = cheminDepotPhoto(cleabs, acteur.id, crypto.randomUUID())
       const r = await fetch(`${URL_BASE()}/storage/v1/object/upload/sign/facades/${chemin}`, {
         method: 'POST',
         headers: entetes(),
@@ -285,7 +300,7 @@ Deno.serve(async (req) => {
     }
 
     if (b.action === 'enregistrer') {
-      if (!cleabs || !orientation || typeof b.chemin !== 'string' || !b.chemin.startsWith(`${cleabs}/artisan-`)) {
+      if (!cleabs || !orientation || !depotPhotoAutorise(b.chemin, cleabs, acteur.id)) {
         return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
       }
       const dim = (v: unknown) => (typeof v === 'number' && v > 0 && v < 20000 ? Math.round(v) : null)
@@ -314,7 +329,7 @@ Deno.serve(async (req) => {
       const depuis = new Date(Date.now() - 86400e3).toISOString()
       const lues = await rest<{ id: string }[]>(`facade_photo?${filtreLecteur(acteur)}&lu_le=gt.${depuis}&select=id`)
       if (lues.length >= LECTURES_PAR_JOUR) return json({ ok: false, error: 'quota_atteint' }, 200, CORS)
-      const [photo] = await rest<LignePhoto[]>(`facade_photo?id=eq.${b.id}&select=${COLONNES}`)
+      const photo = acces.photo
       if (!photo) return json({ ok: false, error: 'photo_introuvable' }, 404, CORS)
       // Une photo déjà lue ne se relit pas : même réponse, sans nouveau coût.
       if (photo.lecture) return json({ ok: true, lecture: photo.lecture }, 200, CORS)
@@ -325,7 +340,7 @@ Deno.serve(async (req) => {
       if (typeof b.id !== 'string' || !/^[0-9a-f-]{36}$/.test(b.id) || !Number.isInteger(b.rang) || b.rang! < 0 || b.rang! > 200) {
         return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
       }
-      const [photo] = await rest<LignePhoto[]>(`facade_photo?id=eq.${b.id}&select=${COLONNES}`)
+      const photo = acces.photo
       if (!photo) return json({ ok: false, error: 'photo_introuvable' }, 404, CORS)
       const avant = new Set(photo.ecartees ?? [])
       if (b.ecartee === false) avant.delete(b.rang!)

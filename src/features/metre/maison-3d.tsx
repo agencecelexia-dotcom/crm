@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Loader2, MapPinOff } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ecartesParDefaut, moisDuVol } from './affichage-releve'
 import { ExportsMetre } from './exports-metre'
@@ -45,7 +46,7 @@ export function Maison3D({
   contour?: Point[] | null
 }) {
   const t = JETON_AGENCE
-  const { data: rep, isLoading, error } = useReleve(t, cleabs, point)
+  const { data: rep, isLoading, error, reprendre } = useReleve(t, cleabs, point)
   const releve = releveUtilisable(rep?.releve) ? rep!.releve! : null
   const { data: photos } = usePhotosFacade(t, cleabs, !!releve)
   const { data: materiaux } = useMateriauxToit(t, cleabs, !!releve)
@@ -92,7 +93,7 @@ export function Maison3D({
     [releve, photos, materiaux, titre, adresse],
   )
 
-  const enCours = isLoading || rep?.statut === 'en_cours' || (rep?.trouve === false && !error)
+  const enCours = isLoading || (rep?.statut === 'en_cours' && !rep.delaiDepasse && !error)
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-border px-4 py-3">
@@ -110,6 +111,8 @@ export function Maison3D({
       <PanneauMetreIA
         etat={ia.etat.data}
         enCours={ia.enCours}
+        erreurEtat={ia.etat.isError}
+        onVerifierEtat={() => void ia.reprendre()}
         onLancer={() => ia.lancer.mutate()}
         erreur={ia.lancer.data?.ok === false ? (ia.lancer.data.error ?? 'echec') : ia.lancer.isError ? 'echec' : null}
         contour={contour}
@@ -117,6 +120,10 @@ export function Maison3D({
       />
 
       <div ref={zone3d} />
+      {(rep?.delaiDepasse || error) && <div role="status" className="space-y-2 border-b border-border p-4 text-sm">
+        <p>{rep?.delaiDepasse ? 'Le relevé prend plus de temps que prévu.' : 'Le relevé n’a pas pu être vérifié.'}</p>
+        <Button variant="outline" onClick={() => void reprendre()}>Réessayer le relevé</Button>
+      </div>}
       {!montrer3d ? (
         <div className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm text-muted-foreground">
           <span>La maison apparaîtra en 3D dès que l’IA aura fini sa lecture.</span>

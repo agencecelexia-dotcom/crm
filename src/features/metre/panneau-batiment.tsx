@@ -27,6 +27,9 @@ import { ToitReleve } from './toit-releve'
 import { PhotosFacade } from './photo-facade'
 import { MateriauToit } from './materiau-toit'
 import { ExportsMetre } from './exports-metre'
+import { requeteMetrageArtisan } from './use-metrage'
+import { lignesDuDossier } from './rapport-metre'
+import { useQueryClient } from '@tanstack/react-query'
 import { SurPlace } from './sur-place'
 import type { Face3D } from './modele3d'
 import type { OutilsVue3D } from './vue-3d'
@@ -144,9 +147,10 @@ export function PanneauBatiment({
   outils3d?: RefObject<OutilsVue3D | null>
   token: string
 }) {
+  const qc = useQueryClient()
   // Le métier ouvre sur SON onglet : le façadier n'a pas à chercher ses murs.
   const [onglet, setOnglet] = useState<'toiture' | 'facades' | 'maison'>(vue === 'facades' ? 'facades' : 'toiture')
-  const { data: fiche, isLoading: ficheEnCours } = useFicheMaison(
+  const { data: fiche, isLoading: ficheEnCours, isError: ficheErreur, refetch: rechargerFiche } = useFicheMaison(
     token,
     batiment.cleabs,
     batiment.centre?.[1] ?? null,
@@ -247,10 +251,10 @@ export function PanneauBatiment({
   // toit. Il remplace la grille d'altitudes — sauf s'il n'a pas pu poser le
   // contour sur un toit (`releveUtilisable`). Tant qu'il est en cours (une
   // minute environ), l'écran garde les chiffres de la grille, et le dit.
-  const { data: repReleve } = useReleve(token, batiment.cleabs, batiment.centre ?? null)
+  const { data: repReleve, isError: erreurReleve, reprendre: reprendreReleve } = useReleve(token, batiment.cleabs, batiment.centre ?? null)
   const releve = releveUtilisable(repReleve?.releve) ? repReleve!.releve! : null
   const releveId = releve ? (repReleve?.id ?? null) : null
-  const releveEnCours = repReleve?.statut === 'en_cours'
+  const releveEnCours = repReleve?.statut === 'en_cours' && !repReleve.delaiDepasse && !erreurReleve
   const maisonAbsente = repReleve?.statut === 'fait' && repReleve.releve?.motif === 'maison_absente'
   const vol = moisDuVol(repReleve?.releve?.vol ?? null)
   // Un couvreur ne refait pas toujours tout le toit : il écarte des pans.
@@ -363,7 +367,7 @@ export function PanneauBatiment({
           : [carteToit, carteFacades]
 
   async function copier() {
-    const texte = texteMetre({
+    const estimation = texteMetre({
       titre: titre ?? null,
       adresse: adresse ?? null,
       toit: toitMesure && releve
@@ -402,9 +406,16 @@ export function PanneauBatiment({
         ? { longueur: batiment.encombrement.longueur, largeur: batiment.encombrement.largeur }
         : null,
     })
-    const fait = await partagerTexte('Métré', texte)
-    if (fait === 'copie') toast.success('Mesures copiées', { description: 'Collez-les dans votre devis ou un message.' })
-    else if (fait === 'echec') toast.error('Copie impossible sur cet appareil.')
+    try {
+      const dossier = await qc.fetchQuery(requeteMetrageArtisan(token, affectationToken))
+      const valeurs = lignesDuDossier(dossier).map((l) => `${l.element} : ${l.quantite?.toLocaleString('fr-FR')} ${l.unite} — ${l.source}. ${l.validation}.${l.detail ? ` ${l.detail}` : ''}`)
+      const texte = valeurs.length ? ['Dossier du chantier', ...valeurs, '', 'Relevé automatique conservé', estimation].join('\n') : estimation
+      const fait = await partagerTexte('Métré', texte)
+      if (fait === 'copie') toast.success('Mesures copiées', { description: 'Collez-les dans votre devis ou un message.' })
+      else if (fait === 'echec') toast.error('Copie impossible sur cet appareil.')
+    } catch {
+      toast.error('Impossible de récupérer les valeurs confirmées. Réessayez avant de copier.')
+    }
   }
 
   function choisirMur(m: Facade | null) {
@@ -433,6 +444,11 @@ export function PanneauBatiment({
       {/* Les chiffres du métier, d'abord : le couvreur lit son toit, le
           façadier ses murs, sans chercher l'onglet. */}
       <FicheMesures token={token} affectationToken={affectationToken} cartes={cartes} />
+      {(repReleve?.delaiDepasse || erreurReleve) && <div role="status" className="space-y-2 rounded-xl border border-border p-3 text-sm">
+        <p>{repReleve?.delaiDepasse ? 'Le relevé prend plus de temps que prévu.' : 'Le relevé n’a pas pu être vérifié.'}</p>
+        <p className="text-muted-foreground">Les mesures disponibles restent consultables. Vérifiez l’avancement pour reprendre.</p>
+        <Button variant="outline" onClick={() => void reprendreReleve()}>Réessayer le relevé</Button>
+      </div>}
 
       <div className="flex gap-1 rounded-lg bg-muted p-1">
         {(['toiture', 'facades', 'maison'] as const).map((o) => (
@@ -487,7 +503,7 @@ export function PanneauBatiment({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            À commander, chutes comprises&nbsp;:{' '}
+            Simulation de chutes sur le relevé initial, à vérifier avant commande&nbsp;:{' '}
             {[5, 10, 15].map((c, i) => (
               <span key={c}>
                 {i > 0 && ' · '}
@@ -1131,18 +1147,19 @@ export function PanneauBatiment({
           )}
         </>
       ) : (
-        <FicheMaison fiche={fiche} enCours={ficheEnCours} />
+        <FicheMaison fiche={fiche} enCours={ficheEnCours} erreur={ficheErreur} reessayer={() => void rechargerFiche()} />
       )}
 
       {/* Tout ce qui est mesuré, en texte, avec sa provenance : à coller dans
           le devis ou à envoyer à l'équipe. */}
-      <Button variant="outline" className="min-h-11 w-full" onClick={copier}>
+      <Button variant="outline" className="min-h-11 w-full" onClick={() => void copier()}>
         <Copy className="size-4" />
         Copier les mesures
       </Button>
       {releve && (
         <ExportsMetre
           token={token}
+          affectationToken={affectationToken}
           cleabs={batiment.cleabs ?? null}
           releve={releve}
           pans={pansRetenus}
@@ -1167,9 +1184,13 @@ export function PanneauBatiment({
 function FicheMaison({
   fiche,
   enCours,
+  erreur,
+  reessayer,
 }: {
   fiche: ReturnType<typeof useFicheMaison>['data']
   enCours: boolean
+  erreur: boolean
+  reessayer: () => void
 }) {
   if (enCours) {
     return (
@@ -1179,11 +1200,12 @@ function FicheMaison({
       </p>
     )
   }
-  if (!fiche?.ok) {
+  if (erreur || !fiche?.ok || !Object.values(fiche.sources).some(Boolean)) {
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        Aucune donnée publique sur ce bâtiment.
-      </p>
+      <div className="space-y-2 py-4 text-sm" role="alert">
+        <p>Les données publiques n’ont pas pu être récupérées.</p>
+        <Button variant="outline" onClick={reessayer}>Réessayer</Button>
+      </div>
     )
   }
 

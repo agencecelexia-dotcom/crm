@@ -2,11 +2,10 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ChevronRight, Euro, Inbox, RotateCcw, Ruler, Wallet } from 'lucide-react'
 
-import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
 import { supabase } from '@/lib/supabase/client'
+import { DashboardFeedback } from './dashboard-feedback'
 
 interface ATraiter {
   leads_neufs: number
@@ -33,7 +32,7 @@ interface ATraiter {
  * n'apprend rien et noie les vrais signaux.
  */
 export function ATraiter() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['a-traiter'],
     queryFn: async (): Promise<ATraiter> => {
       const { data, error } = await supabase.rpc('a_traiter')
@@ -42,16 +41,17 @@ export function ATraiter() {
     },
   })
 
-  if (isLoading) return <Skeleton className="mb-5 h-40 rounded-2xl" />
-  if (!data) return null
+  if (isLoading) return <Skeleton className="h-32 rounded-xl" />
+  if (isError || !data) return <DashboardFeedback message="Les priorités n’ont pas pu être chargées" retry={() => void refetch()} />
 
   const lignes = [
     {
       cle: 'leads',
       actif: data.leads_neufs > 0,
-      to: '/projets?pipe=neuf',
+      to: '/projets?file=attribution',
       icone: Inbox,
-      titre: `${data.leads_neufs} lead${data.leads_neufs > 1 ? 's' : ''} à attribuer`,
+      titre: 'Projets à attribuer',
+      valeur: String(data.leads_neufs),
       detail:
         data.leads_neufs_vieux > 0
           ? `dont ${data.leads_neufs_vieux} depuis plus de 3 jours`
@@ -63,7 +63,8 @@ export function ATraiter() {
       actif: data.a_encaisser_n > 0,
       to: '/commissions',
       icone: Euro,
-      titre: `${formatEuros(data.a_encaisser_montant)} à encaisser`,
+      titre: 'Commissions à encaisser',
+      valeur: formatEuros(data.a_encaisser_montant),
       detail: `${data.a_encaisser_n} chantier${data.a_encaisser_n > 1 ? 's' : ''} signé${data.a_encaisser_n > 1 ? 's' : ''}, commission non perçue`,
       urgent: false,
     },
@@ -72,7 +73,8 @@ export function ATraiter() {
       actif: data.a_reprendre > 0,
       to: '/projets/a-reattribuer',
       icone: RotateCcw,
-      titre: `${data.a_reprendre} chantier${data.a_reprendre > 1 ? 's' : ''} à replacer`,
+      titre: 'Chantiers à réattribuer',
+      valeur: String(data.a_reprendre),
       detail:
         data.repris_en_cours > 0
           ? `${data.repris_en_cours} déjà repris par un commercial`
@@ -84,7 +86,8 @@ export function ATraiter() {
       actif: (data.metrages_a_verifier ?? 0) > 0,
       to: '/metres-a-verifier',
       icone: Ruler,
-      titre: `${data.metrages_a_verifier} métré${(data.metrages_a_verifier ?? 0) > 1 ? 's' : ''} à vérifier`,
+      titre: 'Métrés à vérifier',
+      valeur: String(data.metrages_a_verifier ?? 0),
       detail: 'ce que dit le client ne concorde pas avec la mesure',
       urgent: false,
     },
@@ -93,73 +96,37 @@ export function ATraiter() {
       actif: Number(data.a_verser) > 0,
       to: '/reprises',
       icone: Wallet,
-      titre: `${formatEuros(data.a_verser)} à verser`,
+      titre: 'Commissions à verser',
+      valeur: formatEuros(data.a_verser),
       detail: 'commissions dues aux commerciaux',
       urgent: false,
     },
   ].filter((l) => l.actif)
 
-  if (lignes.length === 0) {
-    return (
-      <Card className="mb-5 rounded-2xl border-[#16A34A]/30 bg-[#16A34A]/5 p-4 shadow-card">
-        <p className="text-sm font-medium">Rien à traiter dans l’immédiat.</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Tous les leads sont attribués et les commissions sont à jour.
-        </p>
-      </Card>
-    )
-  }
-
   return (
-    <div className="mb-5">
-      <h2 className="mb-2 font-display text-lg tracking-tight">À traiter</h2>
-      <div className="space-y-2">
-        {lignes.map(({ cle, to, icone: Icone, titre, detail, urgent }) => (
-          <Link key={cle} to={to} className="block">
-            <Card
-              className={cn(
-                'flex items-center gap-3 rounded-2xl p-3.5 shadow-card transition-all',
-                'hover:shadow-card-hover active:scale-[0.99]',
-                urgent ? 'border-[#F59E0B]/40 bg-[#F59E0B]/5' : 'border-border/70',
-              )}
-            >
-              <span
-                className={cn(
-                  'flex size-9 shrink-0 items-center justify-center rounded-full',
-                  urgent ? 'bg-[#F59E0B]/15 text-[#B45309]' : 'bg-primary/10 text-primary',
-                )}
-              >
-                <Icone className="size-4" />
-              </span>
+    <div>
+      {lignes.length === 0 && <p className="px-5 py-5 text-[13px] leading-relaxed text-muted-foreground">Aucune attribution, réattribution, commission ou vérification de métré en attente</p>}
+      <ul className="divide-y divide-border">
+        {lignes.map(({ cle, to, icone: Icone, titre, valeur, detail, urgent }) => (
+          <li key={cle}>
+            <Link to={to} className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/60">
+              <Icone className={`size-4 shrink-0 ${urgent ? 'text-amber-700' : 'text-muted-foreground'}`} strokeWidth={1.5} aria-hidden />
               <div className="min-w-0 flex-1">
-                <p className="font-medium tabular-nums">{titre}</p>
-                <p className="truncate text-xs text-muted-foreground">{detail}</p>
+                <p className="text-[13px] font-medium">{titre}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</p>
               </div>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-            </Card>
-          </Link>
+              <span className="shrink-0 text-[13px] font-medium tabular-nums">{valeur}</span>
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />
+            </Link>
+          </li>
         ))}
+      </ul>
+      <div className="border-t border-border px-5 py-3">
+        <p className="text-xs text-muted-foreground"><span className="font-medium tabular-nums text-foreground">{data.chez_artisan}</span> chantiers chez un artisan</p>
+        {data.chez_artisan_dormants > 0 && (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-amber-800"><AlertTriangle className="size-3.5 shrink-0" aria-hidden />{data.chez_artisan_dormants} sans mouvement depuis 3 semaines</p>
+        )}
       </div>
-
-      {/* Le pipe artisan : ce n'est pas une action, mais c'est le risque
-          principal quand la quasi-totalité des chantiers part chez un seul
-          partenaire. */}
-      <Card className="mt-2 rounded-2xl border-border/70 p-3.5 shadow-card">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-sm">
-            <strong className="tabular-nums">{data.chez_artisan}</strong> chantiers chez un
-            artisan
-          </p>
-          {data.chez_artisan_dormants > 0 ? (
-            <p className="flex items-center gap-1.5 text-xs text-[#B45309]">
-              <AlertTriangle className="size-3.5 shrink-0" />
-              {data.chez_artisan_dormants} sans mouvement depuis 3 semaines
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">tous suivis récemment</p>
-          )}
-        </div>
-      </Card>
     </div>
   )
 }

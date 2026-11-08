@@ -1,0 +1,31 @@
+Celexia local fonts — downloaded 2026-11-08
+
+Plus Jakarta Sans
+Designer/copyright: The Plus Jakarta Sans Project Authors / Tokotype
+License: SIL Open Font License 1.1 (full text: plus-jakarta-sans.LICENSE.txt)
+Family source: https://github.com/tokotype/PlusJakartaSans
+Official CSS: https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&display=swap
+The source CSS is preserved as plus-jakarta-sans.source.css.
+Unmodified Google Fonts WOFF2 variable files, normal style, weight 200–800:
+- plus-jakarta-sans-latin-variable.woff2
+  https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yygg_vb.woff2
+- plus-jakarta-sans-latin-ext-variable.woff2
+  https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko40yygg_vbd-E.woff2
+Only the official Latin and Latin Extended subsets are served locally.
+The original unicode ranges are preserved in src/styles/fonts.css.
+
+Clash Display
+Designer/copyright: Indian Type Foundry
+License: ITF Free Font License (reference: clash-display.LICENSE.txt)
+Official family: https://www.fontshare.com/fonts/clash-display
+Official CSS: https://api.fontshare.com/v2/css?f[]=clash-display@variable&display=swap
+The source CSS is preserved as clash-display.source.css.
+Unmodified Fontshare WOFF2 variable file, normal style, weight 200–700:
+- clash-display-variable.woff2
+  https://cdn.fontshare.com/wf/DK2FOA46SRWJ5HXWWU5TK4N4CMHYD236/FPEAXZZSH5L2K5MTJFRIWD2MC32IJMN3/THOOS4VOCKT7H2XEB27NQDYM2NYS4AAR.woff2
+
+Integration
+- @font-face declarations live in src/styles/fonts.css, with font-display: swap.
+- index.html preloads the primary Latin UI font and the display font.
+- No external font request is required by the application.
+- *.source.css files are provenance records, not application stylesheets.

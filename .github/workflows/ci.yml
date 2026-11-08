@@ -30,6 +30,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Tests unitaires
+        run: npm run test:unit
+
+      - name: Cohérence SQL de l’espace artisan
+        run: npm run test:sql
+
       - name: Build
         run: npm run build
         env:
@@ -93,9 +99,14 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
+      - name: Parcours CRM et artisan sur données fictives
+        run: npm run test:interface
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7

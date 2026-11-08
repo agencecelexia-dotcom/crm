@@ -10,9 +10,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "test:interface": "playwright test --config tests/interface.config.ts",
     "typecheck": "tsc -b --noEmit",
     "verify": "npm run typecheck && npm run lint && npm run build",
-    "test:unit": "vitest run tests/unit"
+    "test:unit": "vitest run tests/unit",
+    "test:sql": "node tests/sql/run.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -40,6 +42,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.1.18",

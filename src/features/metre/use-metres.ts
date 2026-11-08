@@ -73,6 +73,8 @@ const MESSAGES: Record<string, string> = {
   token_invalide: 'Votre lien n’est plus valable. Demandez-en un nouveau à Celexia.',
   artisan_ecarte: 'Votre lien n’est plus valable. Contactez Celexia.',
   chantier_retire: 'Ce chantier ne vous est plus attribué.',
+  contrat_requis: 'Signez votre contrat pour confirmer les mesures de ce chantier.',
+  projet_clos: 'Ce chantier est clôturé ou supprimé : ses mesures ne sont plus modifiables.',
   chantier_introuvable: 'Ce chantier est introuvable. Rechargez la page.',
   geometrie_insuffisante: 'Le tracé est incomplet : ajoutez des points.',
   type_invalide: 'Cette mesure n’a pas pu être enregistrée. Réessayez.',
@@ -162,11 +164,12 @@ export function useSupprimerMetre(token: string | undefined) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('supprimer_metre_by_token', {
+      const { data, error } = await supabase.rpc('supprimer_metre_by_token', {
         p_token: token,
         p_id: id,
       })
       if (error) throw error
+      if (!data?.ok) throw new Error(messageMetre(data?.error))
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['metre-contexte'] }),
   })
@@ -214,7 +217,7 @@ export async function chercherAdresse(q: string, signal?: AbortSignal): Promise<
   url.searchParams.set('q', q.trim())
   url.searchParams.set('limit', '5')
   const rep = await fetch(url, { signal })
-  if (!rep.ok) return []
+  if (!rep.ok) throw new Error('La recherche d’adresse est indisponible.')
   const j = (await rep.json()) as {
     features?: {
       properties?: { id?: string; label?: string; type?: string }

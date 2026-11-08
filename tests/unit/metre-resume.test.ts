@@ -19,8 +19,8 @@ describe('texteMetre', () => {
     expect(t).toContain('ouvertures non déduites')
     expect(t).toContain('à confirmer sur place')
   })
-  it('donne ce qu’il faut commander, chutes comprises', () => {
-    expect(texteMetre(base)).toMatch(/À commander : 107 m² \(\+5 %\) · 112 m² \(\+10 %\) · 117 m² \(\+15 %\)/)
+  it('présente les chutes comme une simulation à vérifier', () => {
+    expect(texteMetre(base)).toMatch(/Simulation de chutes, à vérifier avant commande : 107 m² \(\+5 %\) · 112 m² \(\+10 %\) · 117 m² \(\+15 %\)/)
   })
   it('sans toit mesuré, ne l’invente pas', () => {
     const t = texteMetre({ ...base, toit: null })

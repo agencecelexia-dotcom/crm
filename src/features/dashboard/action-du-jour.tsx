@@ -1,22 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Inbox, FileSignature, CalendarClock, FileClock, BadgeEuro, CheckCircle2 } from 'lucide-react'
+import { FileSignature, CalendarClock, FileClock, ChevronRight } from 'lucide-react'
 
-import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase/client'
-import { formatEuros } from '@/lib/format'
+import { DashboardFeedback } from './dashboard-feedback'
 
 interface ActionData {
-  leads: number
   contrats: number
   rdv: number
   devis: number
-  commissions_n: number
-  commissions_total: number
 }
 
-function useActionDuJour() {
-  return useQuery({
+/** Les attributions et commissions sont déjà dans ATraiter ; ici, le suivi. */
+export function ActionDuJour() {
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['action-du-jour'],
     refetchOnWindowFocus: true,
     queryFn: async (): Promise<ActionData> => {
@@ -25,85 +23,32 @@ function useActionDuJour() {
       return data as ActionData
     },
   })
-}
 
-// Bandeau « Action du jour » : tout ce qui demande une action, en un coup d'œil.
-export function ActionDuJour() {
-  const { data } = useActionDuJour()
-  if (!data) return null
+  if (isLoading) return <Skeleton className="h-16 w-full rounded-xl" />
+  if (isError || !data) return <DashboardFeedback message="Les relances n’ont pas pu être chargées" retry={() => void refetch()} />
 
   const items = [
-    {
-      cle: 'leads',
-      n: data.leads,
-      label: 'Leads à attribuer',
-      icon: Inbox,
-      color: '#3B82F6',
-      to: '/projets?statut=nouveau',
-    },
-    {
-      cle: 'contrats',
-      n: data.contrats,
-      label: 'Contrats à faire signer',
-      icon: FileSignature,
-      color: '#F59E0B',
-      to: '/projets?tri=a_signer',
-    },
-    {
-      cle: 'rdv',
-      n: data.rdv,
-      label: 'RDV passés sans suivi',
-      icon: CalendarClock,
-      color: '#8B5CF6',
-      to: '/projets?statut=rdv_pris',
-    },
-    {
-      cle: 'devis',
-      n: data.devis,
-      label: 'Devis envoyés à relancer',
-      icon: FileClock,
-      color: '#0EA5E9',
-      to: '/projets?statut=devis_envoye',
-    },
-    {
-      cle: 'commissions',
-      n: data.commissions_n,
-      label: 'Commissions à encaisser',
-      sous: data.commissions_total > 0 ? formatEuros(data.commissions_total) : undefined,
-      icon: BadgeEuro,
-      color: '#22C55E',
-      to: '/commissions',
-    },
+    { cle: 'contrats', n: data.contrats, label: 'Contrats à faire signer', icon: FileSignature, to: '/projets?tri=a_signer' },
+    { cle: 'rdv', n: data.rdv, label: 'Rendez-vous passés sans suivi', icon: CalendarClock, to: '/projets?statut=rdv_pris' },
+    { cle: 'devis', n: data.devis, label: 'Devis envoyés à relancer', icon: FileClock, to: '/projets?statut=devis_envoye' },
   ].filter((i) => i.n > 0)
 
   return (
-    <section className="mb-5">
-      <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Action du jour</h2>
-      {items.length === 0 ? (
-        <Card className="flex items-center gap-2 rounded-2xl border-border/70 p-4 text-sm text-muted-foreground shadow-card">
-          <CheckCircle2 className="size-5 text-[#22C55E]" />
-          Tout est à jour — rien à traiter dans l'immédiat. 🎉
-        </Card>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {items.map((i) => (
-            <Link key={i.cle} to={i.to}>
-              <Card className="flex h-full flex-col gap-1 rounded-2xl border-border/70 p-3 shadow-card transition-all duration-200 hover:shadow-card-hover active:scale-[0.99]">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="flex size-7 shrink-0 items-center justify-center rounded-full"
-                    style={{ backgroundColor: `${i.color}1a`, color: i.color }}
-                  >
-                    <i.icon className="size-4" />
-                  </span>
-                  <span className="montant text-2xl font-semibold leading-none">{i.n}</span>
-                </div>
-                <p className="text-xs leading-tight text-muted-foreground">{i.label}</p>
-                {i.sous && <p className="text-xs font-medium text-primary">{i.sous}</p>}
-              </Card>
-            </Link>
+    <section aria-labelledby="relances-titre" className="border-t border-border">
+      <h3 id="relances-titre" className="px-5 pb-1 pt-4 text-[13px] font-medium">Relances</h3>
+      {items.length === 0 ? <p className="px-5 pb-5 pt-2 text-xs text-muted-foreground">Aucun contrat, rendez-vous ou devis à relancer</p> : (
+        <ul className="pb-2">
+          {items.map(({ cle, n, label, icon: Icon, to }) => (
+            <li key={cle}>
+              <Link to={to} className="flex min-h-11 items-center gap-3 px-5 py-2.5 transition-colors hover:bg-muted/60">
+                <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden />
+                <span className="min-w-0 flex-1 text-xs text-muted-foreground">{label}</span>
+                <span className="text-[13px] font-medium tabular-nums">{n}</span>
+                <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </section>
   )
