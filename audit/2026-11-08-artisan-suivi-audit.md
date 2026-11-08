@@ -159,10 +159,46 @@ Sources locales stabilisées le 8 novembre 2026. Les références suivantes conc
 - SQL : `npm run test:sql` exécute toutes les migrations en ordre et `supabase/tests/artisan_suivi_audit.sql`. Cette suite a réussi après 185 migrations lors de la vérification du périmètre suivi ; le coordinateur a ensuite confirmé **186 migrations et quatre suites SQL réussies**, incluant les autres périmètres de la mission. Tous les appels HTTP sont neutralisés dans ce banc.
 - `npx tsc -b --noEmit`, ESLint ciblé et vérification d’espaces Git réussis. Les fixtures unitaires sont typées ; aucun `test.fail` / `it.fails` restant dans les deux suites suivi.
 
-### Limites restantes et déploiement
+### Limites relevées avant PR83 — état historique
 
 1. **PERTE-01 reste ouvert** : « Perdu » via suivi demande une justification, mais n’alimente pas les mêmes motifs normalisés que le retrait. Unifier les qualifications exige de préciser les catégories métier ; aucune requalification automatique d’anciens dossiers n’a été inventée.
 2. **KPI-03 est partiellement corrigé** : une note récente n’est plus ignorée, mais l’étiquette « Devis sans réponse » repose toujours sur l’activité globale du dossier. Mesurer réellement l’absence de réponse client demande un événement/date dédiés, distincts d’un rappel ou d’une modification administrative.
 3. Les verrous UI empêchent un double clic en cours ; les actions d’étape/restauration sont idempotentes côté SQL. Un réessai réseau indépendant de note/appel après réponse perdue n’a pas encore de clé d’idempotence persistante.
 4. Le banc PostgreSQL exécute les fonctions/triggers réels, mais pas deux connexions concurrentes, les rôles et secrets Supabase réels, les jobs cron, n8n, le stockage ou la livraison d’emails. Il ne prouve ni les versions ni les droits effectivement déployés en production.
 5. **Migration 0184 préparée, non appliquée à la production.** Les gardes contractuelles, la date d’affectation corrigée, la reprise cohérente et le masquage SQL nécessitent son déploiement. Le nouveau geste `reprendre` nécessite la RPC correspondante : coordonner le déploiement base et frontend. Aucune donnée existante n’a été migrée massivement ni aucun montant réel modifié.
+
+## Reprise après publication de PR83 — notes, appels et pertes
+
+Cette section décrit le lot suivant, préparé après la publication de PR83. Les états de déploiement ci-dessus sont ceux du bilan initial. **La migration 0189 a ensuite été publiée avec 0190, dans une transaction, après validation et sauvegarde des définitions serveur.** La migration 0184 déjà publiée n’a pas été modifiée. Le bilan global de cette reprise figure dans l’audit complet.
+
+### Réponse perdue : une intention, un enregistrement
+
+- `suivi-artisan.tsx:171` et `:258` transmettent une clé UUID avec la note, le changement de suivi ou l’appel. Le verrou immédiat de l’interface reste présent.
+- `tentative-suivi.ts:13` conserve cette clé jusqu’à confirmation du succès. La clé de stockage est une empreinte SHA-256 de l’affectation, de l’action et de son contenu ; la valeur est seulement l’UUID. **Aucun jeton en clair, texte de note ou téléphone n’est conservé dans `sessionStorage`.** Le même envoi après rechargement réutilise la clé ; après succès, une nouvelle action volontairement identique en reçoit une nouvelle.
+- `0189_suivi_idempotent_pertes_qualifiees.sql` ajoute un journal privé de reçus, avec RLS et droits directs retirés à `PUBLIC`, `anon` et `authenticated`. La clé est unique par affectation. Le journal contient l’empreinte, l’accusé contrôlé et sa date, pas une copie du texte client.
+- Les deux nouvelles surcharges verrouillent **projet puis affectation**, contrôlent à nouveau l’accès après verrou, puis exécutent la fonction métier historique et enregistrent le reçu dans la même transaction. Même clé/même contenu : réponse initiale. Même clé/contenu différent, y compris note→appel : refus `idempotence_conflit`. Une erreur métier ne consomme pas la clé.
+- Les tests ont révélé qu’une dernière perte peut clore le projet dans la transaction. Le helper privé `acces_accuse_suivi_par_jeton` autorise la relecture du seul accusé déjà validé après cette clôture. Le contrat, l’artisan actif et l’existence d’un projet non supprimé restent exigés. **Une nouvelle intention** sur chantier clos/retiré passe toujours par la garde d’écriture complète et reste refusée.
+
+### PERTE-01 : qualification client explicite
+
+Le parcours « Pas de suite / Perdu » exige désormais un motif et une précision d’au moins cinq caractères. Il propose les motifs client déjà définis dans le CRM : prix, budget, concurrent, injoignable, renoncement, aides et autre. Les motifs hors zone/métier/planning sont réservés au parcours de retrait indiqué dans le texte d’aide.
+
+La nouvelle surcharge contrôle cette liste côté serveur, conserve `motif_perte`, `motif_perte_detail` et `origine_perte='client'`, puis garde la distinction avec le retrait : aucun `retire_at` n’est ajouté par cette action. Les garde-fous concernant un montant signé, un document signé ou une commission encaissée sont réutilisés sans modification. Aucun ancien dossier n’est requalifié automatiquement.
+
+Le libellé KPI-03 est également corrigé dans `urgence-chantier.ts` et `tableau-de-bord-artisan.tsx` : l’indicateur annonce une absence de **mise à jour**, conformément à la date réellement mesurée, sans prétendre connaître la dernière réponse client.
+
+### Preuves de validation de cette reprise
+
+- **16 tests unitaires réussis** : 12 tests de suivi existants et 4 tests de tentative (clé conservée après rechargement du module, absence de texte privé dans le stockage, séparation des affectations/actions/contenus, nouvelle intention après succès, repli mémoire lorsque le stockage est interdit).
+- **60 scénarios UI réussis : 30 desktop + 30 mobile**, API exclusivement fictive. Les quatre scénarios ajoutés couvrent note/appel validés côté serveur avec réponse perdue puis rechargement, nouvelle intention identique après succès, motifs client distincts du retrait, et serveur sans nouvelle surcharge refusant sans repli non protégé. Les tests existants vérifient encore annulations, erreurs, brouillon concurrent, contrat et garde-fous financiers. Traces : `test-results/suivi-reprise-final`.
+- Le premier passage desktop avait rencontré une disparition du drawer pendant les sauvegardes parallèles sur Vite partagé. Le canal HMR local a été neutralisé dans cette seule suite ; aucune assertion métier n’a été retirée ni délai augmenté. La passe complète suivante a réussi.
+- **189 migrations chargées dans PostgreSQL local**, suites `artisan_suivi_audit.sql` et `artisan_suivi_rejeu_audit.sql` réussies. La nouvelle suite vérifie le rejeu note/appel/perte, les conflits de clé, le cloisonnement par affectation, une nouvelle intention identique, le refus financier, le motif client et le retrait artisan, le contrat révoqué, les droits du journal et l’atomicité : un échec forcé d’écriture du reçu annule aussi la note.
+- Typecheck global, ESLint ciblé et `git diff --check` réussis une fois les autres fichiers du travail parallèle stabilisés. Les résultats SQL/UI globaux du lot commun sont consignés par le coordinateur.
+
+### Compatibilité et limites conservées
+
+1. Appliquer 0189 et recharger le cache PostgREST **avant** le frontend. Les anciennes signatures sont conservées ; les nouvelles surcharges ont tous leurs arguments obligatoires pour éviter une résolution ambiguë. Sur une base non mise à jour, l’interface conserve la saisie et refuse l’enregistrement plutôt que de contourner la protection.
+2. Les anciens onglets continuent d’utiliser les RPC historiques, sans cette déduplication ni qualification obligatoire. Le rechargement active le nouveau parcours. Aucune migration de masse n’est effectuée.
+3. La clé du réessai est conservée pendant la session du navigateur. La fermeture définitive de cette session, l’effacement du stockage ou un autre appareil ne transportent pas automatiquement une intention antérieure. Si le stockage est interdit, la même page garde sa protection en mémoire mais ne peut la restaurer après rechargement.
+4. La base conserve les reçus tant que l’affectation existe ; ils disparaissent avec sa suppression définitive. La concurrence réelle entre plusieurs connexions PostgreSQL n’a pas été exécutée dans PGlite ; l’ordre des verrous, la clé unique et les scénarios séquentiels d’entrelacement ont été vérifiés.
+5. Les contraintes financières, notifications et règles historiques restent celles des fonctions déployées appelées par les surcharges. Aucun email réel, notification réelle, compte ou secret n’a été utilisé dans cette reprise.

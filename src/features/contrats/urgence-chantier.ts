@@ -28,7 +28,7 @@ export const GROUPES: { cle: GroupeAction; label: string; aide: string }[] = [
   { cle: 'nouveaux', label: 'Nouveaux à appeler', aide: 'Reçus il y a moins de 48 h' },
   { cle: 'rdv',      label: 'Rendez-vous',        aide: 'RDV passés à mettre à jour, ou à venir' },
   { cle: 'relances', label: 'À relancer',         aide: 'Jamais contactés, ou rappel prévu' },
-  { cle: 'devis',    label: 'Devis en attente',   aide: 'Envoyés, sans réponse du client' },
+  { cle: 'devis',    label: 'Devis à suivre',     aide: 'Devis envoyés, sans mise à jour depuis 15 jours' },
   { cle: 'suivi',    label: 'Autres chantiers',   aide: 'Rien d\'urgent pour l\'instant' },
   { cle: 'clos',     label: 'Terminés et perdus', aide: '' },
 ]
@@ -110,14 +110,14 @@ export function urgenceChantier(p: ProjetEspace): Urgence {
     }
   }
 
-  // Devis envoyé resté sans réponse.
+  // La date mesure une mise à jour du dossier, pas une réponse du client.
   if (p.etape === 'devis_envoye') {
     const inactif = joursDepuis(p.derniere_activite)
     if (inactif != null && inactif >= 15) {
       return {
         niveau: 'haute',
         score: 600 + inactif,
-        raison: `Devis sans réponse (${inactif} j)`,
+        raison: `Devis à suivre · ${inactif} j sans mise à jour`,
         groupe: 'devis',
       }
     }
@@ -134,7 +134,7 @@ export function urgenceChantier(p: ProjetEspace): Urgence {
     return {
       niveau: 'normale',
       score: 200 + inactif,
-      raison: `Sans activité (${inactif} j)`,
+      raison: `Aucune mise à jour depuis ${inactif} j`,
       groupe: 'suivi',
     }
   }

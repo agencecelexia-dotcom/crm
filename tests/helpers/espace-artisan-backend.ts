@@ -102,6 +102,11 @@ interface OptionsBackendArtisan {
 }
 
 export async function installerBackendArtisan(page: Page, options: OptionsBackendArtisan = {}) {
+  // Le serveur local est partagé : même la sauvegarde d’un rapport Markdown
+  // peut provoquer un full-reload Vite et fermer un formulaire en cours.
+  // Neutralise seulement le WebSocket HMR de ce serveur de test, sans
+  // modifier les requêtes applicatives ni masquer leurs erreurs.
+  await page.routeWebSocket('ws://127.0.0.1:5180/**', (ws) => { ws.onMessage(() => undefined) })
   const espace = structuredClone(espaceDemo)
   const identite = structuredClone(identiteDemo)
   const assurances = structuredClone(assuranceDemo)

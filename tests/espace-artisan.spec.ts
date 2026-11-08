@@ -112,7 +112,7 @@ test('la recherche et les filtres isolent les bons chantiers puis le panneau per
   await panneau.getByRole('button', { name: 'Envoyer la note', exact: true }).click()
   await expect(note).toHaveValue('')
   await expect(panneau.getByText('Visite convenue mardi à 17 h, accès par la cour.', { exact: true })).toBeVisible()
-  expect(backend.mutations).toEqual([{ nom: 'add_suivi_by_token', payload: { p_token: 'affectation-demo-1', p_statut: null, p_message: 'Visite convenue mardi à 17 h, accès par la cour.', p_date_rdv: null } }])
+  expect(backend.mutations).toEqual([{ nom: 'add_suivi_by_token', payload: { p_token: 'affectation-demo-1', p_statut: null, p_message: 'Visite convenue mardi à 17 h, accès par la cour.', p_date_rdv: null, p_motif: null, p_cle: expect.stringMatching(/^[a-f0-9-]{36}$/) } }])
   await panneau.evaluate((element) => { element.scrollTop = 0 })
   await capturer(page, testInfo, 'chantier-panneau', false)
   await panneau.getByRole('button', { name: 'Fermer', exact: true }).click()

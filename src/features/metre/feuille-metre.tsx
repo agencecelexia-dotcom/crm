@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   Box,
   Check,
@@ -39,9 +39,13 @@ import {
   useCorrigerPosition,
   useEnregistrerMetre,
   useSupprimerMetre,
+  useModifierTrace,
   type Adresse,
+  type Metre,
 } from './use-metres'
 import { situerChantier } from './position'
+import { CarnetTrace } from './carnet-trace'
+import { traceManuelAffichable, traceModifie } from './edition-trace'
 import { BandeauMaison } from './bandeau-maison'
 import { vueDuChantier } from './vue-par-metier'
 import { PanneauCloture } from './panneau-cloture'
@@ -78,24 +82,33 @@ export function FeuilleMetre({
   affectationToken,
   titre,
   onClose,
+  verifierFermeture,
 }: {
   token: string
   affectationToken: string
   titre?: string | null
   onClose: () => void
+  verifierFermeture?: RefObject<() => boolean>
 }) {
-  const fermerFeuille = onClose
+  function fermerFeuille() {
+    if (!verifierFermeture && !quitterTrace()) return
+    onClose()
+  }
 
   const contexte = useContexteMetre(token, affectationToken)
   const ctx = contexte.data
   const enregistrer = useEnregistrerMetre(token)
   const supprimer = useSupprimerMetre(token)
+  const modifierTrace = useModifierTrace(token)
   const corriger = useCorrigerPosition(token)
 
   const [fond, setFond] = useState<FondCarte>('ortho')
   const [cadastre, setCadastre] = useState(false)
   const [mode, setMode] = useState<ModeCarte>('apercu')
   const [trace, setTrace] = useState<Point[]>([])
+  const [traceOuvert, setTraceOuvert] = useState<Metre | null>(null)
+  const [editionTrace, setEditionTrace] = useState(false)
+  const [sommetADeplacer, setSommetADeplacer] = useState<number | null>(null)
   const [batiments, setBatiments] = useState<Batiment[]>([])
   // Le choix de l'artisan : un bâtiment touché, ou « aucun » quand il a écarté
   // la maison proposée. Tant qu'il n'a rien choisi, c'est la maison du
@@ -104,6 +117,7 @@ export function FeuilleMetre({
   // La façade en cours de chiffrage, surlignée sur la carte.
   const [murChoisi, setMurChoisi] = useState<Facade | null>(null)
   const [nom, setNom] = useState('')
+  const panneau = useRef<HTMLDivElement | null>(null)
   const [recherche, setRecherche] = useState('')
   const [resultats, setResultats] = useState<Adresse[]>([])
   const [etatRecherche, setEtatRecherche] = useState<'repos' | 'chargement' | 'erreur' | 'vide'>('repos')
@@ -395,12 +409,56 @@ export function FeuilleMetre({
   }, [trace, mode])
 
   function recommencer() {
+    if (!quitterTrace()) return
+    setTraceOuvert(null)
+    setEditionTrace(false)
+    setSommetADeplacer(null)
     setTrace([])
     setChoix('aucun')
     setMurChoisi(null)
     setMode('apercu')
     setNom('')
   }
+
+  function quitterTrace() {
+    if (modifierTrace.isPending) return false
+    return !editionTrace || !traceModifie(traceOuvert, nom, trace) || window.confirm('Quitter sans enregistrer les modifications de ce tracé ?')
+  }
+
+  function voirTrace(m: Metre) {
+    if (!quitterTrace()) return
+    if (!traceOuvert && trace.length && !window.confirm('Remplacer le dessin en cours par ce tracé enregistré ?')) return
+    setTraceOuvert(m)
+    setEditionTrace(false)
+    setSommetADeplacer(null)
+    setTrace(m.geometrie.map((p) => [...p] as Point))
+    setNom(m.nom)
+    setChoix('aucun')
+    setMurChoisi(null)
+    setVue3d(false)
+    setMode(m.type === 'surface' ? 'surface' : 'longueur')
+    modifierTrace.reset()
+    panneau.current?.scrollTo({ top: 0 })
+  }
+
+  function poserPoint(p: Point) {
+    if (traceOuvert && (!editionTrace || modifierTrace.isPending)) return
+    setTrace((t) => sommetADeplacer == null ? [...t, p] : t.map((s, i) => i === sommetADeplacer ? p : s))
+    setSommetADeplacer(null)
+  }
+
+  useEffect(() => {
+    if (!verifierFermeture) return
+    verifierFermeture.current = quitterTrace
+    return () => { verifierFermeture.current = () => true }
+  })
+
+  useEffect(() => {
+    if (!editionTrace || !traceModifie(traceOuvert, nom, trace)) return
+    const proteger = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', proteger)
+    return () => window.removeEventListener('beforeunload', proteger)
+  }, [editionTrace, traceOuvert, nom, trace])
 
   function garder(m: MesureAEnregistrer) {
     const surQuelle = choisi
@@ -508,7 +566,10 @@ export function FeuilleMetre({
               setNom(b.nature && b.nature !== 'Indifférenciée' ? b.nature : 'Bâtiment')
             }}
             trace={trace}
-            onPoserSommet={(p) => setTrace((t) => [...t, p])}
+            traceCadre={traceOuvert?.geometrie}
+            traceLectureSeule={!!traceOuvert && (!editionTrace || modifierTrace.isPending)}
+            sommetChoisi={sommetADeplacer}
+            onPoserSommet={poserPoint}
             onBouger={(p) => {
               centreCarte.current = p
             }}
@@ -565,7 +626,7 @@ export function FeuilleMetre({
           )}
 
           {/* Mire de visée : elle désigne le point que « Recadrer » enregistrera. */}
-          {mode === 'apercu' && !choisi && (
+          {((mode === 'apercu' && !choisi) || (traceOuvert && editionTrace)) && (
             <div
               aria-hidden
               className="pointer-events-none absolute left-1/2 top-1/2 z-[400] -translate-x-1/2 -translate-y-1/2"
@@ -626,7 +687,7 @@ export function FeuilleMetre({
           {/* Recherche d'adresse : le recours quand le chantier n'est pas
               géolocalisé. Décalée à gauche pour laisser les boutons de zoom de
               Leaflet, qui occupent le coin haut-gauche. */}
-          <div className={cn('absolute left-14 right-14 top-2 z-[500]', vue3d && modele && 'hidden')}>
+          <div className={cn('absolute left-14 right-14 top-2 z-[500]', (traceOuvert || (vue3d && modele)) && 'hidden')}>
             {chercheOuverte ? (
               <div className="space-y-1 rounded-xl bg-card p-2 shadow-card">
                 <div className="relative">
@@ -677,6 +738,7 @@ export function FeuilleMetre({
             sans défilement, sur un téléphone, le bas du panneau — et le bouton
             d'enregistrement — sortait de l'écran sans qu'on puisse l'atteindre. */}
         <div
+          ref={panneau}
           className={cn(
             'shrink-0 space-y-3 overflow-y-auto overscroll-contain border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:w-[460px] lg:max-h-none lg:border-l lg:border-t-0 lg:p-5',
             // En 3D, la maison prend plus de place : on la tourne, on la touche.
@@ -710,7 +772,7 @@ export function FeuilleMetre({
             </div>
           )}
           {/* La maison : reliée à l'adresse, confirmée, ou « C'est bien elle ? ». */}
-          <BandeauMaison
+          {!traceOuvert && <BandeauMaison
             maison={maison}
             choisi={choisi}
             retenue={retenue}
@@ -718,8 +780,19 @@ export function FeuilleMetre({
             enCours={retenir.isPending}
             onOui={() => choisi && retenirMaison(choisi, () => toast.success('Maison confirmée'))}
             onAutre={recommencer}
-          />
-          {choisi ? (
+          />}
+          {traceOuvert ? <CarnetTrace
+            metre={traceOuvert} edition={editionTrace} trace={trace} nom={nom} sommet={sommetADeplacer}
+            enCours={modifierTrace.isPending} erreur={modifierTrace.isError ? modifierTrace.error.message : null}
+            onNom={setNom} onTrace={setTrace} onSommet={setSommetADeplacer}
+            onEdition={() => { setEditionTrace(true); modifierTrace.reset() }}
+            onCentre={() => { if (centreCarte.current) poserPoint(centreCarte.current) }}
+            onAnnuler={() => { setTrace(traceOuvert.geometrie.map((p) => [...p] as Point)); setNom(traceOuvert.nom); setEditionTrace(false); setSommetADeplacer(null); modifierTrace.reset() }}
+            onFermer={recommencer}
+            onSauver={() => modifierTrace.mutate({ affectationToken, initial: traceOuvert, nom, geometrie: trace }, {
+              onSuccess: (m) => { setTraceOuvert(m); setTrace(m.geometrie); setNom(m.nom); setEditionTrace(false); setSommetADeplacer(null); toast.success('Tracé modifié') },
+            })}
+          /> : choisi ? (
             <>
               {!aConfirmer && (
                 <button
@@ -919,8 +992,9 @@ export function FeuilleMetre({
               </summary>
               <ul className="mt-1 divide-y divide-border">
                 {ctx.metres.map((m) => (
-                  <li key={m.id} className="flex min-h-11 items-center gap-2 text-sm">
-                    <span className="min-w-0 flex-1 truncate">
+                  <li key={m.id} className="flex min-h-11 items-center gap-2 py-2 text-sm">
+                    <div className="min-w-0 flex-1">
+                    <span className="block break-words">
                       {m.nom}
                       <span className="text-muted-foreground">
                         {' · '}
@@ -929,17 +1003,19 @@ export function FeuilleMetre({
                           : formatM2(Number(m.surface_reelle_m2 ?? m.surface_m2 ?? 0))}
                       </span>
                     </span>
+                    {traceManuelAffichable(m) && m.geometrie?.length >= 2 && <Button variant="link" size="sm" className="min-h-11 px-0 text-xs" aria-label={`Voir sur la carte : ${m.nom}`} onClick={() => voirTrace(m)}>Voir sur la carte</Button>}
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"
                       className="size-11 shrink-0 text-muted-foreground"
                       aria-label={`Supprimer ${m.nom}`}
-                      disabled={supprimer.isPending}
+                      disabled={supprimer.isPending || modifierTrace.isPending || (editionTrace && traceOuvert?.id === m.id)}
                       onClick={() => {
                         // Une suppression sans confirmation, à côté d'un doigt de chantier…
                         if (!window.confirm(`Supprimer « ${m.nom} » ?`)) return
                         supprimer.mutate(m.id, {
-                          onSuccess: () => toast.success('Mesure supprimée'),
+                          onSuccess: () => { if (traceOuvert?.id === m.id) recommencer(); toast.success('Mesure supprimée') },
                           onError: () => toast.error('Suppression impossible'),
                         })
                       }}
