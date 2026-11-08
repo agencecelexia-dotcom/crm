@@ -30,6 +30,7 @@ La baseline existante passait **42 tests navigateur** et **558 tests unitaires**
 | Perte, retrait, reprise | Restauration désaccordée avec l’étape conservée | Historique/devis conservés, dates périmées nettoyées, dates futures maintenues, refus métier explicites |
 | Confidentialité | Archives/suivi insuffisamment protégés avant signature | Masquage UI et contrôles serveur ; accès aux pièces restreint à l’artisan et au chantier autorisés |
 | Brouillon | Aucune vraie reprise, nouveaux numéros après panne | Réouverture du même devis, clé idempotente, protection des modifications |
+| Déploiement progressif | Une ancienne API pouvait ignorer la clé de sauvegarde | Vérification des capacités avant toute création ; maintenance explicite et saisies conservées si le serveur est ancien ou indisponible |
 | Deux onglets | PDF ancien potentiellement associé au montant nouveau | Révision obligatoire à l’édition, au rattachement PDF et à l’envoi |
 | Prix et totaux | Deux arrondis, lignes sans intitulé, valeurs invalides | Arrondi commun par ligne/taux ; validation des lignes, prix, quantités, TVA et acompte |
 | Suggestions IA | La réponse du modèle pouvait fournir directement un prix | Montants du modèle retirés ; prix rattachés en SQL aux catalogues autorisés, ouvrage et unité contrôlés |
@@ -60,7 +61,7 @@ Les outils métier sont regroupés autour d’un même chantier. Le devis peut �
 - TypeScript, ESLint, build et contrôle Deno des fonctions modifiées. CI enrichie avec les tests unitaires, SQL et parcours isolés.
 - Export GLB réellement téléchargé sur ordinateur et mobile : signature `glTF`, version et longueur du fichier vérifiées.
 
-Validation technique finale : **172 scénarios navigateur réussis**, **629 tests unitaires réussis, 1 ignoré**, **188 migrations chargées et 6 suites SQL réussies**, **9 tests du relais Deno réussis**, **4 scénarios n8n simulés vérifiés**. La passe finale navigateur dure 2,2 minutes ; TypeScript, ESLint et build passent. Le build conserve un avertissement non bloquant sur la taille de certains chunks chargés séparément, notamment la 3D.
+Validation technique finale : **178 scénarios navigateur réussis**, **629 tests unitaires réussis, 1 ignoré**, **188 migrations chargées et 6 suites SQL réussies**, **9 tests du relais Deno réussis**, **4 scénarios n8n simulés vérifiés**. La passe finale navigateur dure 2,3 minutes ; TypeScript, ESLint et build passent. Le build conserve un avertissement non bloquant sur la taille de certains chunks chargés séparément, notamment la 3D.
 
 Les captures sont conservées localement dans `test-results/artisan-review/` ; elles n’exposent que des données fictives et ne sont pas publiées dans Git.
 

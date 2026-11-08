@@ -109,3 +109,11 @@ Les six régressions initiales sont corrigées. La suite a été élargie à **1
 - L’aperçu reste un téléchargement PDF ; son échec est désormais géré. Une prévisualisation intégrée distincte du téléchargement reste une amélioration ergonomique.
 - Une intervention agence est encore nécessaire pour réconcilier une tentative d’envoi ambiguë. Aucun écran d’administration de cette réconciliation n’est ajouté ici ; ne pas lever automatiquement ce verrou sur simple expiration.
 - Contrat/signature et logo sont audités/testés dans le lot racine séparé. Les prix des suggestions IA sont sécurisés dans le lot racine, avec leurs tests catalogue et SQL ; cette suite teste l’entretien et la conservation d’un prix inconnu, pas la génération distante réelle.
+
+### Compatibilité pendant la publication
+
+Le nouveau formulaire vérifie désormais **avant toute création** la RPC de lecture `capacites_devis_by_token` ajoutée à 0185. Elle annonce le protocole 2, la sauvegarde idempotente et les révisions, uniquement pour un artisan actif avec contrat et assurances validés. Le contrôle est renouvelé à chaque tentative, sans cache de succès.
+
+Cette protection est nécessaire tant qu’un ancien backend peut être utilisé : l’ancienne fonction `creer_devis_by_token` ignore les nouveaux champs `devis_id` et `idempotency_key`, puis crée un autre numéro avant que le frontend constate l’absence de révision. Avec le garde-fou, fonction de capacités absente (404), version ancienne et vérification indisponible (503) produisent un message de maintenance, conservent la saisie et déclenchent **zéro appel de création**. Trois scénarios DOC-20 ont été reproduits en échec avant correctif ; ils complètent la suite initiale et sont exécutés sur desktop/mobile. Le SQL contrôle également les capacités pour jetons inconnus, artisans écartés, contrats absents et assurances non validées.
+
+Validation finale de ce garde-fou : **44/44 cas UI réussis** (22 scénarios × desktop/mobile), **188 migrations et 6 suites SQL réussies**, TypeScript, ESLint ciblé et `git diff --check` réussis. Preuves : `test-results/audit-documents-compatibilite/`. La suite confirme aussi que le backend moderne conserve les sauvegardes et reprises déjà testées.

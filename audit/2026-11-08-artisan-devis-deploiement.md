@@ -47,3 +47,7 @@ Une réconciliation doit vérifier l’exécution n8n et l’acceptation Gmail d
 La configuration du relais est conservée dans `.env.secrets.local`, ignoré par Git : `DEVIS_EMAIL_WEBHOOK_URL`, `DEVIS_EMAIL_WEBHOOK_SECRET` et `DEVIS_EMAIL_WORKFLOW_ID`. Le secret doit être enregistré dans le projet Supabase cible avant activation.
 
 **Blocage actuel :** le jeton d’administration Supabase fourni est valide mais ne possède pas les droits sur le projet de ce CRM. Le workflow reste désactivé tant que les migrations et fonctions de ce projet ne sont pas déployées. La délivrabilité Gmail, l’accusé réel du fournisseur et les autres services externes ne sont pas annoncés comme testés.
+
+## Coexistence temporaire avec un ancien backend
+
+Avant d’appeler la création, le frontend lit `capacites_devis_by_token` (migration 0185) et exige le protocole 2 avec idempotence et révisions. Si cette fonction est absente, incompatible ou inaccessible, la sauvegarde s’arrête avant toute réservation de numéro : message de maintenance, saisies conservées, aucune ancienne RPC de création appelée. L’aperçu et les documents historiques restent accessibles. Cette protection permet de publier une prévisualisation sans générer de doublons pendant que les migrations attendent leur déploiement ; elle ne rend pas les nouvelles fonctions disponibles sur un backend ancien.

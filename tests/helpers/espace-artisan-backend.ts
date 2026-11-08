@@ -151,6 +151,7 @@ export async function installerBackendArtisan(page: Page, options: OptionsBacken
       case 'etat_chiffrage_by_token':
         if (etat.chiffrageEnErreur) return indisponible()
         return json(assurances)
+      case 'capacites_devis_by_token': return json({ ok: true, version: 2, sauvegarde_idempotente: true, revisions: true })
       case 'list_devis_by_token':
         if (etat.devisEnErreur) return indisponible()
         return json(etat.devisVides ? [] : devisDemo)

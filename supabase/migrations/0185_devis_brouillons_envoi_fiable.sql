@@ -282,3 +282,21 @@ begin
     'revision',d.revision,'envoi_etat',d.envoi_etat
   ) order by d.created_at desc),'[]'::json) from public.devis d where d.artisan_id=a.id);
 end $$;
+
+-- Lecture préalable obligatoire pour le nouveau frontend : l'ancienne RPC de
+-- création ignore devis_id/idempotency_key et créerait un nouveau numéro.
+-- Ce contrat n'est annoncé qu'une fois toutes les fonctions 0185 installées.
+create or replace function public.capacites_devis_by_token(p_token text)
+returns json language plpgsql stable security definer set search_path=public,pg_temp as $$
+declare a public.artisans;
+begin
+  a:=public._devis_artisan(p_token);
+  if a.id is null then return json_build_object('ok',false,'error','non_autorise'); end if;
+  if not (coalesce(a.contrat_externe,false) or exists(select 1 from public.contrats where artisan_id=a.id and statut='signe')) then
+    return json_build_object('ok',false,'error','contrat_requis');
+  end if;
+  if not public.peut_chiffrer(a.id) then return json_build_object('ok',false,'error','chiffrage_non_active'); end if;
+  return json_build_object('ok',true,'version',2,'sauvegarde_idempotente',true,'revisions',true);
+end $$;
+revoke execute on function public.capacites_devis_by_token(text) from public;
+grant execute on function public.capacites_devis_by_token(text) to anon,authenticated;

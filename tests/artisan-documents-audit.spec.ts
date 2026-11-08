@@ -372,3 +372,29 @@ test('DOC-19 un PDF refusé pour conflit de révision ne déclenche aucun envoi'
   expect(envois).toBe(0)
   await expect(panneau.getByRole('textbox', { name: 'Désignation', exact: true })).toHaveValue('Prestation fictive')
 })
+
+for (const [nom, status, reponse] of [
+  ['RPC absente sur ancien backend', 404, { code: 'PGRST202', message: 'Fonction indisponible dans la fixture ancienne' }],
+  ['version ancienne annoncée', 200, { ok: true, version: 1 }],
+  ['vérification temporairement indisponible', 503, { message: 'Maintenance fictive' }],
+] as const) {
+  test(`DOC-20 ${nom} : aucune création et saisies conservées`, async ({ page }) => {
+    await installerBackendArtisan(page)
+    await page.route(rpc('capacites_devis_by_token'), (route) => route.fulfill({ status, json: reponse }))
+    let creations = 0
+    await page.route(rpc('creer_devis_by_token'), (route) => {
+      creations++
+      return route.fulfill({ json: { ok: false, error: 'Ancienne RPC ne doit jamais être appelée' } })
+    })
+    const panneau = await ouvrirDevis(page)
+    await panneau.getByRole('textbox', { name: 'Nom', exact: true }).fill('Client fictif à conserver')
+    await panneau.getByRole('textbox', { name: 'Désignation', exact: true }).fill('Prestation conservée pendant mise à jour')
+    await panneau.getByRole('textbox', { name: 'Prix unitaire', exact: true }).fill('100')
+    await panneau.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+    await expect(page.getByText(/sauvegarde des devis est temporairement indisponible pendant la mise à jour/)).toBeVisible()
+    expect(creations).toBe(0)
+    await expect(panneau.getByRole('textbox', { name: 'Nom', exact: true })).toHaveValue('Client fictif à conserver')
+    await expect(panneau.getByRole('textbox', { name: 'Désignation', exact: true })).toHaveValue('Prestation conservée pendant mise à jour')
+    await expect(panneau.getByRole('button', { name: 'Enregistrer', exact: true })).toBeEnabled()
+  })
+}

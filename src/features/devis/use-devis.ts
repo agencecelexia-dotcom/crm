@@ -160,6 +160,16 @@ export function useCreerDevis(token: string | undefined) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (payload: DevisPayload): Promise<{ id: string; numero: string; revision: number }> => {
+      // Une ancienne RPC ignore devis_id/idempotency_key : découvrir son
+      // incompatibilité APRÈS l'appel aurait déjà réservé un autre numéro.
+      // Lecture à chaque tentative, sans cache positif pendant le déploiement.
+      const { data: capacites, error: erreurCapacites } = await supabase.rpc('capacites_devis_by_token', {
+        p_token: token,
+      })
+      const support = capacites as { ok?: boolean; version?: number; sauvegarde_idempotente?: boolean; revisions?: boolean; error?: string } | null
+      if (erreurCapacites || support?.ok !== true || support.version !== 2 || support.sauvegarde_idempotente !== true || support.revisions !== true) {
+        throw new Error(messageDevis(support?.error) ?? 'La sauvegarde des devis est temporairement indisponible pendant la mise à jour. Vos saisies sont conservées. Réessayez plus tard.')
+      }
       const { data, error } = await supabase.rpc('creer_devis_by_token', {
         p_token: token,
         p_payload: payload,

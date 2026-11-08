@@ -11,6 +11,14 @@ begin
     values(a,'Audit fictif',jeton,true,now(),current_date+365,current_date+365,'CGV fictives conservées','IBAN FICTIF');
   insert into public.artisans(id,nom,token,contrat_externe,assurances_validees_at)
     values(b,'Autre artisan fictif','audit-autre-'||b,true,now());
+  r:=public.capacites_devis_by_token(jeton);
+  assert (r->>'ok')::boolean and (r->>'version')::integer=2 and (r->>'sauvegarde_idempotente')::boolean and (r->>'revisions')::boolean, 'protocole de sauvegarde moderne non annoncé';
+  r:=public.capacites_devis_by_token('jeton-inconnu-fictif'); assert not (r->>'ok')::boolean, 'capacités révélées à un jeton inconnu';
+  update public.artisans set assurances_validees_at=null where id=b;
+  r:=public.capacites_devis_by_token('audit-autre-'||b); assert r->>'error'='chiffrage_non_active', 'artisan non validé accepté';
+  update public.artisans set assurances_validees_at=now(),contrat_externe=false where id=b;
+  r:=public.capacites_devis_by_token('audit-autre-'||b); assert r->>'error'='contrat_requis', 'artisan sans contrat accepté';
+  update public.artisans set contrat_externe=true where id=b;
   payload:=jsonb_build_object('idempotency_key',cle,'client_nom','Client fictif','client_email','client@example.test',
     'tva_mode','normal','acompte_pct',30,'conditions','Conditions fictives','email_html','Devis __NUMERO_DEVIS__',
     'email_subject','Devis __NUMERO_DEVIS__','document_data','{}'::jsonb,
@@ -59,6 +67,7 @@ begin
   r:=public.enregistrer_identite_by_token(jeton,'{"cgv":""}'); assert (select cgv is null from public.artisans where id=a), 'retour CGV défaut impossible';
   r:=public.enregistrer_identite_by_token(jeton,'{"acompte_defaut":"150"}'); assert not (r->>'ok')::boolean, 'acompte entreprise hors bornes';
   update public.artisans set ecarte_at=now() where id=a;
+  r:=public.capacites_devis_by_token(jeton); assert not (r->>'ok')::boolean, 'artisan écarté reçoit les capacités de création';
   r:=public.devis_by_token(jeton,d); assert not (r->>'ok')::boolean, 'artisan écarté peut relire';
   raise notice 'Audit devis : création/reprise/idempotence, arrondis, bornes, propriété, envoi, CGV vérifiés';
 end $$;
