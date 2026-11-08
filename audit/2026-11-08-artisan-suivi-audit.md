@@ -202,3 +202,27 @@ Le libellé KPI-03 est également corrigé dans `urgence-chantier.ts` et `tablea
 3. La clé du réessai est conservée pendant la session du navigateur. La fermeture définitive de cette session, l’effacement du stockage ou un autre appareil ne transportent pas automatiquement une intention antérieure. Si le stockage est interdit, la même page garde sa protection en mémoire mais ne peut la restaurer après rechargement.
 4. La base conserve les reçus tant que l’affectation existe ; ils disparaissent avec sa suppression définitive. La concurrence réelle entre plusieurs connexions PostgreSQL n’a pas été exécutée dans PGlite ; l’ordre des verrous, la clé unique et les scénarios séquentiels d’entrelacement ont été vérifiés.
 5. Les contraintes financières, notifications et règles historiques restent celles des fonctions déployées appelées par les surcharges. Aucun email réel, notification réelle, compte ou secret n’a été utilisé dans cette reprise.
+
+## Point d’entrée unique pour ne pas poursuivre un chantier — lot suivant
+
+**Constat UX.** « Pas de suite / Perdu » dans le suivi et « Me retirer de ce chantier » au pied de la fiche ressemblaient à deux façons de faire la même chose. Ils déclenchaient pourtant deux décisions métier différentes. Le retrait proposait également les motifs client, ce qui renforçait cette confusion.
+
+**Parcours corrigé.** `corps-chantier.tsx` propose désormais une seule entrée « Ne pas poursuivre ce chantier ». `retrait-chantier-dialog.tsx` ouvre un seul dialogue, sans choix implicite après signature :
+
+- **Le client ne donne pas suite** : les sept motifs client existants, une justification d’au moins cinq caractères, puis confirmation. Le même appel `add_suivi_by_token` est conservé avec `p_statut='perdu'`, le motif, la raison et la clé UUID persistante. Le mécanisme `tentative-suivi.ts` conserve exactement son empreinte et sa portée : un envoi identique après réponse perdue/rechargement réutilise la clé.
+- **Je ne peux pas prendre ce chantier** : les quatre motifs artisan existants (zone, métier, doublon, planning), une justification et la date de recontact facultative pour le planning. L’appel `retirer_chantier_by_token` reste inchangé. La fonction serveur existante reconnaît déjà un retrait effectué et retourne son succès sans répéter les effets.
+- **Avant signature**, seul le retrait artisan est proposé ; les décisions et motifs client restent absents. Un chantier terminé conserve son parcours actuel sans nouvelle action d’arrêt.
+
+L’ancien formulaire de perte a été retiré de `suivi-artisan.tsx`, qui garde la pause, les étapes, les rappels, les appels et les notes. L’aide et le message de motif invalide renvoient au nouveau dialogue. Aucune migration, requalification historique ou modification des règles financières n’est réalisée dans ce lot.
+
+**Protections maintenues.** Un choix est obligatoire, puis un motif du bon côté et une raison de cinq caractères. Changer de situation efface les anciens motif, raison et date. Les gardes serveur pour devis signé, commission encaissée, chantier signé, accès et contrat restent en place. Une erreur laisse le dialogue et les saisies ouverts. Pendant l’envoi, un verrou immédiat empêche le double clic ; les champs, le changement de situation et l’annulation sont désactivés. Le déclencheur Radix rend le focus au bouton après annulation.
+
+**Limite de vocabulaire explicitée.** Le motif existant « Autre » appartient au client dans la base ; il n’est donc pas proposé pour qualifier un retrait artisan. L’écran invite à contacter Celexia si aucun des quatre motifs artisan ne correspond. Ajouter « Autre » côté artisan nécessiterait un motif/API distincts ; ce lot n’invente pas une qualification fausse. La date de recontact n’est pas ajoutée à la perte client : cette RPC ne la prend pas en charge aujourd’hui. L’historique existant est conservé tel quel.
+
+### Vérification du dialogue unique
+
+- 16 tests unitaires de suivi/tentative réussis ; typecheck global et ESLint ciblé réussis.
+- **78/78 scénarios UI réussis (39 desktop + 39 mobile)** dans `test-results/arret-unifie-final`. La suite ciblée couvre les comportements existants et six scénarios supplémentaires : entrée unique/annulation/focus, changement de situation, doubles clics sur chacune des deux branches, perte avec réponse perdue/rechargement, retrait seul avant signature. Les réponses et appels passent exclusivement par l’API fictive `crm-test.supabase.co` interceptée par Playwright.
+- La première passe a obtenu 76/78 réussites : les deux échecs concernaient le même nouveau sélecteur de test ambigu (date et justification avaient tous deux le rôle `textbox`). Il a été précisé par son libellé, sans changement de comportement applicatif. Le scénario mobile de bascule a été renforcé à 320 px avec contrôle d’absence de débordement horizontal et captures du dialogue.
+- Captures artisan/client inspectées : dialogue lisible, défilement borné à 320 px, champs et boutons accessibles ; absence de débordement horizontal vérifiée. Typecheck, ESLint ciblé et `git diff --check` finaux réussis.
+- SQL non relancé pour ce lot frontend : aucune migration ni RPC modifiée. Le comportement serveur cité repose sur la lecture des fonctions déjà validées des migrations 0184 et 0189, pas sur une mutation de production.

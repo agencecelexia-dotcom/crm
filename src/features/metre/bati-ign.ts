@@ -97,11 +97,23 @@ export async function batimentsAutour(
   // impossible à toucher. Le service en rend deux cents sans peiner.
   url.searchParams.set('COUNT', '200')
 
-  const rep = await fetch(url, { signal })
+  const delai = AbortSignal.timeout(12_000)
+  const rep = await fetch(url, { signal: signal ? AbortSignal.any([signal, delai]) : delai })
   if (!rep.ok) throw new Error(`IGN ${rep.status}`)
   const json = (await rep.json()) as { features?: unknown[] }
 
-  return (json.features ?? []).map(lireBatiment).filter((b): b is Batiment => b !== null)
+  if (!Array.isArray(json.features)) throw new Error('Réponse IGN illisible')
+  return json.features.map(lireBatiment).filter((b): b is Batiment => b !== null)
+}
+
+/** Le contour déjà identifié par le serveur reste utilisable sans le WFS du voisinage. */
+export function batimentDuContour(cleabs: string, contour: Point[]): Batiment | null {
+  return lireBatiment({ id: cleabs, properties: { cleabs }, geometry: { type: 'Polygon', coordinates: [contour] } })
+}
+
+/** Le WFS et le serveur n'utilisent pas toujours le même identifiant de feature. */
+export function memeBatiment(a: Batiment, b: Batiment): boolean {
+  return a.cleabs && b.cleabs ? a.cleabs === b.cleabs : a.id === b.id
 }
 
 type Geometrie = { type?: string; coordinates?: unknown }
@@ -113,7 +125,12 @@ function lireBatiment(brut: unknown): Batiment | null {
   if (contour.length < 3) return null
 
   const p = f.properties ?? {}
-  const nb = (k: string) => (typeof p[k] === 'number' ? (p[k] as number) : null)
+  const nb = (k: string) => {
+    const valeur = p[k]
+    if (typeof valeur !== 'number' && (typeof valeur !== 'string' || !valeur.trim())) return null
+    const n = Number(valeur)
+    return Number.isFinite(n) ? n : null
+  }
   const txt = (k: string) =>
     typeof p[k] === 'string' && p[k] && p[k] !== 'Indifférenciée' && p[k] !== 'Indifférencié'
       ? (p[k] as string)
@@ -166,9 +183,11 @@ function premierAnneau(g?: Geometrie): Point[] {
   const anneau = (g?.type === 'MultiPolygon' ? (c[0] as unknown[])?.[0] : c[0]) as unknown
   if (!Array.isArray(anneau)) return []
 
-  const points = anneau
-    .filter((s): s is number[] => Array.isArray(s) && typeof s[0] === 'number' && typeof s[1] === 'number')
-    .map((s): Point => [s[0], s[1]])
+  // Retirer un sommet invalide inventerait un autre polygone et donc une autre surface.
+  if (!anneau.every((s) => Array.isArray(s) && s.length >= 2 &&
+    typeof s[0] === 'number' && Number.isFinite(s[0]) && Math.abs(s[0]) <= 180 &&
+    typeof s[1] === 'number' && Number.isFinite(s[1]) && Math.abs(s[1]) <= 90)) return []
+  const points = anneau.map((s): Point => [s[0], s[1]])
 
   if (points.length > 2) {
     const [a, b] = [points[0], points[points.length - 1]]

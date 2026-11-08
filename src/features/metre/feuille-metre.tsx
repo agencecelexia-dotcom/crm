@@ -19,7 +19,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { batimentsAutour, type Batiment } from './bati-ign'
+import { batimentDuContour, batimentsAutour, memeBatiment, type Batiment } from './bati-ign'
+import { SaisieTerrainMetres } from './fiche-mesures'
 import { PanneauBatiment, type MesureAEnregistrer } from './panneau-batiment'
 import { CarteMetre, type FondCarte, type ModeCarte } from './carte-metre'
 import {
@@ -109,7 +110,6 @@ export function FeuilleMetre({
   const [traceOuvert, setTraceOuvert] = useState<Metre | null>(null)
   const [editionTrace, setEditionTrace] = useState(false)
   const [sommetADeplacer, setSommetADeplacer] = useState<number | null>(null)
-  const [batiments, setBatiments] = useState<Batiment[]>([])
   // Le choix de l'artisan : un bâtiment touché, ou « aucun » quand il a écarté
   // la maison proposée. Tant qu'il n'a rien choisi, c'est la maison du
   // chantier qui est sélectionnée.
@@ -181,21 +181,30 @@ export function FeuilleMetre({
   const zoom = cible ? 19 : 18
   const enRecherche = manuelle ? manuelle.enCours : maisonServeur.isLoading
 
-  useEffect(() => {
-    if (lon == null || lat == null) return
-    const ctrl = new AbortController()
-    void (async () => {
-      let bats = await batimentsAutour(lat, lon, 150, ctrl.signal)
+  const bati = useQuery({
+    queryKey: ['batiments-voisins', lon, lat, cible],
+    enabled: lon != null && lat != null,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) => {
+      let bats = await batimentsAutour(lat!, lon!, 150, signal)
       // En ville, deux cents bâtiments ne couvrent pas toujours la fenêtre :
       // la maison désignée doit y être, on la cherche au plus près.
       if (cible && !bats.some((b) => b.cleabs === cible)) {
-        const pres = await batimentsAutour(lat, lon, 30, ctrl.signal).catch(() => [])
+        const pres = await batimentsAutour(lat!, lon!, 30, signal).catch(() => [])
         bats = [...bats, ...pres.filter((p) => !bats.some((b) => b.id === p.id))]
       }
-      setBatiments(bats)
-    })().catch(() => undefined)
-    return () => ctrl.abort()
-  }, [lon, lat, cible])
+      return bats
+    },
+  })
+  const principal = maison?.principal
+  const batiments = useMemo(() => {
+    const trouves = bati.data ?? []
+    if (!principal || trouves.some((b) => b.cleabs === principal.cleabs)) return trouves
+    const connu = batimentDuContour(principal.cleabs, principal.contour)
+    return connu ? [connu, ...trouves] : trouves
+  }, [bati.data, principal])
 
   // La maison du chantier est sélectionnée d'office : l'artisan ouvre l'écran
   // et lit ses mesures sans rien toucher. C'est tout l'objet de l'outil.
@@ -203,7 +212,7 @@ export function FeuilleMetre({
     () => (cible ? (batiments.find((b) => b.cleabs === cible) ?? null) : null),
     [batiments, cible],
   )
-  const choisi = choix === 'aucun' ? null : (choix ?? preselection)
+  const choisi = choix === 'aucun' ? null : choix ? (batiments.find((b) => memeBatiment(b, choix)) ?? choix) : preselection
   // Le relevé LiDAR de la maison choisie, pour la carte : même requête que le
   // panneau (le cache la partage), et les pans que l'artisan y écarte.
   const { data: repReleve } = useReleve(token, choisi?.cleabs ?? null, choisi?.centre ?? null)
@@ -272,8 +281,8 @@ export function FeuilleMetre({
 
   // Les autres bâtiments chargés : ils disent quels murs de la maison sont accolés.
   const voisins = useMemo(
-    () => batiments.filter((b) => b.id !== choisi?.id).map((b) => b.contour),
-    [batiments, choisi?.id],
+    () => batiments.filter((b) => !choisi || !memeBatiment(b, choisi)).map((b) => b.contour),
+    [batiments, choisi],
   )
 
   // LA CLÔTURE : pour les métiers du terrain, la parcelle de la maison et ses
@@ -341,7 +350,6 @@ export function FeuilleMetre({
           apres?.()
         },
         onError: (e) =>
-          apres &&
           toast.error('Maison non retenue', { description: e instanceof Error ? e.message : undefined }),
       },
     )
@@ -355,6 +363,7 @@ export function FeuilleMetre({
   }
 
   function allerA(a: Adresse) {
+    if (!quitterTrace()) return
     // Sans remise à zéro, l'emprise, la pente et l'alerte ABF de l'ancien
     // bâtiment restaient à l'écran.
     setTrace([])
@@ -399,8 +408,8 @@ export function FeuilleMetre({
   // Le tracé à main levée — le recours, quand il n'y a pas de bâtiment : un
   // terrain, une terrasse, une clôture.
   const dessin = useMemo(() => {
-    if (trace.length < 2) return null
-    const estSurface = mode === 'surface' && trace.length >= 3
+    if (trace.length < (mode === 'surface' ? 3 : 2)) return null
+    const estSurface = mode === 'surface'
     return {
       surface: estSurface ? aire(trace) : null,
       perimetre: estSurface ? longueur(trace, true) : null,
@@ -522,7 +531,7 @@ export function FeuilleMetre({
   // ce que l'audit avait trouvé ailleurs.
   const panneauMaison = choisi ? (
     <PanneauBatiment
-      key={choisi.id}
+      key={choisi.cleabs ?? choisi.id}
       token={token}
       batiment={choisi}
       enCours={enregistrer.isPending}
@@ -536,6 +545,7 @@ export function FeuilleMetre({
       titre={titre}
       adresse={maison?.adresse_retrouvee ?? ctx?.client_adresse ?? null}
       affectationToken={affectationToken}
+      dossierApplicable={choisi.cleabs === retenue || (!manuelle && choisi.cleabs === cible && (maison?.confiance === 'confirmee' || maison?.confiance === 'officielle'))}
     />
   ) : null
 
@@ -781,6 +791,10 @@ export function FeuilleMetre({
             onOui={() => choisi && retenirMaison(choisi, () => toast.success('Maison confirmée'))}
             onAutre={recommencer}
           />}
+          {bati.isError && !traceOuvert && <div role="status" className="space-y-2 rounded-xl border border-border p-3 text-sm">
+            <p>Le chargement des bâtiments voisins a échoué.{choisi ? ' Le contour déjà identifié reste disponible.' : ' Vous pouvez saisir vos mesures terrain.'}</p>
+            <Button variant="outline" size="sm" disabled={bati.isFetching} onClick={() => void bati.refetch()}>Recharger les bâtiments</Button>
+          </div>}
           {traceOuvert ? <CarnetTrace
             metre={traceOuvert} edition={editionTrace} trace={trace} nom={nom} sommet={sommetADeplacer}
             enCours={modifierTrace.isPending} erreur={modifierTrace.isError ? modifierTrace.error.message : null}
@@ -899,11 +913,12 @@ export function FeuilleMetre({
             </>
           ) : mode === 'apercu' ? (
             <>
-              <p className="text-center text-sm text-muted-foreground">
+              {!bati.isError && <p className="text-center text-sm text-muted-foreground">
                 {batiments.length > 0
                   ? 'Touchez la maison du chantier pour lire ses mesures.'
-                  : 'Aucun bâtiment ici — dessinez, ou cherchez l’adresse.'}
-              </p>
+                  : bati.isFetching || enRecherche ? 'Recherche du bâtiment en cours…'
+                    : 'Aucun bâtiment identifié — dessinez, saisissez vos mesures ou cherchez l’adresse.'}
+              </p>}
               <div className="grid gap-2 sm:grid-cols-2">
                 <Button variant="outline" className="h-auto min-h-11 whitespace-normal" onClick={() => setMode('surface')}>
                   <Pencil className="size-4" />
@@ -944,7 +959,7 @@ export function FeuilleMetre({
               <p className="text-center text-sm text-muted-foreground">
                 {trace.length === 0
                   ? 'Touchez chaque coin, l’un après l’autre.'
-                  : `${trace.length} point${trace.length > 1 ? 's' : ''} posé${trace.length > 1 ? 's' : ''}.`}
+                  : `${trace.length} point${trace.length > 1 ? 's' : ''} posé${trace.length > 1 ? 's' : ''}.${mode === 'surface' ? ' Il faut au moins 3 points pour une surface.' : ''}`}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <Button
@@ -961,6 +976,11 @@ export function FeuilleMetre({
               </div>
             </>
           )}
+
+          {!traceOuvert && <details className="rounded-xl border border-border p-3" open={!choisi || undefined}>
+            <summary className="min-h-11 cursor-pointer content-center text-sm font-medium">Mesures du chantier</summary>
+            <div className="mt-2"><SaisieTerrainMetres token={token} affectationToken={affectationToken} metiers={ctx.metiers?.length ? ctx.metiers : [ctx.metier]} /></div>
+          </details>}
 
           {/* « Mesurer avec l'IA » : confirmer la maison, lancer, lire ce que l'IA a compris. */}
           {choisi?.cleabs && (

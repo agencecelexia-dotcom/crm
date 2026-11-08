@@ -103,12 +103,20 @@ export class Grille2D {
  */
 export function solLocal(nu: Nuage, zone: Zone, pas = 1): (x: number, y: number) => number {
   const nx = Math.ceil((zone.maxX - zone.minX) / pas), ny = Math.ceil((zone.maxY - zone.minY) / pas)
+  if (!Number.isFinite(nx * ny) || nx <= 0 || ny <= 0 || pas <= 0) throw new Error('zone_invalide')
   const parCase: number[][] = Array.from({ length: nx * ny }, () => [])
+  let pointsSol = 0
   for (let i = 0; i < nu.nb; i++) {
-    if (nu.classe[i] !== 2) continue
+    if (nu.classe[i] !== 2 || !Number.isFinite(nu.z[i])) continue
     const cx = Math.floor((nu.x[i] - zone.minX) / pas), cy = Math.floor((nu.y[i] - zone.minY) / pas)
-    if (cx >= 0 && cx < nx && cy >= 0 && cy < ny) parCase[cy * nx + cx].push(nu.z[i])
+    if (cx >= 0 && cx < nx && cy >= 0 && cy < ny) {
+      parCase[cy * nx + cx].push(nu.z[i])
+      pointsSol++
+    }
   }
+  // Sans sol, les altitudes NGF ne peuvent devenir des hauteurs de bâtiment.
+  // Zéro serait une mesure inventée (205 m NGF deviendraient un mur de 205 m).
+  if (!pointsSol) throw new Error('sol_absent')
   const grille = new Float64Array(nx * ny).fill(NaN)
   for (let k = 0; k < parCase.length; k++) {
     const v = parCase[k]
@@ -143,6 +151,7 @@ export function solLocal(nu: Nuage, zone: Zone, pas = 1): (x: number, y: number)
     const cx = Math.min(nx - 1, Math.max(0, Math.floor((x - zone.minX) / pas)))
     const cy = Math.min(ny - 1, Math.max(0, Math.floor((y - zone.minY) / pas)))
     const v = grille[cy * nx + cx]
-    return Number.isNaN(v) ? 0 : v
+    if (!Number.isFinite(v)) throw new Error('sol_absent')
+    return v
   }
 }

@@ -19,20 +19,8 @@ declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
 /** Combien de lectures par personne et par jour : chacune coûte quelques dizaines de centimes. */
 const LECTURES_PAR_JOUR = 8
 
-const ORIGINES = [
-  'http://localhost:5173',
-  'http://localhost:4173',
-  ...(Deno.env.get('SITE_URL') ?? '').split(',').map((o) => o.trim()).filter(Boolean),
-]
-function cors(origin: string | null) {
-  const ok = origin && (ORIGINES.includes(origin) || /^https:\/\/[\w-]+\.vercel\.app$/.test(origin))
-  return {
-    'Access-Control-Allow-Origin': ok ? origin! : ORIGINES[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    Vary: 'Origin',
-  }
-}
+import { corsMetre } from '../_cors-metre.ts'
+
 const json = (b: unknown, s: number, h: Record<string, string>) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...h, 'content-type': 'application/json' } })
 
@@ -52,7 +40,7 @@ async function acteurDe(req: Request, jeton: string): Promise<string | null> {
 }
 
 Deno.serve(async (req) => {
-  const CORS = cors(req.headers.get('origin'))
+  const CORS = corsMetre(req.headers.get('origin'), Deno.env.get('SITE_URL'))
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   try {
     const b = ((await req.json().catch(() => ({}))) ?? {}) as { token?: string; cleabs?: string; action?: string; point?: unknown; relire?: boolean }

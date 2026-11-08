@@ -70,40 +70,61 @@ export function depuisLambert93(x: number, y: number): [number, number] {
 
 // ---------- Lecture du GeoTIFF ----------
 //
-// Le flux de l'IGN est un TIFF classique, petit-boutiste, mono-bande, float32,
-// non compressé, en une seule bande. Quarante lignes suffisent, et aucune
-// bibliothèque : `geotiff` pèserait trois cent dix-neuf kilo-octets pour ceci.
+// TIFF classique mono-bande float32, non compressé. Les strips peuvent être
+// disjoints : leurs offsets et tailles font autorité, pas leur contiguïté.
 
 export interface Grille { w: number; h: number; px: Float32Array }
 
+// Version 4 : contour canonique côté serveur et intégrité des grilles.
+export const VERSION_TOITURE = 4
+
 export function lireGeoTiff(ab: ArrayBuffer): Grille {
   const dv = new DataView(ab)
-  const pb = String.fromCharCode(dv.getUint8(0), dv.getUint8(1)) === 'II'
+  const verifier = (off: number, taille: number) => {
+    if (!Number.isSafeInteger(off) || !Number.isSafeInteger(taille) || off < 0 || taille < 0 || off + taille > ab.byteLength) throw new Error('tiff_incomplet')
+  }
+  verifier(0, 8)
+  const ordre = String.fromCharCode(dv.getUint8(0), dv.getUint8(1))
+  if (ordre !== 'II' && ordre !== 'MM') throw new Error('tiff_inattendu')
+  const pb = ordre === 'II'
   if (dv.getUint16(2, pb) !== 42) throw new Error('tiff_inattendu')
 
   const ifd = dv.getUint32(4, pb)
+  verifier(ifd, 2)
   const n = dv.getUint16(ifd, pb)
-  const T: Record<number, number> = {}
+  verifier(ifd + 2, n * 12)
+  const T: Record<number, number[]> = {}
   for (let i = 0; i < n; i++) {
     const e = ifd + 2 + i * 12
     const tag = dv.getUint16(e, pb)
     const type = dv.getUint16(e + 2, pb)
     const nb = dv.getUint32(e + 4, pb)
-    const taille = ({ 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 11: 4, 12: 8 } as Record<number, number>)[type] ?? 1
+    if (type !== 3 && type !== 4) continue
+    const taille = type === 3 ? 2 : 4
     const off = taille * nb <= 4 ? e + 8 : dv.getUint32(e + 8, pb)
-    if (type === 3) T[tag] = dv.getUint16(off, pb)
-    else if (type === 4) T[tag] = dv.getUint32(off, pb)
+    verifier(off, taille * nb)
+    if (nb > 1_000_000) throw new Error('tiff_dimensions')
+    T[tag] = Array.from({ length: nb }, (_, j) => type === 3 ? dv.getUint16(off + j * taille, pb) : dv.getUint32(off + j * taille, pb))
   }
 
-  if (T[259] !== 1) throw new Error('compression_inattendue')
-  if (T[258] !== 32 || T[339] !== 3) throw new Error('pas_du_float32')
+  const tag = (id: number) => T[id]?.[0]
+  if (tag(259) !== 1) throw new Error('compression_inattendue')
+  if (tag(258) !== 32 || tag(339) !== 3) throw new Error('pas_du_float32')
+  if ((tag(277) ?? 1) !== 1 || (tag(284) ?? 1) !== 1 || (tag(274) ?? 1) !== 1) throw new Error('tiff_format_inattendu')
 
-  const w = T[256]
-  const h = T[257]
-  // L'offset des données VARIE d'une requête à l'autre : jamais en dur.
-  const off = T[273]
+  const w = tag(256), h = tag(257)
+  if (!w || !h || !Number.isSafeInteger(w * h) || w * h > 4_000_000) throw new Error('tiff_dimensions')
+  const lignes = tag(278) ?? h
+  const offsets = T[273], tailles = T[279]
+  if (!lignes || !offsets || !tailles || offsets.length !== Math.ceil(h / lignes) || tailles.length !== offsets.length) throw new Error('tiff_strips')
   const px = new Float32Array(w * h)
-  for (let i = 0; i < w * h; i++) px[i] = dv.getFloat32(off + i * 4, pb)
+  for (let strip = 0; strip < offsets.length; strip++) {
+    const debut = strip * lignes * w
+    const compte = Math.min(lignes, h - strip * lignes) * w
+    if (tailles[strip] < compte * 4) throw new Error('tiff_incomplet')
+    verifier(offsets[strip], tailles[strip])
+    for (let i = 0; i < compte; i++) px[debut + i] = dv.getFloat32(offsets[strip] + i * 4, pb)
+  }
   return { w, h, px }
 }
 
@@ -119,16 +140,17 @@ export async function grilleIgn(
 
   let derniere: unknown
   for (let essai = 0; essai < 3; essai++) {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 20000)
     try {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 20000)
       const r = await fetch(url, { signal: ctrl.signal })
-      clearTimeout(t)
       if (!r.ok) throw new Error(`wms_${r.status}`)
       return await r.arrayBuffer()
     } catch (e) {
       derniere = e
-      await new Promise((r) => setTimeout(r, 800 * (essai + 1)))
+      if (essai < 2) await new Promise((r) => setTimeout(r, 800 * (essai + 1)))
+    } finally {
+      clearTimeout(t)
     }
   }
   throw derniere instanceof Error ? derniere : new Error('wms_injoignable')
@@ -189,6 +211,7 @@ const PLAT_PCT = 10
 const PAN_MIN = 0.08
 /** Au-delà, ce n'est plus un pan de toit mais un mur ou un ressaut. */
 const PAN_MAX_PCT = 150
+const altitudeValide = (v: number) => Number.isFinite(v) && v > -9998
 
 /**
  * La pente d'un toit, lue dans deux grilles d'altitude.
@@ -210,7 +233,7 @@ export function calculer(
       const x = x0 + (c + 0.5) * pas
       // La ligne 0 est au NORD : la latitude décroît quand la ligne croît.
       const y = y0 + (H - r - 0.5) * pas
-      estToit[i] = dedans(x, y, poly) && hauteurSol[i] > 1.5 && px[i] > -9998 ? 1 : 0
+      estToit[i] = dedans(x, y, poly) && Number.isFinite(hauteurSol[i]) && hauteurSol[i] > 1.5 && altitudeValide(px[i]) ? 1 : 0
     }
   }
 
@@ -339,7 +362,7 @@ export function mesurerMurs(
     let tot = 0, poids = 0
     for (const [dr, dc, pw] of [[0, 0, (1 - tx) * (1 - ty)], [0, 1, tx * (1 - ty)], [1, 0, (1 - tx) * ty], [1, 1, tx * ty]]) {
       const r = r0 + dr, c = c0 + dc
-      if (r >= 0 && r < h && c >= 0 && c < w && px[r * w + c] > -9998) { tot += px[r * w + c] * pw; poids += pw }
+      if (r >= 0 && r < h && c >= 0 && c < w && altitudeValide(px[r * w + c])) { tot += px[r * w + c] * pw; poids += pw }
     }
     return poids > 0 ? tot / poids : null
   }
@@ -402,7 +425,7 @@ export function hauteursToit(mnh: Grille, poly: [number, number][], x0: number, 
   const v: number[] = []
   for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
     const val = px[r * w + c]
-    if (val > 1.5 && dedans(x0 + (c + 0.5) * pas, y0 + (h - r - 0.5) * pas, poly)) v.push(val)
+    if (Number.isFinite(val) && val > 1.5 && dedans(x0 + (c + 0.5) * pas, y0 + (h - r - 0.5) * pas, poly)) v.push(val)
   }
   if (v.length < 25) return null
   v.sort((x, y) => x - y)
@@ -450,8 +473,12 @@ export type ResultatToit =
  * @param lire d'où viennent les grilles : l'IGN par défaut, un jeu d'essai en test.
  */
 export async function mesurerToit(contour: [number, number][], lire: LireGrille = grilleIgn): Promise<ResultatToit> {
-  const g = async (couche: string, x0: number, y0: number, x1: number, y1: number, w: number, h: number) =>
-    lireGeoTiff(await lire(couche, x0, y0, x1, y1, w, h))
+  if (!Array.isArray(contour) || contour.length < 3 || contour.length > 10_000 || contour.some((p) => !Array.isArray(p) || p.length !== 2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) || Math.abs(p[0]) > 180 || Math.abs(p[1]) >= 90)) throw new Error('contour_invalide')
+  const g = async (couche: string, x0: number, y0: number, x1: number, y1: number, w: number, h: number) => {
+    const grille = lireGeoTiff(await lire(couche, x0, y0, x1, y1, w, h))
+    if (grille.w !== w || grille.h !== h) throw new Error('grille_dimensions')
+    return grille
+  }
 
   // Le contour arrive en degrés ; tout le calcul se fait en mètres.
   const poly = contour.map(([lon, lat]) => versLambert93(lon, lat))
@@ -489,7 +516,7 @@ export async function mesurerToit(contour: [number, number][], lire: LireGrille 
       g(LIDAR.replace('{C}', 'MNH'), x0, y0, x0 + W * pas, y0 + H * pas, W, H),
     ])
     // Hors couverture, le service répond un GeoTIFF valide plein de −9999.
-    const invalides = mns.px.reduce((n, v) => n + (v <= -9998 ? 1 : 0), 0)
+    const invalides = mns.px.reduce((n, v) => n + (altitudeValide(v) ? 0 : 1), 0)
     if (invalides <= W * H * 0.5) {
       mesure = calculer(mns, mnh.px, poly, x0, y0, pas, 25)
       source = 'LiDAR HD de l’IGN, grille de 50 cm'
@@ -511,7 +538,7 @@ export async function mesurerToit(contour: [number, number][], lire: LireGrille 
     // Ici, pas de modèle de hauteur tout fait : on le construit.
     const hauteur = new Float32Array(mns.px.length)
     for (let i = 0; i < hauteur.length; i++) {
-      hauteur[i] = mns.px[i] > -9998 && mnt.px[i] > -9998 ? mns.px[i] - mnt.px[i] : -9999
+      hauteur[i] = altitudeValide(mns.px[i]) && altitudeValide(mnt.px[i]) ? mns.px[i] - mnt.px[i] : -9999
     }
     // SOIXANTE-DIX PIXELS, PAS UN DE MOINS.
     //
@@ -525,7 +552,7 @@ export async function mesurerToit(contour: [number, number][], lire: LireGrille 
     // cent dix mètres carrés au sol. En dessous, la photogrammétrie ne sait
     // pas lire un toit, et l'on préfère le dire : c'est le cas d'à peu près
     // une maison sur vingt, qui garde la saisie à la main qu'elle a déjà.
-    const vides = mns.px.reduce((n, v) => n + (v <= -9998 ? 1 : 0), 0)
+    const vides = mns.px.reduce((n, v) => n + (altitudeValide(v) ? 0 : 1), 0)
     aucuneDonnee = vides > W * H * 0.5
     if (!aucuneDonnee) mesure = calculer(mns, hauteur, poly, x0, y0, pas, 70)
     source = 'Photogrammétrie de l’IGN, grille de 1 m'

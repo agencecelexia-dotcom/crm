@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -57,7 +57,9 @@ const REFERENCES: Reference[] = [
 
 const releve = (nom: string) => JSON.parse(readFileSync(join(DOSSIER, nom, 'releve.json'), 'utf8')) as Releve
 
-describe.each(REFERENCES.filter((x) => existsSync(join(DOSSIER, x.nom, 'releve.json'))))('audit : $adresse', (ref) => {
+// Une fixture manquante doit faire échouer l'audit, pas retirer sa référence
+// silencieusement de la couverture des tests.
+describe.each(REFERENCES)('audit : $adresse', (ref) => {
   const r = releve(ref.nom)
   const retenus = pansParDefaut(r)
   const toit = toitRetenu(r, retenus)

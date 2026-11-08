@@ -20,20 +20,8 @@ import { reserverReleve, releverEtGarder, rpcService } from '../_releve-serveur.
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void }
 
-const ORIGINES = [
-  'http://localhost:5173',
-  'http://localhost:4173',
-  ...(Deno.env.get('SITE_URL') ?? '').split(',').map((o) => o.trim()).filter(Boolean),
-]
-function cors(origin: string | null) {
-  const ok = origin && (ORIGINES.includes(origin) || /^https:\/\/[\w-]+\.vercel\.app$/.test(origin))
-  return {
-    'Access-Control-Allow-Origin': ok ? origin! : ORIGINES[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    Vary: 'Origin',
-  }
-}
+import { corsMetre } from '../_cors-metre.ts'
+
 const json = (b: unknown, s: number, h: Record<string, string>) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...h, 'content-type': 'application/json' } })
 
@@ -55,7 +43,7 @@ const estPoint = (p: unknown): p is [number, number] =>
   p[0] > -6 && p[0] < 10 && p[1] > 41 && p[1] < 52
 
 Deno.serve(async (req) => {
-  const CORS = cors(req.headers.get('origin'))
+  const CORS = corsMetre(req.headers.get('origin'), Deno.env.get('SITE_URL'))
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   try {
     const { token, cleabs, point } = ((await req.json().catch(() => ({}))) ?? {}) as {
@@ -75,7 +63,7 @@ Deno.serve(async (req) => {
         error?: string
       }>
     const actuel = await lire()
-    if (actuel.error === 'token_invalide') return json({ ok: false, error: 'token_invalide' }, 403, CORS)
+    if (actuel.error) return json({ ok: false, error: actuel.error }, 403, CORS)
 
     // La base dit s'il faut relever : absent, périmé, ou échec ancien.
     if (await reserverReleve(cleabs)) {

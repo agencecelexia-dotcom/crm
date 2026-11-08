@@ -62,7 +62,7 @@ async function identifier(
     const { data, error } = await supabase.functions.invoke('batiment-chantier', { body: corps, signal: ctrl.signal })
     if (error) throw error
     const r = data as MaisonChantier | { ok: false; error?: string }
-    if (!r.ok) throw new Error(messageMetre(r.error))
+    if (!r?.ok) throw new Error(messageMetre(r?.error))
     return r
   } finally {
     clearTimeout(minuterie)

@@ -95,9 +95,9 @@ describe('les ouvertures au dossier', () => {
     expect(q.find((x) => x.cle === 'ouvertures')!.valeur).toBe(3 * photos.length)
   })
 
-  it('tait la nette s’il manque une façade', () => {
+  it('ne publie aucun total du bâtiment s’il manque une façade', () => {
     const q = quantitesDesOuvertures(r, photos.slice(1))
-    expect(q.map((x) => x.cle)).toEqual(['ouvertures', 'ouvertures_surface'])
+    expect(q).toEqual([])
   })
 
   it('ne dit rien sans photo lue', () => {

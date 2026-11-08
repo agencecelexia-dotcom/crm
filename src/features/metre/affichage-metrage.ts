@@ -3,11 +3,12 @@
 
 import type { Unite } from './catalogue-metrage'
 import type { StatutMetrage } from './use-metrage'
+import { quantiteValide } from './valeurs-metrage'
 
 export const UNITE_LISIBLE: Record<Unite, string> = { m2: 'm²', ml: 'm', m: 'm', pct: '%', u: '', oui_non: '' }
 
 export function valeurLisible(v: number | null | undefined, unite: Unite): string {
-  if (v == null) return '—'
+  if (!quantiteValide(v, unite)) return '—'
   if (unite === 'oui_non') return v ? 'oui' : 'non'
   const n = unite === 'u' ? String(Math.round(v)) : v.toLocaleString('fr-FR', { maximumFractionDigits: 1 })
   return UNITE_LISIBLE[unite] ? `${n} ${UNITE_LISIBLE[unite]}` : n

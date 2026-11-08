@@ -5,7 +5,7 @@ import { gunzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { depuisLambert93, versLambert93 } from '../../supabase/functions/_calcul-toit'
 import { decoderNuage, encoderNuage } from '../../supabase/functions/_nuage'
-import { hauteurGouttiere, releverBatiment, type Releve } from '../../supabase/functions/_releve'
+import { hauteurGouttiere, releverBatiment, VERSION_RELEVE, type Releve } from '../../supabase/functions/_releve'
 import { facadeRetenue, lignesRetenues, orientationsDesFacades, pansParDefaut, toitRetenu } from '../../supabase/functions/_releve-retenu'
 import { quantitesDuReleve } from '../../supabase/functions/_mesures-chantier'
 import { boitePlate, contourDe, deuxPans, nuageDe, polygoneDe, quatrePans, type Scene } from './aide-nuage'
@@ -316,7 +316,10 @@ describe.each(jeux)('maison réelle : $nom', (j) => {
   it('rend le même relevé que le jour où il a été figé', () => {
     const fichier = join(DOSSIER, j.nom, 'releve.json')
     expect(existsSync(fichier)).toBe(true)
-    expect(JSON.parse(JSON.stringify(r))).toEqual(JSON.parse(readFileSync(fichier, 'utf8')))
+    // Les fixtures v7 gardent leur date/version historique. Le nouveau rejet
+    // du sol absent ne change aucune géométrie quand un sol valide existe.
+    expect(r.version).toBe(VERSION_RELEVE)
+    expect(JSON.parse(JSON.stringify(r))).toEqual({ ...JSON.parse(readFileSync(fichier, 'utf8')), version: VERSION_RELEVE })
   })
 
   it('tient ce qu’on sait d’elle', () => connu[j.nom]?.(r))

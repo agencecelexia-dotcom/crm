@@ -35,12 +35,14 @@ it('date le vol en mois', () => {
   expect(moisDuVol(null)).toBeNull()
 })
 
-it('la provenance du toit dit la source, le vol, le recalage et la précision', () => {
+it('la provenance du toit distingue source, vol, recalage et sensibilité géométrique', () => {
   const lignes = provenanceToit(releve('deux-pans-simple')).join('\n')
   expect(lignes).toContain('LiDAR HD de l’IGN')
   expect(lignes).toContain('septembre 2021')
   expect(lignes).toContain('recalé de 46 cm')
-  expect(lignes).toMatch(/Précision : ±5 cm sur le bord du toit, soit ±[\d,]+ m²/)
+  expect(lignes).toMatch(/déplacer le bord de 5 cm change la surface d’environ [\d,]+ m²/)
+  expect(lignes).toContain('Ce scénario n’est pas une garantie de précision')
+  expect(lignes).not.toContain('Précision : ±')
 })
 
 describe('l’élévation d’une façade', () => {

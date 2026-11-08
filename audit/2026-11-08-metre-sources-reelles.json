@@ -1,0 +1,407 @@
+{
+  "date": "2026-11-08T11:43:45.140Z",
+  "fixtures": [
+    {
+      "fixture": "copc/deux-pans-simple",
+      "cleabs": "BATIMENT0000002209748162",
+      "centre": [
+        4.8704385925,
+        45.817584495
+      ],
+      "zone": {
+        "minX": 845210,
+        "minY": 6525921,
+        "maxX": 845240,
+        "maxY": 6525952
+      }
+    },
+    {
+      "fixture": "lidar/photogrammetrie",
+      "cleabs": "BATIMENT0000000316210699",
+      "centre": [
+        -3.6319038955555554,
+        47.81381061222223
+      ],
+      "zone": {
+        "minX": 204220,
+        "minY": 6766747,
+        "maxX": 204256,
+        "maxY": 6766784
+      }
+    }
+  ],
+  "resultats": [
+    {
+      "nom": "deux-pans-simple:BAN-IGN-reverse",
+      "host": "data.geopf.fr",
+      "path": "/geocodage/reverse",
+      "status": 200,
+      "ms": 266,
+      "octets": 591,
+      "type": "application/json; charset=utf-8",
+      "plage": null,
+      "champs": [
+        "type",
+        "name",
+        "label",
+        "street",
+        "postcode",
+        "citycode",
+        "city",
+        "oldcitycode",
+        "oldcity",
+        "context",
+        "importance",
+        "housenumber",
+        "id",
+        "banId",
+        "x",
+        "y",
+        "distance",
+        "score",
+        "_type"
+      ],
+      "id": "69292_0708_00001",
+      "typeAdresse": "housenumber"
+    },
+    {
+      "nom": "deux-pans-simple:metadata",
+      "host": "data.geopf.fr",
+      "path": "/wfs/ows",
+      "status": 200,
+      "ms": 287,
+      "octets": 2111,
+      "type": "application/json;charset=UTF-8",
+      "plage": null,
+      "features": 1,
+      "vols": [
+        "2021-09-24Z"
+      ]
+    },
+    {
+      "nom": "deux-pans-simple:BDTOPO",
+      "host": "data.geopf.fr",
+      "path": "/wfs/ows",
+      "status": 200,
+      "ms": 304,
+      "octets": 15318,
+      "type": "application/json;charset=UTF-8",
+      "plage": null,
+      "features": 12,
+      "fixtureTrouvee": true,
+      "batiment": [
+        {
+          "cleabs": "BATIMENT0000002209748162",
+          "hauteur": 6.8,
+          "type": "MultiPolygon"
+        }
+      ]
+    },
+    {
+      "nom": "deux-pans-simple:BAN-ancien-reverse",
+      "host": "api-adresse.data.gouv.fr",
+      "path": "/reverse/",
+      "status": 200,
+      "ms": 305,
+      "octets": 5542,
+      "type": "application/json; charset=utf-8",
+      "plage": null
+    },
+    {
+      "nom": "deux-pans-simple:BAN-IGN-search",
+      "host": "data.geopf.fr",
+      "path": "/geocodage/search",
+      "status": 200,
+      "ms": 56,
+      "octets": 621,
+      "type": "application/json; charset=utf-8",
+      "plage": null,
+      "features": 1,
+      "premierType": "housenumber",
+      "premierId": "69292_0708_00001"
+    },
+    {
+      "nom": "deux-pans-simple:RNB",
+      "host": "rnb-api.beta.gouv.fr",
+      "path": "/api/alpha/buildings/",
+      "status": 200,
+      "ms": 275,
+      "octets": 962,
+      "type": "application/json",
+      "plage": null,
+      "liensBdtopo": [
+        {
+          "id": "BATIMENT0000002209748162",
+          "status": "constructed",
+          "pointValide": true
+        }
+      ],
+      "fixtureTrouvee": true
+    },
+    {
+      "nom": "deux-pans-simple:COPC-entete",
+      "host": "data.geopf.fr",
+      "path": "/telechargement/download/LiDARHD-NUALID/NUALHD_1-0__LAZ_LAMB93_OL_2025-02-20/LHD_FXX_0845_6526_PTS_LAMB93_IGN69.copc.laz",
+      "status": 206,
+      "ms": 215,
+      "octets": 4096,
+      "type": "application/octet-stream",
+      "plage": "bytes 0-4095/179920084",
+      "signature": "LASF"
+    },
+    {
+      "nom": "deux-pans-simple:MNS-lidar",
+      "host": "data.geopf.fr",
+      "path": "/wms-r",
+      "status": 200,
+      "ms": 174,
+      "octets": 15393,
+      "type": "image/geotiff",
+      "plage": null,
+      "grille": {
+        "w": 60,
+        "h": 62,
+        "pixels": 3720,
+        "valides": 3720,
+        "min": 269.1734313964844,
+        "max": 278.3459167480469
+      }
+    },
+    {
+      "nom": "photogrammetrie:BAN-IGN-reverse",
+      "host": "data.geopf.fr",
+      "path": "/geocodage/reverse",
+      "status": 200,
+      "ms": 42,
+      "octets": 579,
+      "type": "application/json; charset=utf-8",
+      "plage": null,
+      "champs": [
+        "type",
+        "name",
+        "label",
+        "street",
+        "postcode",
+        "citycode",
+        "city",
+        "oldcitycode",
+        "oldcity",
+        "context",
+        "importance",
+        "housenumber",
+        "id",
+        "banId",
+        "x",
+        "y",
+        "distance",
+        "score",
+        "_type"
+      ],
+      "id": "29150_0020_00023",
+      "typeAdresse": "housenumber"
+    },
+    {
+      "nom": "photogrammetrie:BAN-ancien-reverse",
+      "host": "api-adresse.data.gouv.fr",
+      "path": "/reverse/",
+      "status": 200,
+      "ms": 60,
+      "octets": 5473,
+      "type": "application/json; charset=utf-8",
+      "plage": null
+    },
+    {
+      "nom": "photogrammetrie:metadata",
+      "host": "data.geopf.fr",
+      "path": "/wfs/ows",
+      "status": 200,
+      "ms": 61,
+      "octets": 2191,
+      "type": "application/json;charset=UTF-8",
+      "plage": null,
+      "features": 1,
+      "vols": [
+        "2024-12-12Z"
+      ]
+    },
+    {
+      "nom": "photogrammetrie:BDTOPO",
+      "host": "data.geopf.fr",
+      "path": "/wfs/ows",
+      "status": 200,
+      "ms": 64,
+      "octets": 13978,
+      "type": "application/json;charset=UTF-8",
+      "plage": null,
+      "features": 11,
+      "fixtureTrouvee": true,
+      "batiment": [
+        {
+          "cleabs": "BATIMENT0000000316210699",
+          "hauteur": 9.2,
+          "type": "MultiPolygon"
+        }
+      ]
+    },
+    {
+      "nom": "photogrammetrie:BAN-IGN-search",
+      "host": "data.geopf.fr",
+      "path": "/geocodage/search",
+      "status": 200,
+      "ms": 45,
+      "octets": 597,
+      "type": "application/json; charset=utf-8",
+      "plage": null,
+      "features": 1,
+      "premierType": "housenumber",
+      "premierId": "29150_0020_00023"
+    },
+    {
+      "nom": "photogrammetrie:RNB",
+      "host": "rnb-api.beta.gouv.fr",
+      "path": "/api/alpha/buildings/",
+      "status": 200,
+      "ms": 155,
+      "octets": 2125,
+      "type": "application/json",
+      "plage": null,
+      "liensBdtopo": [
+        {
+          "id": "BATIMENT0000000316210868",
+          "status": "constructed",
+          "pointValide": true
+        },
+        {
+          "id": "BATIMENT0000000316210699",
+          "status": "constructed",
+          "pointValide": true
+        }
+      ],
+      "fixtureTrouvee": true
+    },
+    {
+      "nom": "photogrammetrie:COPC-entete",
+      "host": "data.geopf.fr",
+      "path": "/telechargement/download/LiDARHD-NUALID/NUALHD_1-0__LAZ_LAMB93_BG_2026-09-21/LHD_FXX_0204_6767_PTS_LAMB93_IGN69.copc.laz",
+      "status": 206,
+      "ms": 178,
+      "octets": 4096,
+      "type": "application/octet-stream",
+      "plage": "bytes 0-4095/103675252",
+      "signature": "LASF"
+    },
+    {
+      "nom": "photogrammetrie:MNS-lidar",
+      "host": "data.geopf.fr",
+      "path": "/wms-r",
+      "status": 200,
+      "ms": 154,
+      "octets": 21825,
+      "type": "image/geotiff",
+      "plage": null,
+      "grille": {
+        "w": 72,
+        "h": 74,
+        "pixels": 5328,
+        "valides": 5328,
+        "min": 53.90599060058594,
+        "max": 69.43521118164062
+      }
+    },
+    {
+      "nom": "photogrammetrie:MNS-photo",
+      "host": "data.geopf.fr",
+      "path": "/wms-r",
+      "status": 200,
+      "ms": 187,
+      "octets": 5842,
+      "type": "image/geotiff",
+      "plage": null,
+      "grille": {
+        "w": 36,
+        "h": 37,
+        "pixels": 1332,
+        "valides": 1332,
+        "min": 54.552303314208984,
+        "max": 68.79713439941406
+      }
+    }
+  ],
+  "ban_compatibilite": [
+    {
+      "fixture": "copc/deux-pans-simple",
+      "type": "legacy-reverse",
+      "status": 200,
+      "redirected": false,
+      "finalHost": "api-adresse.data.gouv.fr",
+      "features": 10,
+      "id": "69292_0708_00001"
+    },
+    {
+      "fixture": "copc/deux-pans-simple",
+      "type": "legacy-search",
+      "status": 200,
+      "redirected": false,
+      "finalHost": "api-adresse.data.gouv.fr",
+      "features": 1,
+      "id": "69292_0708_00001",
+      "champs": [
+        "label",
+        "score",
+        "housenumber",
+        "id",
+        "banId",
+        "name",
+        "postcode",
+        "citycode",
+        "x",
+        "y",
+        "city",
+        "context",
+        "type",
+        "importance",
+        "depcode",
+        "street",
+        "_type"
+      ]
+    },
+    {
+      "fixture": "lidar/photogrammetrie",
+      "type": "legacy-reverse",
+      "status": 200,
+      "redirected": false,
+      "finalHost": "api-adresse.data.gouv.fr",
+      "features": 10,
+      "id": "29150_0020_00023"
+    },
+    {
+      "fixture": "lidar/photogrammetrie",
+      "type": "legacy-search",
+      "status": 200,
+      "redirected": false,
+      "finalHost": "api-adresse.data.gouv.fr",
+      "features": 1,
+      "id": "29150_0020_00023",
+      "champs": [
+        "label",
+        "score",
+        "housenumber",
+        "id",
+        "banId",
+        "name",
+        "postcode",
+        "citycode",
+        "x",
+        "y",
+        "city",
+        "context",
+        "type",
+        "importance",
+        "depcode",
+        "street",
+        "_type"
+      ]
+    }
+  ],
+  "contexte": "GET publics depuis Node 24.18.1, sans auth ; fixtures du dépôt uniquement. COPC limité aux 4096 premiers octets."
+}

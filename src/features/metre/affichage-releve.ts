@@ -1,6 +1,11 @@
 import { formatM2, longueur, type Facade } from './geometrie'
 import { pansParDefaut, type FacadeReleve, type Releve, type TypeLigne } from './releve'
 
+/** Une cote inconnue reste absente ; une seule décimale évite la fausse précision. */
+export function formatHauteurMesuree(n: number | null | undefined): string {
+  return n == null || !Number.isFinite(n) || n < 0 ? '—' : `${n.toFixed(1).replace('.', ',')} m`
+}
+
 /** Les pans écartés d'office : les terrasses, quand le toit a aussi des pans en pente. */
 export function ecartesParDefaut(r: Releve | null): Set<number> {
   if (!r || !pansParDefaut(r)) return new Set()
@@ -73,12 +78,8 @@ export function debordLisible(r: Releve): string | null {
     : `${Math.max(0, Math.round(min * 100))} à ${cm(max)} selon les côtés`
 }
 
-/**
- * L'incertitude de la surface du toit. Le bord du toit est lu à ±5 cm (toits
- * synthétiques : écart maximal de 8 cm, médian de 2) ; la pente d'un pan à
- * 0,2 point près, négligeable. Le bord domine : ±5 cm sur tout le tour.
- */
-export function incertitudeToit(r: Releve): number {
+/** Effet géométrique d'un déplacement hypothétique du bord, pas une précision terrain. */
+export function sensibiliteBordToit(r: Releve): number {
   const facteur = r.surfaces.toitPlan > 0 ? r.surfaces.toitVrai / r.surfaces.toitPlan : 1
   return longueur(r.toit, true) * 0.05 * facteur
 }
@@ -109,7 +110,7 @@ export function provenanceToit(r: Releve): string[] {
   if (r.surfaces.sansPoints > 1) {
     lignes.push(`${formatM2(r.surfaces.sansPoints)} sans point (arbre ou panneaux solaires) : la pente du pan y est prolongée.`)
   }
-  lignes.push(`Précision : ±5 cm sur le bord du toit, soit ±${formatM2(incertitudeToit(r))}.`)
+  lignes.push(`Sensibilité géométrique : déplacer le bord de 5 cm change la surface d’environ ${formatM2(sensibiliteBordToit(r))}. Ce scénario n’est pas une garantie de précision ; vérifiez les cotes sur place.`)
   return lignes
 }
 
