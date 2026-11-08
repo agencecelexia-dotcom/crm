@@ -40,13 +40,13 @@ Une réconciliation doit vérifier l’exécution n8n et l’acceptation Gmail d
 
 - Les suites UI et unitaires utilisent des réponses fictives. Toutes les migrations et les assertions sont exécutées dans PostgreSQL local via PGlite, avec les services Supabase/HTTP simulés.
 - Neuf tests Deno exercent le handler serveur : révision transmise, ordre réservation/PDF/mail/confirmation, résultat ambigu, PDF externe ou invalide, rejeu, conflit et secret du callback. Aucune permission réseau n’est accordée à ces tests.
-- Après renouvellement de l’accès n8n, le workflow de production a été importé **désactivé** et ses deux nœuds liés au credential Header Auth dédié. Le credential Gmail reste celui de l’instance existante ; le webhook générique n’a pas été modifié.
+- Après renouvellement de l’accès n8n, le workflow de production a été importé **désactivé**, puis activé après déploiement et vérification du serveur. Ses deux nœuds utilisent le credential Header Auth dédié. Le credential Gmail reste celui de l’instance existante ; le webhook générique n’a pas été modifié.
 - Une copie isolée a été exécutée dans l’instance n8n : Gmail remplacé par un Code node sans messagerie, callback de prise remplacé par une réponse fictive. Quatre cas ont été vérifiés : absence d’authentification refusée HTTP403, prise confirmée avec accusé explicite, prise refusée sans accusé, PDF invalide sans accusé. Les workflows temporaires ont été désactivés puis supprimés. Aucun email envoyé.
 - n8n peut répondre HTTP200 avec un corps vide après une erreur de workflow. Le relais refuse cette réponse : le statut HTTP ne suffit jamais à marquer le devis envoyé.
 
 La configuration du relais est conservée dans `.env.secrets.local`, ignoré par Git : `DEVIS_EMAIL_WEBHOOK_URL`, `DEVIS_EMAIL_WEBHOOK_SECRET` et `DEVIS_EMAIL_WORKFLOW_ID`. Le secret doit être enregistré dans le projet Supabase cible avant activation.
 
-**Blocage actuel :** le jeton d’administration Supabase fourni est valide mais ne possède pas les droits sur le projet de ce CRM. Le workflow reste désactivé tant que les migrations et fonctions de ce projet ne sont pas déployées. La délivrabilité Gmail, l’accusé réel du fournisseur et les autres services externes ne sont pas annoncés comme testés.
+**Publication serveur du 8 novembre 2026 :** l’accès administrateur au bon projet a été rétabli. Les migrations 0184–0188 ont été appliquées dans une transaction ; les quatre fonctions et les deux secrets du relais sont déployés. Les contrôles distants ont confirmé les permissions, le protocole devis 2 et les lectures du portail. Le workflow n8n est activé ; ses refus sans authentification et sur PDF invalide ont été vérifiés. Les comptages métier sont inchangés. La délivrabilité Gmail, l’accusé réel du fournisseur et les autres services externes ne sont pas annoncés comme testés : aucun email réel n’a été envoyé.
 
 ## Coexistence temporaire avec un ancien backend
 

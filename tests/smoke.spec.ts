@@ -7,7 +7,7 @@ test('redirige vers la page de connexion et affiche le formulaire', async ({ pag
   await expect(page).toHaveURL(/\/login/)
 
   await expect(page.getByLabel('Email')).toBeVisible()
-  await expect(page.getByLabel('Mot de passe')).toBeVisible()
+  await expect(page.getByLabel('Mot de passe', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Se connecter' })).toBeVisible()
 })
 

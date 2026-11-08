@@ -76,8 +76,10 @@ Le carnet de tracés ne propose pas encore une réédition complète ni un trans
 
 ## Publication
 
-Les migrations serveur doivent précéder l’interface. Le nouveau workflow n8n est préparé **désactivé**, pour ne pas ouvrir un circuit incomplet. L’accès API n8n a été rétabli et testé. L’accès administrateur Supabase fourni reste refusé sur le projet utilisé par ce CRM : le compte du jeton voit d’autres projets. La base actuelle et ses données sont conservées.
+L’accès administrateur au projet existant a été rétabli pendant la publication. Les migrations **0184–0188 ont été appliquées ensemble, dans une transaction**, après sauvegarde locale des définitions SQL et des bundles serveur précédents. Aucun montant historique n’a été recalculé ; les comptages artisans, projets, affectations, devis et suivis sont inchangés après déploiement.
 
 La cible a été recoupée avec le bundle du site public `crm-ci7k.vercel.app` : il utilise bien la même base que la configuration locale. Changer l’URL vers un autre projet accessible ne constituerait pas une publication sur la base actuelle.
 
-La publication complète en production ne peut donc être annoncée tant que l’accès à la base cible et le déploiement coordonné ne sont pas vérifiés. Une branche/PR permet de conserver et revoir le travail en attendant cet accès.
+Les quatre fonctions `devis-envoyer`, `document-signe`, `devis-suggerer` et `facade-photo` sont déployées. Les secrets du relais ont été configurés et le workflow n8n dédié est **activé** ; le workflow générique précédent est conservé. Vingt contrôles distants ont vérifié les CORS, refus de jetons fictifs, callback authentifié sur une clé inexistante, six lectures du portail réel, protocole devis 2, permissions SQL et comptages. Le webhook actif refuse une requête non authentifiée et n’accuse pas un PDF invalide. Aucun email réel n’a été envoyé.
+
+L’interface et les rapports sont versionnés dans la [PR 83](https://github.com/agencecelexia-dotcom/crm/pull/83), avec les contrôles GitHub et les déploiements Vercel associés. Les anciens onglets doivent être rechargés après publication : les appels PDF et d’envoi utilisent désormais le nouveau protocole serveur.
