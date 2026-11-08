@@ -17,23 +17,11 @@
 // Le calcul lui-même vit dans `../_calcul-toit.ts`, partagé avec les tests et
 // le banc de justesse ; ici, l'accès (jeton de l'artisan) et le cache.
 
-import { mesurerToit } from '../_calcul-toit.ts'
+import { mesurerToit, VERSION_TOITURE } from '../_calcul-toit.ts'
+import { parCleabs } from '../_batiment.ts'
+import { corsMetre } from '../_cors-metre.ts'
 
-const ORIGINES = [
-  'http://localhost:5173',
-  'http://localhost:4173',
-  ...(Deno.env.get('SITE_URL') ?? '').split(',').map((o) => o.trim()).filter(Boolean),
-]
-
-function cors(origin: string | null) {
-  const ok = origin && (ORIGINES.includes(origin) || /^https:\/\/[\w-]+\.vercel\.app$/.test(origin))
-  return {
-    'Access-Control-Allow-Origin': ok ? origin! : ORIGINES[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    Vary: 'Origin',
-  }
-}
+declare const Deno: { env: { get(nom: string): string | undefined }; serve(handler: (req: Request) => Promise<Response>): void }
 
 const json = (b: unknown, s: number, h: Record<string, string>) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...h, 'content-type': 'application/json' } })
@@ -50,35 +38,45 @@ async function rpc(nom: string, params: unknown) {
 }
 
 Deno.serve(async (req) => {
-  const CORS = cors(req.headers.get('origin'))
+  const CORS = corsMetre(req.headers.get('origin'), Deno.env.get('SITE_URL'))
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+  if (req.method !== 'POST') return json({ ok: false, error: 'methode_invalide' }, 405, CORS)
 
   try {
     const { token, contour, cleabs, rafraichir } = (await req.json()) ?? {}
-    if (typeof token !== 'string' || !Array.isArray(contour) || contour.length < 3) {
+    if (typeof token !== 'string' || !Array.isArray(contour) || contour.length < 3 || contour.length > 10_000 || contour.some((p) => !Array.isArray(p) || p.length !== 2 || !p.every((v) => typeof v === 'number' && Number.isFinite(v)) || Math.abs(p[0]) > 180 || Math.abs(p[1]) >= 90)) {
       return json({ ok: false, error: 'parametres_manquants' }, 400, CORS)
     }
+    const cle = typeof cleabs === 'string' && cleabs.trim() ? cleabs.trim() : null
+    if (cle && !/^BATIMENT\d{16}$/.test(cle)) return json({ ok: false, error: 'cleabs_invalide' }, 400, CORS)
     if (await rpc('token_artisan_valide', { p_token: token }) !== true) {
       return json({ ok: false, error: 'token_invalide' }, 403, CORS)
     }
 
     // Un toit ne bouge pas. Chaque mesure évitée épargne deux images à l'IGN,
     // cinq secondes à l'artisan, et protège les appels suivants de l'étranglement.
-    const cle = typeof cleabs === 'string' && cleabs.trim() ? cleabs.trim() : null
     if (cle && !rafraichir) {
       const c = await rpc('toiture_by_token', { p_token: token, p_cleabs: cle })
       const v = c as { trouvee?: boolean; couvert?: boolean; motif?: string | null; version?: number }
       // Le cache garde `motif` mais pas `fiable` : c'est la même chose dite
       // autrement, et une colonne de moins à tenir cohérente.
-      // Une mesure antérieure aux murs (version 1) est refaite : la servir
-      // laisserait l'onglet Façades sur la hauteur de la BD TOPO. De même une
-      // mesure antérieure aux pans (version 2) : le toit se lit pan par pan.
-      if (v?.trouvee && (v.version ?? 1) >= 3) {
+      // Les anciennes mesures pouvaient provenir d'un contour envoyé par
+      // le navigateur, sans lien vérifié avec l'identifiant partagé.
+      if (v?.trouvee && (v.version ?? 1) >= VERSION_TOITURE) {
         return json({ ok: true, cache: true, ...(c as object), fiable: !!v.couvert && !v.motif }, 200, CORS)
       }
     }
 
-    const r = await mesurerToit(contour as [number, number][])
+    let contourMesure = contour as [number, number][]
+    if (cle) {
+      // Le contour client n'est qu'un indice spatial pour accélérer la
+      // recherche. Seule la géométrie IGN du bon cleabs peut entrer au cache.
+      const point: [number, number] = [contourMesure.reduce((s, p) => s + p[0], 0) / contourMesure.length, contourMesure.reduce((s, p) => s + p[1], 0) / contourMesure.length]
+      const batiment = (await parCleabs([cle], [point])).find((b) => b.cleabs === cle)
+      if (!batiment) return json({ ok: false, error: 'batiment_introuvable' }, 404, CORS)
+      contourMesure = batiment.contour
+    }
+    const r = await mesurerToit(contourMesure)
     if (cle) {
       await rpc(
         'enregistrer_toiture',
@@ -88,19 +86,20 @@ Deno.serve(async (req) => {
               p_pente: r.pente, p_incertitude: r.incertitude,
               p_pixels: r.pixels, p_versants: r.versants, p_source: r.source,
               p_murs: r.murs, p_hauteur_gouttiere: r.hauteur_gouttiere,
-              p_hauteur_faitage: r.hauteur_faitage, p_version: 3,
+              p_hauteur_faitage: r.hauteur_faitage, p_version: VERSION_TOITURE,
               p_facteur: r.facteur, p_part_plate: r.part_plate, p_pans: r.pans,
             }
           : {
               p_cleabs: cle, p_couvert: false, p_motif: r.motif,
+              p_version: VERSION_TOITURE,
               p_pente: null, p_incertitude: null, p_pixels: null, p_versants: [], p_source: null,
             },
       ).catch(() => {})
     }
     return json(r, 200, CORS)
   } catch (e) {
-    if (e instanceof Error && e.message === 'batiment_trop_grand') {
-      return json({ ok: false, error: 'batiment_trop_grand' }, 400, CORS)
+    if (e instanceof Error && ['batiment_trop_grand', 'contour_invalide'].includes(e.message)) {
+      return json({ ok: false, error: e.message }, 400, CORS)
     }
     console.error('toiture-lidar', e)
     return json({ ok: false, error: String(e instanceof Error ? e.message : e) }, 500, CORS)

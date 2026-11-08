@@ -22,7 +22,7 @@ export function EcranMetres({ token, projets }: { token: string; projets: Projet
 
   return (
     <div className="space-y-4">
-      <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">Choisissez un chantier pour ouvrir sa vue aérienne et consulter la surface, le périmètre et la toiture du bâtiment. Les mesures restent rattachées au bon client.</p>
+      <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">Choisissez un chantier pour ouvrir sa vue aérienne et consulter la surface, le périmètre et la toiture du bâtiment. Vous pouvez aussi saisir vos mesures terrain. Les valeurs automatiques restent des estimations à vérifier.</p>
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="relative w-full sm:max-w-sm"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden /><Input aria-label="Rechercher un chantier à mesurer" className="h-10 bg-card pl-9" placeholder="Client, adresse ou métier" value={recherche} onChange={(e) => setRecherche(e.target.value)} /></div>
@@ -39,8 +39,8 @@ export function EcranMetres({ token, projets }: { token: string; projets: Projet
               <li key={p.id}>
                 <button type="button" onClick={() => setChoisi(p)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/50 sm:gap-4">
                   <Ruler className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} aria-hidden />
-                  <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-medium">{p.client_nom || 'Client'}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{[p.client_adresse, p.client_ville].filter(Boolean).join(' · ') || 'Adresse non renseignée'}{p.metier ? ` · ${p.metier}` : ''}</span><span className={`mt-2 block text-xs sm:hidden ${aVerifier ? 'text-amber-800' : 'text-muted-foreground'}`}>{isLoading ? 'Chargement du métré…' : isError ? 'Ouvrir le métré' : aVerifier ? 'Métrés à vérifier' : pret ? 'Métrés prêts' : 'À mesurer'}</span></span>
-                  <span className={`hidden shrink-0 text-xs sm:inline ${aVerifier ? 'text-amber-800' : 'text-muted-foreground'}`}>{isLoading ? 'Chargement…' : isError ? 'Ouvrir le métré' : aVerifier ? 'Métrés à vérifier' : pret ? 'Métrés prêts' : 'À mesurer'}</span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-medium">{p.client_nom || 'Client'}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{[p.client_adresse, p.client_ville].filter(Boolean).join(' · ') || 'Adresse non renseignée'}{p.metier ? ` · ${p.metier}` : ''}</span><span className={`mt-2 block text-xs sm:hidden ${aVerifier ? 'text-amber-800' : 'text-muted-foreground'}`}>{isLoading ? 'Chargement du métré…' : isError ? 'Ouvrir le métré' : aVerifier ? 'Métrés à vérifier' : pret ? 'Mesures disponibles' : 'À mesurer'}</span></span>
+                  <span className={`hidden shrink-0 text-xs sm:inline ${aVerifier ? 'text-amber-800' : 'text-muted-foreground'}`}>{isLoading ? 'Chargement…' : isError ? 'Ouvrir le métré' : aVerifier ? 'Métrés à vérifier' : pret ? 'Mesures disponibles' : 'À mesurer'}</span>
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 </button>
               </li>

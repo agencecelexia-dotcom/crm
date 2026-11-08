@@ -10,6 +10,8 @@ import type { PhotoLue } from './_ouvertures.ts'
 import type { Releve } from './_releve.ts'
 import { releveUtilisable } from './_releve-retenu.ts'
 
+declare const Deno: { env: { get(nom: string): string | undefined } }
+
 const URL_BASE = () => Deno.env.get('SUPABASE_URL')!
 const CLE_SERVICE = () => Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const entetes = () => ({
@@ -28,9 +30,29 @@ export async function rpcService(nom: string, params: unknown): Promise<unknown>
   return await res.json()
 }
 
-async function lire<T>(chemin: string): Promise<T | null> {
-  const res = await fetch(`${URL_BASE()}/rest/v1/${chemin}`, { headers: entetes() })
-  return res.ok ? ((await res.json()) as T) : null
+async function lire<T>(chemin: string): Promise<T> {
+  const res = await fetch(`${URL_BASE()}/rest/v1/${chemin}`, { headers: entetes(), signal: AbortSignal.timeout(15_000) })
+  if (!res.ok) throw new Error(`dossier_lecture_${res.status}`)
+  const donnees = await res.json()
+  // Toutes ces lectures sont des listes PostgREST. Une panne ou une réponse
+  // incomplète n'est jamais une liste vide permettant d'invalider une mesure.
+  if (!Array.isArray(donnees)) throw new Error('dossier_lecture_incomplete')
+  return donnees as T
+}
+
+const CLES_AUTOMATIQUES = new Set([
+  'toit_surface', 'toit_pente', 'toit_pans', 'faitage', 'aretiers', 'noues', 'egouts', 'rives',
+  'facades_total', 'hauteur_murs', 'ouvertures', 'ouvertures_surface', 'facade_nette', 'fenetres_toit', 'cheminees',
+])
+
+async function ecrire(chemin: string, methode: 'POST' | 'PATCH', corps: unknown, prefer = 'return=minimal') {
+  const res = await fetch(`${URL_BASE()}/rest/v1/${chemin}`, {
+    method: methode,
+    headers: { ...entetes(), prefer },
+    body: JSON.stringify(corps),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) throw new Error(`dossier_ecriture_${res.status}`)
 }
 
 /** Tous les chiffres d'une maison : son relevé, les ouvertures de ses photos lues, les éléments de son toit. */
@@ -61,7 +83,7 @@ export async function reporterAuDossier(cleabs: string, r: Releve): Promise<numb
   if ((await rpcService('automatisation_active', { p_cle: 'auto_pre_metre' })) !== true) return 0
   const projets = await lire<{ id: string; metier: string | null; metiers: string[] | null }[]>(
     `projets?batiment_cleabs=eq.${encodeURIComponent(cleabs)}` +
-      '&or=(batiment_source.in.(rnb,artisan,agence),batiment_confirme_at.not.is.null)&select=id,metier,metiers',
+      '&deleted_at=is.null&statut=neq.mort&or=(batiment_source.in.(rnb,artisan,agence),batiment_confirme_at.not.is.null)&select=id,metier,metiers',
   )
   if (!projets?.length) return 0
   const quantites = await quantitesDeLaMaisonReleve(cleabs, r)
@@ -81,14 +103,33 @@ export async function reporterAuDossier(cleabs: string, r: Releve): Promise<numb
         mesure_detail: q.detail ?? null,
         mesuree_le: maintenant,
       }))
-    if (!lignes.length) continue
-    const ecrit = await fetch(`${URL_BASE()}/rest/v1/metrage_chantier?on_conflict=projet_id,cle`, {
-      method: 'POST',
-      headers: { ...entetes(), prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify(lignes),
-    })
-    if (ecrit.ok) n += lignes.length
-    else console.error('dossier: non mis à jour', p.id, ecrit.status, await ecrit.text())
+    if (lignes.length) {
+      // Créer les clés absentes, sans écraser une mesure dessinée en cas de
+      // concurrence. Les lignes existantes sont mises à jour sous condition.
+      await ecrire('metrage_chantier?on_conflict=projet_id,cle', 'POST', lignes, 'resolution=ignore-duplicates,return=minimal')
+      await Promise.all(lignes.map(async (ligne) => {
+        const { projet_id, cle, unite, ...mesure } = ligne
+        await ecrire(
+          `metrage_chantier?projet_id=eq.${encodeURIComponent(projet_id)}&cle=eq.${cle}&unite=eq.${unite}` +
+            '&or=(mesure_source.is.null,mesure_source.in.(lidar,photogrammetrie,ia_photo))',
+          'PATCH', mesure,
+        )
+      }))
+      n += lignes.length
+    }
+    // Le recalcul complet a réussi. Les quantités qui ont perdu leur source
+    // ne doivent plus survivre comme anciennes mesures. Ne toucher qu'à la
+    // branche automatique : la valeur confirmée, sa note et son auteur sont
+    // conservés par le trigger metrage_verifier ; dessin/parcelle sont exclus.
+    const presentes = new Set(lignes.map((l) => l.cle))
+    const absentes = [...cles].filter((cle) => CLES_AUTOMATIQUES.has(cle) && !presentes.has(cle))
+    if (absentes.length) {
+      await ecrire(
+        `metrage_chantier?projet_id=eq.${encodeURIComponent(p.id)}&cle=in.(${absentes.join(',')})` +
+          '&mesure_source=in.(lidar,photogrammetrie,ia_photo)',
+        'PATCH', { valeur_mesuree: null, mesure_source: null, mesure_precision: null, mesure_detail: null, mesuree_le: null },
+      )
+    }
   }
   return n
 }

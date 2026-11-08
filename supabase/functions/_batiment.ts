@@ -30,13 +30,16 @@ export async function lireJson(url: string, essais = 2, delaiMs = 8000): Promise
     try {
       const ctrl = new AbortController()
       const t = setTimeout(() => ctrl.abort(), delaiMs)
-      const r = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json' } })
-      clearTimeout(t)
-      if (!r.ok) throw new Error(`http_${r.status}`)
-      const texte = await r.text()
-      // Un corps vide en HTTP 200 est une panne, pas une réponse.
-      if (!texte.trim()) throw new Error('reponse_vide')
-      return JSON.parse(texte)
+      try {
+        const r = await fetch(url, { signal: ctrl.signal, headers: { accept: 'application/json' } })
+        if (!r.ok) throw new Error(`http_${r.status}`)
+        // Le délai couvre aussi le corps : les en-têtes seuls ne sont pas une réponse.
+        const texte = await r.text()
+        if (!texte.trim()) throw new Error('reponse_vide')
+        return JSON.parse(texte)
+      } finally {
+        clearTimeout(t)
+      }
     } catch (e) {
       derniere = e
       await new Promise((ok) => setTimeout(ok, 700 * (i + 1)))

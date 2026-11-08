@@ -16,8 +16,8 @@ import { lectureParPans, mesureFacade, penteMesureeDe, type Toiture } from './_t
 import { photoDeLaFacade, resultatRetenu, type PhotoLue } from './_ouvertures.ts'
 import type { MateriauxGardes } from './_materiaux.ts'
 
-/** Le débord que l'écran applique par défaut (panneau-batiment.tsx). */
-export const DEBORD_DEFAUT_M = 0.4
+/** Sans mesure de débord, le raster donne une surface au droit des murs. */
+export const DEBORD_DEFAUT_M = 0
 
 export interface QuantiteMesuree {
   cle: string
@@ -49,7 +49,7 @@ export function quantitesDeLaMaison(contour: Point[], r: ResultatToit): Quantite
       unite: 'm2',
       valeur: Math.round(surface * 100) / 100,
       source,
-      detail: { debord_m: DEBORD_DEFAUT_M, pente_pct: pente, pans },
+      detail: { debord_m: DEBORD_DEFAUT_M, hors_debord: true, debord_source: 'non_renseigne', pente_pct: pente, pans },
     })
     sortie.push({ cle: 'toit_pente', unite: 'pct', valeur: pente, source })
     if (source === 'lidar' && pans.length) sortie.push({ cle: 'toit_pans', unite: 'u', valeur: pans.length, source })
@@ -82,9 +82,6 @@ export function quantitesDuReleve(r: Releve): QuantiteMesuree[] {
   // Les pans que l'écran compte d'office : sans les terrasses.
   const retenus = pansParDefaut(r)
   const toit = toitRetenu(r, retenus)
-  // ±5 cm sur tout le bord du toit : la seule incertitude qui compte (affichage-releve.ts).
-  const facteur = r.surfaces.toitPlan > 0 ? r.surfaces.toitVrai / r.surfaces.toitPlan : 1
-  const precision = Math.round(longueur(r.toit, true) * 0.05 * facteur * 10) / 10
   const detail = {
     methode: 'releve_lidar',
     version: r.version,
@@ -98,8 +95,10 @@ export function quantitesDuReleve(r: Releve): QuantiteMesuree[] {
       unite: 'm2',
       valeur: toit.vrai,
       source: 'lidar',
-      precision,
-      detail: { ...detail, pans: toit.nb, debord_min_m: r.debord.min, debord_max_m: r.debord.max, plan_m2: toit.plan },
+      // Le déplacement hypothétique du bord ne couvre ni les erreurs de
+      // classement/sol ni les pans reconstruits : aucune précision garantie.
+      precision: null,
+      detail: { ...detail, pans: toit.nb, debord_min_m: r.debord.min, debord_max_m: r.debord.max, plan_m2: toit.plan, hypothese_bord_cm: 5 },
     },
     { cle: 'toit_pente', unite: 'pct', valeur: toit.pente, source: 'lidar', detail },
     { cle: 'toit_pans', unite: 'u', valeur: toit.nb, source: 'lidar', detail },
@@ -145,7 +144,7 @@ export function quantitesDuReleve(r: Releve): QuantiteMesuree[] {
 
 /**
  * Les ouvertures des façades, lues sur leurs photos : leur nombre, leur
- * surface, et la façade NETTE (brute moins ouvertures) — celle-ci seulement si
+ * surface, et la façade NETTE (brute moins ouvertures) — seulement si
  * CHAQUE façade à traiter a sa lecture : une seule façade sans photo, et le
  * total net serait faux sans le dire.
  */
@@ -158,7 +157,9 @@ export function quantitesDesOuvertures(r: Releve, photos: PhotoLue[]): QuantiteM
     if (!p || !res?.utilisable || res.surface == null) continue
     lues.push({ orientation: o, nombre: res.nombre, surface: res.surface, methode: res.methode, source: p.source })
   }
-  if (!lues.length) return []
+  // Ces clés sont des totaux du bâtiment, sans champ de périmètre affiché.
+  // Les lectures partielles restent consultables façade par façade.
+  if (!lues.length || lues.length !== aTraiter.length) return []
   const detail = {
     methode: 'photo_facade',
     facades: lues.map((l) => ({ orientation: l.orientation, nombre: l.nombre, surface_m2: l.surface, methode: l.methode, photo: l.source })),
@@ -175,8 +176,8 @@ export function quantitesDesOuvertures(r: Releve, photos: PhotoLue[]): QuantiteM
       cle: 'facade_nette',
       unite: 'm2',
       valeur: Math.round(Math.max(0, brute - surface) * 100) / 100,
-      source: 'lidar',
-      detail: { ...detail, brute_m2: Math.round(brute * 100) / 100 },
+      source: 'ia_photo',
+      detail: { ...detail, brute_m2: Math.round(brute * 100) / 100, source_brute: 'lidar' },
     })
   }
   return sortie

@@ -35,26 +35,29 @@ const DUREE_MAX_MS = 180_000
  */
 export function useReleve(token: string | undefined, cleabs: string | null, point: Point | null) {
   const qc = useQueryClient()
-  const query = useQuery({
-    queryKey: ['releve', cleabs],
+  const cle = ['releve', cleabs, token ?? null] as const
+  const query = useQuery<ReponseReleve>({
+    queryKey: cle,
     enabled: !!token && !!cleabs,
     // Un relevé fait ne bouge pas ; le serveur le garde.
     staleTime: 1000 * 60 * 60 * 24,
     retry: false,
     refetchInterval: (q) =>
       q.state.status !== 'error' && q.state.data?.statut === 'en_cours' && !q.state.data.delaiDepasse ? INTERVALLE_MS : false,
-    queryFn: async (): Promise<ReponseReleve> => {
+    queryFn: async ({ signal }): Promise<ReponseReleve> => {
       const { data, error } = await supabase.functions.invoke('releve-lidar', {
         body: { token, cleabs, point },
+        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       })
       if (error) throw error
-      return bornerAttente(data as ReponseReleve, qc.getQueryData<ReponseReleve>(['releve', cleabs]), Date.now(), DUREE_MAX_MS)
+      if (!data || data.ok !== true || data.error) throw new Error('Le relevé n’a pas pu être chargé. Réessayez.')
+      return bornerAttente(data as ReponseReleve, qc.getQueryData<ReponseReleve>(cle), Date.now(), DUREE_MAX_MS)
     },
   })
   const { refetch } = query
   const reprendre = useCallback(() => {
-    qc.setQueryData<ReponseReleve>(['releve', cleabs], (etat) => reprendreAttente(etat, Date.now()))
+    qc.setQueryData<ReponseReleve>(['releve', cleabs, token ?? null], (etat) => reprendreAttente(etat, Date.now()))
     return refetch()
-  }, [qc, cleabs, refetch])
+  }, [qc, cleabs, token, refetch])
   return { ...query, reprendre }
 }

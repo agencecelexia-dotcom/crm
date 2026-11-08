@@ -30,7 +30,7 @@ const metre: Metre = {
   source: 'dessin', modifiable_trace: true, created_at: '2026-11-07T10:00:00Z',
 }
 
-async function installerOutils(page: Page, options: { contexteErreur?: boolean; contexteRefuse?: boolean; avecMaison?: boolean; iaFinie?: boolean; avecReleve?: boolean; parcoursIA?: boolean; photos?: boolean; avecPosition?: boolean; lotRefuse?: boolean; iaBloquee?: boolean; releveBloque?: boolean; traceRefuse?: boolean; traceLongueur?: boolean; traceLectureSeule?: boolean } = {}) {
+async function installerOutils(page: Page, options: { contexteErreur?: boolean; contexteRefuse?: boolean; avecMaison?: boolean; iaFinie?: boolean; avecReleve?: boolean; parcoursIA?: boolean; photos?: boolean; avecPosition?: boolean; lotRefuse?: boolean; iaBloquee?: boolean; releveBloque?: boolean; traceRefuse?: boolean; traceLongueur?: boolean; traceLectureSeule?: boolean; metier?: string; metrageErreur?: boolean; correctionRefusee?: boolean; toitureErreur?: boolean; solAbsent?: boolean } = {}) {
   const backend = await installerBackendArtisan(page)
   const appels: { nom: string; body: Record<string, unknown> }[] = []
   const inconnues: string[] = []
@@ -41,11 +41,14 @@ async function installerOutils(page: Page, options: { contexteErreur?: boolean; 
   let finirIA = false
   let finirReleve = false
   let orientationPhoto = 'sud'
+  let metrageErreur = options.metrageErreur ?? false
+  let correctionRefusee = options.correctionRefusee ?? false
+  let toitureErreur = options.toitureErreur ?? false
   const ctx: ContexteMetre = {
     ok: !options.contexteRefuse, error: options.contexteRefuse ? 'chantier_retire' : undefined,
     projet_id: 'chantier-demo-1', affectation_id: 'affectation-demo-1', client_ville: 'Ville de démonstration',
     client_adresse: '12 rue des Ateliers', client_code_postal: '00000', latitude: 48.85605,
-    longitude: 2.350075, metier: 'Couverture', metiers: ['Couverture'], metres: [{ ...metre, modifiable_trace: !options.traceLectureSeule, ...(options.traceLongueur ? { type: 'longueur' as const, geometrie: contour.slice(0, 2), surface_m2: null, longueur_m: 11 } : {}) }],
+    longitude: 2.350075, metier: options.metier ?? 'Couverture', metiers: [options.metier ?? 'Couverture'], metres: [{ ...metre, modifiable_trace: !options.traceLectureSeule, ...(options.traceLongueur ? { type: 'longueur' as const, geometrie: contour.slice(0, 2), surface_m2: null, longueur_m: 11 } : {}) }],
   }
   const maison: MaisonChantier = {
     ok: true, confiance: options.avecMaison ? 'confirmee' : 'aucune', methode: options.avecMaison ? 'confirmee' : null,
@@ -96,6 +99,7 @@ async function installerOutils(page: Page, options: { contexteErreur?: boolean; 
         return json({ ok: true, nombre: corrections.length })
       }
       case 'corriger_metrage_by_token': {
+        if (correctionRefusee) { correctionRefusee = false; return json({ ok: false, error: 'valeur_invalide' }) }
         const ligne: LigneMetrage = { cle: String(body.p_cle), unite: body.p_unite as LigneMetrage['unite'], valeur_declaree: 95, declaree_par: 'client', citation: null, valeur_mesuree: 104, mesure_source: 'lidar', statut: 'confirme', valeur_retenue: Number(body.p_valeur), retenue_par: 'artisan', note: body.p_note as string | null }
         const index = metrage.findIndex((m) => m.cle === ligne.cle)
         if (index >= 0) metrage[index] = ligne
@@ -103,10 +107,10 @@ async function installerOutils(page: Page, options: { contexteErreur?: boolean; 
         return json({ ok: true })
       }
       case 'batiment-chantier': return json(maison)
-      case 'releve-lidar': return json(options.releveBloque && !finirReleve ? { ok: true, trouve: true, statut: 'en_cours' } : options.avecReleve ? { ok: true, trouve: true, id: 'releve-demo', statut: 'fait', releve } : { ok: true, statut: 'hors_couverture', releve: null })
-      case 'toiture-lidar': return json({ ok: true, couvert: false, fiable: false, motif: 'hors_couverture' })
+      case 'releve-lidar': return json(options.solAbsent ? { ok: true, trouve: true, statut: 'echec', motif: 'sol_absent' } : options.releveBloque && !finirReleve ? { ok: true, trouve: true, statut: 'en_cours' } : options.avecReleve ? { ok: true, trouve: true, id: 'releve-demo', statut: 'fait', releve } : { ok: true, statut: 'hors_couverture', releve: null })
+      case 'toiture-lidar': return toitureErreur ? json({ ok: false, error: 'indisponible' }) : json({ ok: true, couvert: false, fiable: false, motif: 'hors_couverture' })
       case 'fiche-maison': return json({ ok: true, bdnb: null, dpe: null, urbanisme: null, risques: null, cadastre: null, sources: {} })
-      case 'metrage_by_token': return json({ ok: true, metrage })
+      case 'metrage_by_token': return metrageErreur ? json({ message: 'Panne fictive des métrés' }, 503) : json({ ok: true, metrage })
       case 'metre-ia':
         if (options.parcoursIA && body.action === 'lire') {
           lecturesIA++
@@ -153,7 +157,7 @@ async function installerOutils(page: Page, options: { contexteErreur?: boolean; 
     inconnues.push(url.pathname)
     return route.abort('blockedbyclient')
   })
-  return { ...backend, appelsOutils: appels, inconnues, metrage, terminerIA: () => { finirIA = true }, terminerReleve: () => { finirReleve = true } }
+  return { ...backend, appelsOutils: appels, inconnues, metrage, terminerIA: () => { finirIA = true }, terminerReleve: () => { finirReleve = true }, retablirMetrage: () => { metrageErreur = false }, retablirToiture: () => { toitureErreur = false } }
 }
 
 async function ouvrirMetre(page: Page) {
@@ -260,13 +264,15 @@ for (const type of ['surface', 'longueur'] as const) {
 test('corriger une mesure sur place et télécharger le CSV qui conserve le relevé initial', async ({ page }) => {
   const backend = await installerOutils(page, { avecMaison: true, avecReleve: true })
   const feuille = await ouvrirMetre(page)
-  await feuille.getByRole('button', { name: 'Mesuré sur place', exact: true }).first().click()
+  await feuille.locator('summary').filter({ hasText: 'Mesures du chantier' }).click()
+  const terrain = feuille.getByRole('region', { name: 'Mesures du chantier', exact: true })
+  await terrain.getByRole('group', { name: 'Surface du toit', exact: true }).getByRole('button', { name: 'Mesuré sur place', exact: true }).click()
   const champ = feuille.getByRole('textbox', { name: /Valeur mesurée sur place/ })
   await champ.fill('112,5')
   await champ.press('Enter')
   await expect(page.getByText('Valeur enregistrée', { exact: true })).toBeVisible()
   expect(backend.metrage[0]).toMatchObject({ cle: 'toit_surface', valeur_retenue: 112.5, retenue_par: 'artisan' })
-  await expect(feuille.getByText('112,5 m²', { exact: true })).toBeVisible()
+  await expect(terrain.getByText('112,5 m²', { exact: true })).toBeVisible()
   const telechargement = page.waitForEvent('download')
   await feuille.getByRole('button', { name: 'Tableau CSV', exact: true }).click()
   const fichier = await telechargement
@@ -362,6 +368,9 @@ for (const refuse of [false, true]) {
     for (let i = 0; i < n; i++) {
       await facades.nth(i).click()
       if (i === 0) {
+        await feuille.getByLabel('Longueur mesurée', { exact: true }).fill('10abc')
+        await expect(feuille.getByRole('button', { name: 'Façade vue', exact: true })).toBeDisabled()
+        await expect(feuille.getByRole('alert').filter({ hasText: 'cotes complètes' })).toBeVisible()
         await feuille.getByLabel('Longueur mesurée', { exact: true }).fill('10')
         await feuille.getByLabel('Hauteur à la gouttière', { exact: true }).fill('6')
         await feuille.getByRole('button', { name: 'Une ouverture de plus', exact: true }).click()
@@ -559,4 +568,123 @@ test('redessiner une surface garde son type et annuler restaure tous les points'
   await carnet.getByRole('button', { name: 'Annuler les modifications' }).click()
   await expect(carnet.getByText('4 points · estimation à distance')).toBeVisible()
   expect(backend.appelsOutils.filter((a) => a.nom === 'modifier_trace_by_token')).toHaveLength(0)
+})
+
+test('saisir sans bâtiment refuse les nombres incomplets, conserve le champ après un refus puis enregistre la cote', async ({ page }) => {
+  const backend = await installerOutils(page, { correctionRefusee: true })
+  const feuille = await ouvrirMetre(page)
+  const carteTerrain = feuille.getByRole('region', { name: 'Mesures du chantier', exact: true }).getByRole('group', { name: 'Surface du toit', exact: true })
+  await carteTerrain.getByRole('button', { name: 'Mesuré sur place', exact: true }).click()
+  const champ = carteTerrain.getByRole('textbox', { name: 'Valeur mesurée sur place : Surface du toit' })
+  await champ.fill('12abc')
+  await champ.press('Enter')
+  await expect(carteTerrain.getByRole('alert')).toContainText('nombre complet')
+  expect(backend.appelsOutils.filter((a) => a.nom === 'corriger_metrage_by_token')).toHaveLength(0)
+  await champ.fill('1 200,5')
+  await champ.press('Enter')
+  await expect(carteTerrain.getByRole('alert')).toBeVisible()
+  await expect(champ).toHaveValue('1 200,5')
+  expect(backend.metrage).toEqual([])
+  await carteTerrain.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+  await expect(carteTerrain.getByText('1 200,5 m²', { exact: true })).toBeVisible()
+  expect(backend.metrage[0]).toMatchObject({ cle: 'toit_surface', unite: 'm2', valeur_retenue: 1200.5, retenue_par: 'artisan' })
+  expect(backend.appelsOutils.some((a) => a.nom === 'metre-ia' && a.body.action === 'lire')).toBe(false)
+  expect(backend.inconnues).toEqual([])
+  expect(backend.erreursPage).toEqual([])
+})
+
+test('le nombre de pans reste entier et annuler ne transmet aucune cote', async ({ page }) => {
+  const backend = await installerOutils(page)
+  const feuille = await ouvrirMetre(page)
+  const carteTerrain = feuille.getByRole('region', { name: 'Mesures du chantier', exact: true }).getByRole('group', { name: 'Nombre de pans', exact: true })
+  await carteTerrain.getByRole('button', { name: 'Mesuré sur place', exact: true }).click()
+  const champ = carteTerrain.getByRole('textbox', { name: 'Valeur mesurée sur place : Nombre de pans' })
+  await champ.fill('1,5')
+  await champ.press('Enter')
+  await expect(carteTerrain.getByRole('alert')).toContainText('nombre entier')
+  await carteTerrain.getByRole('button', { name: 'Annuler la saisie : Nombre de pans' }).click()
+  await expect(champ).toHaveCount(0)
+  expect(backend.appelsOutils.filter((a) => a.nom === 'corriger_metrage_by_token')).toHaveLength(0)
+  await carteTerrain.getByRole('button', { name: 'Mesuré sur place', exact: true }).click()
+  await champ.fill('4')
+  await champ.press('Enter')
+  await expect(carteTerrain.getByText('✓ mesuré sur place', { exact: true })).toBeVisible()
+  expect(backend.metrage[0]).toMatchObject({ cle: 'toit_pans', unite: 'u', valeur_retenue: 4 })
+})
+
+test('le portail se renseigne par Oui ou Non et préserve Non comme une valeur connue', async ({ page }) => {
+  const backend = await installerOutils(page, { metier: 'Clôture' })
+  const feuille = await ouvrirMetre(page)
+  const carteTerrain = feuille.getByRole('region', { name: 'Mesures du chantier', exact: true }).getByRole('group', { name: 'Portail', exact: true })
+  await carteTerrain.getByRole('button', { name: 'Mesuré sur place', exact: true }).click()
+  const champ = carteTerrain.getByRole('combobox', { name: 'Valeur mesurée sur place : Portail' })
+  await expect(champ).toHaveValue('')
+  await carteTerrain.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+  await expect(carteTerrain.getByRole('alert')).toContainText('Choisissez Oui ou Non')
+  expect(backend.appelsOutils.filter((a) => a.nom === 'corriger_metrage_by_token')).toHaveLength(0)
+  await champ.selectOption('0')
+  await carteTerrain.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+  await expect(carteTerrain.getByText('non', { exact: true })).toBeVisible()
+  await expect(carteTerrain.getByText('✓ mesuré sur place', { exact: true })).toBeVisible()
+  expect(backend.metrage[0]).toMatchObject({ cle: 'portail', unite: 'oui_non', valeur_retenue: 0 })
+})
+
+test('une panne du dossier empêche une confirmation aveugle puis restitue la mesure connue au réessai', async ({ page }) => {
+  const backend = await installerOutils(page, { metrageErreur: true })
+  backend.metrage.push({ cle: 'toit_surface', unite: 'm2', valeur_declaree: null, declaree_par: null, citation: null, valeur_mesuree: 104, mesure_source: 'lidar', statut: 'mesure', valeur_retenue: 104, retenue_par: 'outil', note: null })
+  const feuille = await ouvrirMetre(page)
+  const terrain = feuille.getByRole('region', { name: 'Mesures du chantier', exact: true })
+  await expect(terrain.getByRole('button', { name: 'Réessayer les valeurs du chantier' })).toBeVisible({ timeout: 15_000 })
+  await expect(terrain.getByRole('button', { name: 'Mesuré sur place', exact: true })).toHaveCount(0)
+  backend.retablirMetrage()
+  await terrain.getByRole('button', { name: 'Réessayer les valeurs du chantier' }).click()
+  const carteTerrain = terrain.getByRole('group', { name: 'Surface du toit', exact: true })
+  await expect(carteTerrain.getByText('104 m²', { exact: true })).toBeVisible()
+  await expect(carteTerrain.getByText('Estimation enregistrée · LiDAR', { exact: true })).toBeVisible()
+  await expect(carteTerrain.getByText('✓ mesuré sur place', { exact: true })).toHaveCount(0)
+  expect(backend.appelsOutils.filter((a) => a.nom === 'corriger_metrage_by_token')).toHaveLength(0)
+})
+
+test('un pan sélectionné garde sa propre surface et son export sans écraser la quantité confirmée du chantier', async ({ page }) => {
+  const backend = await installerOutils(page, { avecMaison: true, avecReleve: true })
+  backend.metrage.push({ cle: 'toit_surface', unite: 'm2', valeur_declaree: null, declaree_par: null, citation: null, valeur_mesuree: 104, mesure_source: 'lidar', statut: 'confirme', valeur_retenue: 112.5, retenue_par: 'artisan', note: null })
+  const feuille = await ouvrirMetre(page)
+  await expect(feuille.getByRole('group', { name: 'Toit', exact: true }).getByText('112,5 m²', { exact: true })).toBeVisible()
+  await feuille.getByRole('button', { name: /^Pan / }).first().click()
+  const selection = feuille.getByRole('group', { name: 'Toit, pans retenus', exact: true })
+  await expect(selection.getByText('112,5 m²', { exact: true })).toHaveCount(0)
+  await expect(selection.getByText('Sélection affichée · distincte des quantités du chantier', { exact: true })).toBeVisible()
+  await expect(selection.getByRole('button', { name: 'Mesuré sur place', exact: true })).toHaveCount(0)
+  const telechargement = page.waitForEvent('download')
+  await feuille.getByRole('button', { name: 'Tableau CSV', exact: true }).click()
+  const fichier = await telechargement
+  const csv = readFileSync((await fichier.path())!, 'utf8')
+  expect(csv).not.toContain('Valeurs confirmées;Surface du toit;112,5')
+  expect(csv).toContain('Toiture;Total compté;')
+  expect(backend.metrage[0].valeur_retenue).toBe(112.5)
+  expect(backend.appelsOutils.filter((a) => a.nom.startsWith('corriger_metrage'))).toHaveLength(0)
+})
+
+test('une panne de pente et hauteur propose un réessai sans prétendre à une absence de couverture', async ({ page }) => {
+  const backend = await installerOutils(page, { avecMaison: true, toitureErreur: true })
+  const feuille = await ouvrirMetre(page)
+  await expect(feuille.getByRole('button', { name: 'Réessayer la pente et les hauteurs' })).toBeVisible()
+  await expect(feuille.getByText('Aucun relevé d’altitude de l’IGN ne couvre ce bâtiment.', { exact: false })).toHaveCount(0)
+  backend.retablirToiture()
+  await feuille.getByRole('button', { name: 'Réessayer la pente et les hauteurs' }).click()
+  await expect(feuille.getByRole('button', { name: 'Réessayer la pente et les hauteurs' })).toHaveCount(0)
+  await expect(feuille.getByText('Aucun relevé d’altitude de l’IGN ne couvre ce bâtiment.', { exact: false })).toBeVisible()
+  await expect(feuille.getByText('Hors débord — renseignez-le si nécessaire.', { exact: false })).toBeVisible()
+  expect(backend.appelsOutils.filter((a) => a.nom === 'toiture-lidar')).toHaveLength(2)
+})
+
+test('sans niveau de sol le relevé affiche des cotes à relever, jamais une hauteur zéro', async ({ page }) => {
+  const backend = await installerOutils(page, { avecMaison: true, solAbsent: true, metier: 'Façade / Ravalement' })
+  const feuille = await ouvrirMetre(page)
+  await expect(feuille.getByText('Le niveau du sol n’a pas pu être établi : les hauteurs et surfaces de façade restent à relever sur place.', { exact: true })).toBeVisible()
+  const hauteur = feuille.getByRole('group', { name: 'Hauteur à la gouttière', exact: true })
+  await expect(hauteur.getByText('—', { exact: true })).toBeVisible()
+  await expect(hauteur.getByText('0 m', { exact: true })).toHaveCount(0)
+  await expect(feuille.getByRole('button', { name: 'Réessayer le relevé', exact: true })).toBeVisible()
+  expect(backend.inconnues).toEqual([])
 })

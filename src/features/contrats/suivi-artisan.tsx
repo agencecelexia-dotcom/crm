@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Send, Check, CalendarIcon, Loader2, Phone, PhoneCall, PhoneMissed, Bell, Pause, XCircle } from 'lucide-react'
+import { Send, Check, CalendarIcon, Loader2, Phone, PhoneCall, PhoneMissed, Bell, Pause } from 'lucide-react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { toast } from 'sonner'
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -26,7 +25,6 @@ import { formatEuros } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
 import { SUIVI_STATUTS } from '@/lib/constants'
-import { MOTIFS_PERTE, type MotifPerte } from '@/lib/motifs-perte'
 import { FilDiscussion } from './fil-discussion'
 import { messageErreurSuivi } from './erreur-suivi'
 import { confirmerTentativeSuivi, obtenirTentativeSuivi } from './tentative-suivi'
@@ -34,7 +32,6 @@ import type { Suivi } from '@/types/database'
 
 // Parcours principal (dans l'ordre) + statuts secondaires hors parcours.
 const PARCOURS = ['contacte', 'rdv_pris', 'devis_envoye', 'devis_signe', 'termine'] as const
-const SECONDAIRES = ['en_attente', 'perdu'] as const
 
 // Suivi côté artisan : parcours d'avancement visuel + note libre.
 // `token` = token du PROJET (sécurise add_suivi_by_token).
@@ -74,9 +71,6 @@ export function SuiviArtisan({
   const [rdvMode, setRdvMode] = useState(false)
   const [rdvDate, setRdvDate] = useState<Date | undefined>(undefined)
   const [rdvHeure, setRdvHeure] = useState('')
-  const [perduMode, setPerduMode] = useState(false)
-  const [perduRaison, setPerduRaison] = useState('')
-  const [perduMotif, setPerduMotif] = useState<MotifPerte | ''>('')
   // Rappel : un CO-statut, pas une étape. « Le client signera à son retour de
   // vacances le 5 » ne fait pas reculer le chantier — il reste « devis
   // envoyé », avec une date à laquelle le reprendre.
@@ -162,12 +156,12 @@ export function SuiviArtisan({
     else action()
   }
 
-  async function poster(statut?: string, message?: string, dateRdv?: string, motif?: MotifPerte): Promise<boolean> {
+  async function poster(statut?: string, message?: string, dateRdv?: string): Promise<boolean> {
     if (envoiEnCours.current) return false
     envoiEnCours.current = true
     setEnvoi(true)
     try {
-      const contenu = { p_statut: statut ?? null, p_message: message ?? null, p_date_rdv: dateRdv ?? null, p_motif: motif ?? null }
+      const contenu = { p_statut: statut ?? null, p_message: message ?? null, p_date_rdv: dateRdv ?? null, p_motif: null }
       const tentative = await obtenirTentativeSuivi(token, 'suivi', contenu)
       const { data, error } = await supabase.rpc('add_suivi_by_token', {
         p_token: token,
@@ -517,96 +511,26 @@ export function SuiviArtisan({
           )}
         </div>
 
-        {/* Statuts secondaires */}
-        <div className="flex flex-wrap gap-2">
-          {SECONDAIRES.map((cle) => {
-            const conf = SUIVI_STATUTS[cle]
-            const active = cle === 'en_attente' ? Boolean(enAttenteDepuis) : statutActuel === cle
-            return (
-              <button
-                key={cle}
-                type="button"
-                disabled={envoi}
-                onClick={() => {
-                  if (active) {
-                    if (cle === 'en_attente') void poster('reprendre')
-                    return
-                  }
-                  if (cle === 'perdu') setPerduMode(true)
-                  else void poster(cle)
-                }}
-                aria-pressed={active}
-                title={cle === 'en_attente' && active ? 'Reprendre le suivi sans changer d’étape' : undefined}
-                className={cn(
-                  'flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  active ? 'border-foreground/30 bg-secondary text-foreground' : 'border-border bg-card text-muted-foreground hover:bg-muted',
-                )}
-              >
-                {cle === 'perdu' ? <XCircle className="size-4" aria-hidden /> : <Pause className="size-4" aria-hidden />}
-                {conf.label}
-              </button>
-            )
-          })}
+        {/* La pause conserve l’étape ; l’arrêt du suivi a son dialogue unique dans la fiche. */}
+        <div>
+          <button
+            type="button"
+            disabled={envoi}
+            onClick={() => void poster(enAttenteDepuis ? 'reprendre' : 'en_attente')}
+            aria-pressed={Boolean(enAttenteDepuis)}
+            title={enAttenteDepuis ? 'Reprendre le suivi sans changer d’étape' : undefined}
+            className={cn(
+              'flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              enAttenteDepuis ? 'border-foreground/30 bg-secondary text-foreground' : 'border-border bg-card text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <Pause className="size-4" aria-hidden />
+            {SUIVI_STATUTS.en_attente.label}
+          </button>
         </div>
 
         {enAttenteDepuis && <p className="text-xs text-muted-foreground">Ce chantier est en pause. Cliquez sur « En attente » ou sur son étape pour reprendre le suivi.</p>}
-
-        {/* Justification OBLIGATOIRE quand on déclare « perdu » */}
-        {perduMode && (
-          <div className="space-y-3 rounded-lg border border-destructive/25 bg-card p-4">
-            <p className="text-sm font-medium text-destructive">Pourquoi ce chantier est-il perdu ?</p>
-            <p className="text-xs text-muted-foreground">
-              Indiquez pourquoi le projet n’aboutit pas côté client. Si vous refusez vous-même
-              le chantier (zone, métier ou planning), utilisez « Me retirer de ce chantier ».
-            </p>
-            <Select value={perduMotif} onValueChange={(v) => setPerduMotif(v as MotifPerte)} disabled={envoi}>
-              <SelectTrigger className="min-h-11 w-full" aria-label="Motif de perte du chantier">
-                <SelectValue placeholder="Choisir un motif" />
-              </SelectTrigger>
-              <SelectContent>
-                {MOTIFS_PERTE.filter((m) => m.origine === 'client').map((m) => <SelectItem key={m.cle} value={m.cle}>{m.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Textarea
-              value={perduRaison}
-              onChange={(e) => setPerduRaison(e.target.value)}
-              rows={2}
-              placeholder="Expliquez en quelques mots…"
-              aria-label="Raison de la perte du chantier"
-              disabled={envoi}
-            />
-            <p className="text-xs text-muted-foreground">Précisez la situation en au moins 5 caractères.</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                className="min-h-11 flex-1 bg-card"
-                disabled={envoi}
-                onClick={() => {
-                  setPerduMode(false)
-                  setPerduRaison('')
-                  setPerduMotif('')
-                }}
-              >
-                Annuler
-              </Button>
-              <Button
-                className="min-h-11 flex-1"
-                disabled={envoi || !perduMotif || perduRaison.trim().length < 5}
-                onClick={async () => {
-                  if (perduMotif && await poster('perdu', perduRaison.trim(), undefined, perduMotif)) {
-                    setPerduMode(false)
-                    setPerduRaison('')
-                    setPerduMotif('')
-                  }
-                }}
-              >
-                {envoi ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-                Confirmer « perdu »
-              </Button>
-            </div>
-          </div>
-        )}
 
         <Separator />
 

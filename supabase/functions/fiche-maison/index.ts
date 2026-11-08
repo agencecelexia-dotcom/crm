@@ -29,22 +29,7 @@
 // `allSettled` et un délai de garde. Une fiche à moitié remplie vaut mieux
 // qu'une erreur.
 
-const ORIGINES = [
-  'http://localhost:5173',
-  'http://localhost:4173',
-  ...(Deno.env.get('SITE_URL') ?? '').split(',').map((o) => o.trim()).filter(Boolean),
-]
-
-function cors(origin: string | null) {
-  const ok =
-    origin && (ORIGINES.includes(origin) || /^https:\/\/[\w-]+\.vercel\.app$/.test(origin))
-  return {
-    'Access-Control-Allow-Origin': ok ? origin! : ORIGINES[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    Vary: 'Origin',
-  }
-}
+import { corsMetre } from '../_cors-metre.ts'
 
 function json(body: unknown, status: number, headers: Record<string, string>) {
   return new Response(JSON.stringify(body), {
@@ -295,7 +280,7 @@ async function viaCadastre(lat: number, lon: number) {
 }
 
 Deno.serve(async (req) => {
-  const CORS = cors(req.headers.get('origin'))
+  const CORS = corsMetre(req.headers.get('origin'), Deno.env.get('SITE_URL'))
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {

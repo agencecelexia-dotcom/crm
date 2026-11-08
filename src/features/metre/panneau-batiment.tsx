@@ -28,6 +28,8 @@ import { PhotosFacade } from './photo-facade'
 import { MateriauToit } from './materiau-toit'
 import { ExportsMetre } from './exports-metre'
 import { requeteMetrageArtisan } from './use-metrage'
+import { valeurLisible } from './affichage-metrage'
+import { lireValeurMetrage } from './valeurs-metrage'
 import { lignesDuDossier } from './rapport-metre'
 import { useQueryClient } from '@tanstack/react-query'
 import { SurPlace } from './sur-place'
@@ -38,6 +40,7 @@ import {
   debordLisible,
   ecartesParDefaut,
   facadeDuReleve,
+  formatHauteurMesuree as formatHauteur,
   moisDuVol,
   provenanceFacade,
   provenanceToit,
@@ -57,19 +60,10 @@ import {
 /** Pentes courantes, pour corriger d'un doigt ce que la BD TOPO propose. */
 const PENTES = [0, 30, 35, 40, 45, 60, 80]
 
-/**
- * Débords de toiture courants, en centimètres.
- *
- * Quarante centimètres par défaut : c'est la valeur de construction la plus
- * répandue, et l'erreur qu'elle évite va dans le sens qui compte. Sur une
- * maison de 80 m² au sol, l'oublier retire quinze mètres carrés de couverture
- * — soit de quoi manquer de tuiles en fin de chantier.
- */
+/** Débords à renseigner, en centimètres. Aucune dimension n'est présumée. */
 const DEBORDS = [0, 30, 40, 50, 70]
 
-/** Une hauteur mesurée au LiDAR vaut ±0,3 m : une décimale, pas deux. */
-const formatHauteur = (n: number) => `${n.toFixed(1).replace('.', ',')} m`
-const DEBORD_DEFAUT = 40
+const DEBORD_DEFAUT = 0
 
 /**
  * Hauteur approchée à la gouttière selon le nombre de niveaux : un rez-de-
@@ -125,10 +119,13 @@ export function PanneauBatiment({
   titre,
   adresse,
   affectationToken,
+  dossierApplicable = false,
 }: {
   batiment: Batiment
   /** Le chantier : son dossier de métrés porte ce qu'a dit le client. */
   affectationToken: string
+  /** Seul le bâtiment identifié du chantier reçoit ses valeurs retenues. */
+  dossierApplicable?: boolean
   /** Pour l'en-tête du texte copié. */
   titre?: string | null
   adresse?: string | null
@@ -165,7 +162,7 @@ export function PanneauBatiment({
   // 3. ce qu'on DÉDUIT des altitudes de la BD TOPO, faute de mieux : ±27 à ±61
   //    points, que l'écran doit annoncer comme tels.
   const [penteSaisie, setPenteSaisie] = useState<number | null>(null)
-  const { data: toitureIgn, isLoading: toitureEnCours } = useToiture(
+  const { data: toitureIgn, isLoading: toitureEnCours, isError: erreurToiture, refetch: reprendreToiture } = useToiture(
     token,
     batiment.cleabs,
     batiment.contour,
@@ -193,8 +190,9 @@ export function PanneauBatiment({
   //    pignon et le terrain, et chaque côté a la sienne ;
   // 3. à défaut, celle de la BD TOPO. Comparée au LiDAR sur quinze maisons, elle
   //    s'écarte de 3,6 à 4,8 m sur un tiers d'entre elles — l'écran le dit.
-  const tapee = hauteurSaisie.trim() ? parseFloat(hauteurSaisie.replace(',', '.')) : null
-  const hauteurTapee = tapee != null && Number.isFinite(tapee) && tapee > 0 ? tapee : null
+  const tapee = lireValeurMetrage(hauteurSaisie, 'm')
+  const hauteurTapee = tapee != null && tapee > 0 && tapee <= 60 ? tapee : null
+  const hauteurInvalide = !!hauteurSaisie.trim() && hauteurTapee == null
   const ouvertures = ouverturesPhoto ?? nbOuvertures * OUVERTURE_TYPE
   const mesureMur = mur ? mesureFacade(mur, toitureIgn) : null
   // Un pignon monte plus haut que la gouttière : avec une hauteur unique, le
@@ -202,7 +200,7 @@ export function PanneauBatiment({
   // mesuré, lui, le contient déjà.
   const pignon = mur ? pignonDe(batiment, mur) : null
   const origineHauteur: 'saisie' | 'lidar' | 'bati' | null =
-    hauteurTapee != null ? 'saisie' : mesureMur ? 'lidar' : batiment.hauteur ? 'bati' : null
+    hauteurInvalide ? null : hauteurTapee != null ? 'saisie' : mesureMur ? 'lidar' : batiment.hauteur ? 'bati' : null
   const surfaceBrute = !mur
     ? null
     : origineHauteur === 'saisie'
@@ -262,6 +260,10 @@ export function PanneauBatiment({
   // devient son choix.
   const [choixPans, setChoixPans] = useState<Set<number> | null>(null)
   const ecartes = choixPans ?? ecartesParDefaut(releve)
+  const defautPans = ecartesParDefaut(releve)
+  const toitPartiel = releve
+    ? ecartes.size !== defautPans.size || [...ecartes].some((id) => !defautPans.has(id))
+    : versantChoisi != null
   const pansRetenus = releve && ecartes.size ? releve.pans.filter((p) => !ecartes.has(p.id)).map((p) => p.id) : null
   const toitMesure = releve ? toitRetenu(releve, pansRetenus) : null
   const resumeRetenu = releve ? resumePansReleve(releve.pans.filter((p) => !ecartes.has(p.id))) : null
@@ -297,7 +299,7 @@ export function PanneauBatiment({
       setOuverturesPhoto(null)
     }
   }
-  const totalFacadesReleve = releve
+  const totalFacadesReleve = releve && releve.facades.length
     ? orientationsDesFacades(releve).reduce((s, o) => s + facadeRetenue(releve, o).surface, 0)
     : null
   const mitoyenReleve = releve ? releve.facades.reduce((s, f) => s + f.accole, 0) : 0
@@ -317,6 +319,7 @@ export function PanneauBatiment({
   )
   const carteToit: CarteMesure = {
     cle: 'toit_surface',
+    portee: toitPartiel ? 'selection' : 'chantier',
     enCours: toitureEnCours && !toitMesure,
     libelle: toitMesure ? (pansRetenus ? 'Toit, pans retenus' : 'Toit') : versantChoisi ? `Toit, versant ${versantChoisi}` : 'Toit',
     unite: 'm2',
@@ -351,6 +354,7 @@ export function PanneauBatiment({
   }
   const cartePente: CarteMesure = {
     cle: 'toit_pente',
+    portee: toitPartiel ? 'selection' : 'chantier',
     enCours: toitureEnCours && !toitMesure,
     libelle: 'Pente',
     unite: 'pct',
@@ -407,7 +411,7 @@ export function PanneauBatiment({
         : null,
     })
     try {
-      const dossier = await qc.fetchQuery(requeteMetrageArtisan(token, affectationToken))
+      const dossier = dossierApplicable && !toitPartiel ? await qc.fetchQuery(requeteMetrageArtisan(token, affectationToken)) : []
       const valeurs = lignesDuDossier(dossier).map((l) => `${l.element} : ${l.quantite?.toLocaleString('fr-FR')} ${l.unite} — ${l.source}. ${l.validation}.${l.detail ? ` ${l.detail}` : ''}`)
       const texte = valeurs.length ? ['Dossier du chantier', ...valeurs, '', 'Relevé automatique conservé', estimation].join('\n') : estimation
       const fait = await partagerTexte('Métré', texte)
@@ -443,7 +447,16 @@ export function PanneauBatiment({
 
       {/* Les chiffres du métier, d'abord : le couvreur lit son toit, le
           façadier ses murs, sans chercher l'onglet. */}
-      <FicheMesures token={token} affectationToken={affectationToken} cartes={cartes} />
+      <FicheMesures token={token} affectationToken={affectationToken} cartes={cartes} dossierApplicable={dossierApplicable} saisiePermise={false} />
+      {erreurToiture && <div role="alert" className="space-y-2 rounded-xl border border-border p-3 text-sm">
+        <p>La mesure de pente et de hauteur n’a pas pu être chargée.</p>
+        <p className="text-muted-foreground">Les cotes déjà connues restent disponibles. Vous pouvez aussi renseigner vos mesures sur place.</p>
+        <Button variant="outline" onClick={() => void reprendreToiture()}>Réessayer la pente et les hauteurs</Button>
+      </div>}
+      {repReleve?.statut === 'echec' && !erreurReleve && <div role="status" className="space-y-2 rounded-xl border border-border p-3 text-sm">
+        <p>{repReleve.motif === 'sol_absent' ? 'Le niveau du sol n’a pas pu être établi : les hauteurs et surfaces de façade restent à relever sur place.' : 'Le relevé automatique n’a pas abouti. Utilisez les mesures disponibles ou renseignez vos cotes prises sur place.'}</p>
+        <Button variant="outline" onClick={() => void reprendreReleve()}>Réessayer le relevé</Button>
+      </div>}
       {(repReleve?.delaiDepasse || erreurReleve) && <div role="status" className="space-y-2 rounded-xl border border-border p-3 text-sm">
         <p>{repReleve?.delaiDepasse ? 'Le relevé prend plus de temps que prévu.' : 'Le relevé n’a pas pu être vérifié.'}</p>
         <p className="text-muted-foreground">Les mesures disponibles restent consultables. Vérifiez l’avancement pour reprendre.</p>
@@ -494,7 +507,7 @@ export function PanneauBatiment({
             {releve.hauteurs.gouttiere != null && (
               <Chiffre
                 titre="Gouttière · faîtage (mesurés)"
-                valeur={`${formatHauteur(releve.hauteurs.gouttiere)} · ${formatHauteur(releve.hauteurs.faitage ?? 0)}`}
+                valeur={`${formatHauteur(releve.hauteurs.gouttiere)} · ${formatHauteur(releve.hauteurs.faitage)}`}
               />
             )}
             <Chiffre titre="Débord (mesuré)" valeur={debordCourt(releve) ?? '—'} />
@@ -590,7 +603,7 @@ export function PanneauBatiment({
             {toitureIgn?.hauteur_gouttiere != null ? (
               <Chiffre
                 titre="Gouttière · faîtage (mesurés)"
-                valeur={`${formatHauteur(toitureIgn.hauteur_gouttiere)} · ${formatHauteur(toitureIgn.hauteur_faitage ?? 0)}`}
+                valeur={`${formatHauteur(toitureIgn.hauteur_gouttiere)} · ${formatHauteur(toitureIgn.hauteur_faitage)}`}
               />
             ) : null}
             <Chiffre titre="Périmètre" valeur={formatM(batiment.perimetre)} />
@@ -601,7 +614,7 @@ export function PanneauBatiment({
               chiffre principal, les chutes ne s'ajoutent qu'à la commande. */}
           {surfaceRetenue != null && (
             <p className="text-xs text-muted-foreground">
-              À commander, chutes comprises&nbsp;:{' '}
+              Simulation de chutes sur cette estimation, à vérifier avant commande&nbsp;:{' '}
               {[5, 10, 15].map((c, i) => (
                 <span key={c}>
                   {i > 0 && ' · '}
@@ -727,7 +740,7 @@ export function PanneauBatiment({
                     : 'border-border bg-card hover:bg-accent',
                 )}
               >
-                {d === 0 ? 'aucun' : `${d} cm`}
+                {d === 0 ? 'hors débord' : `${d} cm`}
               </button>
             ))}
           </div>
@@ -742,25 +755,10 @@ export function PanneauBatiment({
                 ) : (
                   'à ajouter à la surface une fois la pente choisie.'
                 )}
-                Ce débord n’est pas mesurable sur les données de l’IGN&nbsp;: à vous de le régler.
+                Débord renseigné par vos soins, à vérifier sur place.
               </>
             ) : (
-              <>
-                Sans débord, la surface est celle du toit à l’aplomb des murs
-                {pente != null && toiture != null ? (
-                  <>
-                    {' '}
-                    — en général{' '}
-                    {formatM2(
-                      surfaceReelle(empriseAvecDebord(batiment.emprise, batiment.perimetre, 0.4), pente) -
-                        toiture,
-                    )}{' '}
-                    de moins que le toit réel.
-                  </>
-                ) : (
-                  ', plus petite que le toit réel.'
-                )}
-              </>
+              <>Hors débord — renseignez-le si nécessaire. La surface suit le toit à l’aplomb des murs.</>
             )}
           </p>
 
@@ -783,7 +781,7 @@ export function PanneauBatiment({
                       : 'border-border bg-card hover:bg-accent',
                   )}
                 >
-                  {v.orientation} · {formatM2((toiture ?? 0) * v.part)}
+                  {v.orientation} · {valeurLisible(toiture == null ? null : toiture * v.part, 'm2')}
                 </button>
               ))}
               {versantChoisi && (
@@ -834,7 +832,7 @@ export function PanneauBatiment({
       ) : onglet === 'facades' && releve ? (
         <>
           {/* Devant la maison : chaque façade vue, photographiée, cotée. */}
-          <Button
+          {dossierApplicable && <Button
             variant={surPlace ? 'default' : 'outline'}
             className="min-h-11 w-full"
             aria-pressed={surPlace}
@@ -842,8 +840,8 @@ export function PanneauBatiment({
           >
             <MapPinCheck className="size-4" />
             {surPlace ? 'Sur place : façade par façade' : 'Je suis sur place'}
-          </Button>
-          {surPlace && (
+          </Button>}
+          {dossierApplicable && surPlace && (
             <SurPlace
               token={token}
               affectationToken={affectationToken}
@@ -889,7 +887,7 @@ export function PanneauBatiment({
               <div className="grid grid-cols-2 gap-2">
                 <Chiffre
                   titre={`Façade ${orientationChoisie}${facadeMesuree.murs.some((m) => m.rue) ? ', côté rue' : ''}`}
-                  valeur={formatM2(surfaceFacadeReleve ?? 0)}
+                  valeur={valeurLisible(surfaceFacadeReleve, 'm2')}
                   fort
                 />
                 <Chiffre titre="Longueur à traiter" valeur={formatM(facadeMesuree.longueur)} />
@@ -1082,10 +1080,11 @@ export function PanneauBatiment({
                   </span>
                   <div className="relative">
                     <Input
-                      className="h-10 pr-8"
+                      className="h-11 pr-8"
                       inputMode="decimal"
                       placeholder="ex. 5,8"
                       value={hauteurSaisie}
+                      aria-invalid={hauteurInvalide}
                       onChange={(e) => setHauteurSaisie(e.target.value)}
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -1123,6 +1122,8 @@ export function PanneauBatiment({
                 </div>
               </div>
 
+              {hauteurInvalide && <p role="alert" className="text-xs text-destructive">Indiquez une hauteur complète entre 0 et 60 m, par exemple 5,8.</p>}
+
               <Garder
                 enCours={enCours}
                 defaut={`Façade ${mur.orientation}`}
@@ -1159,7 +1160,7 @@ export function PanneauBatiment({
       {releve && (
         <ExportsMetre
           token={token}
-          affectationToken={affectationToken}
+          affectationToken={dossierApplicable && !toitPartiel ? affectationToken : undefined}
           cleabs={batiment.cleabs ?? null}
           releve={releve}
           pans={pansRetenus}

@@ -172,12 +172,11 @@ export function CorpsChantier({
           </div>
         )}
 
-        {/* Retrait volontaire. Disponible même contrat non signé : un artisan
-            qui ne veut pas du dossier n'a pas à signer pour le décliner.
-            Masqué sur un chantier terminé, où le retrait n'a plus de sens. */}
+        {/* Un seul point d’entrée pour arrêter le suivi. Avant signature,
+            seul le retrait de l’artisan est proposé. */}
         {projet.statut !== 'termine' && (
           <div className="flex justify-end border-t border-border pt-3">
-            <RetraitChantierDialog token={projet.token} onRetire={onChange} />
+            <RetraitChantierDialog token={projet.token} peutDeclarerPerte={signe} onRetire={onChange} />
           </div>
         )}
       </div>

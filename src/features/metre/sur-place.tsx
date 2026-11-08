@@ -10,10 +10,11 @@ import type { Releve } from './releve'
 import { correctionsSurPlace, facadesSurPlace, noteSurPlace, type SaisieFacade } from './calcul-sur-place'
 import { usePhotosFacade } from './use-photos-facade'
 import { useConfirmerMetragesArtisan } from './use-metrage'
+import { lireValeurMetrage } from './valeurs-metrage'
 
 const nombre = (t: string) => {
-  const v = parseFloat(t.replace(',', '.'))
-  return Number.isFinite(v) && v > 0 && v < 200 ? v : null
+  const v = lireValeurMetrage(t, 'm')
+  return v != null && v > 0 && v < 200 ? v : null
 }
 
 /**
@@ -45,6 +46,7 @@ export function SurPlace({
   const facades = facadesSurPlace(releve, photos ?? [], saisies)
   const corrections = correctionsSurPlace(facades, saisies)
   const vues = facades.filter((f) => f.vue).length
+  const saisieInvalide = Object.values(textes).some((t) => Object.values(t).some((v) => !!v.trim() && nombre(v) == null))
 
   const changer = (o: string, s: Partial<SaisieFacade>) => setSaisies((avant) => ({ ...avant, [o]: { ...avant[o], ...s } }))
   const ecrire = (o: string, champ: 'longueur' | 'hauteur', t: string) => {
@@ -53,6 +55,7 @@ export function SurPlace({
   }
 
   async function confirmer() {
+    if (saisieInvalide || envoi || !corrections.length) return
     setEnvoi(true)
     const note = noteSurPlace(facades, saisies, new Date())
     try {
@@ -75,6 +78,7 @@ export function SurPlace({
         {facades.map((f) => {
           const ouverte = orientationChoisie === f.orientation
           const t = textes[f.orientation] ?? { longueur: '', hauteur: '' }
+          const coteInvalide = Object.values(t).some((v) => !!v.trim() && nombre(v) == null)
           return (
             <li key={f.orientation} className={cn('rounded-lg border bg-card p-2', ouverte ? 'border-primary' : 'border-border')}>
               <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => onChoisir(f.orientation)}>
@@ -123,6 +127,7 @@ export function SurPlace({
                         className="h-9"
                         placeholder={formatM(f.longueur)}
                         value={t.longueur}
+                        aria-invalid={!!t.longueur.trim() && nombre(t.longueur) == null}
                         onChange={(e) => ecrire(f.orientation, 'longueur', e.target.value)}
                       />
                     </label>
@@ -133,14 +138,17 @@ export function SurPlace({
                         className="h-9"
                         placeholder={formatM(f.hauteur)}
                         value={t.hauteur}
+                        aria-invalid={!!t.hauteur.trim() && nombre(t.hauteur) == null}
                         onChange={(e) => ecrire(f.orientation, 'hauteur', e.target.value)}
                       />
                     </label>
                   </div>
+                  {coteInvalide && <p role="alert" className="text-xs text-destructive">Saisissez des cotes complètes entre 0 et 200 m, sans unité, ou videz les champs pour conserver le relevé.</p>}
                   <Button
                     size="sm"
                     variant={f.vue ? 'outline' : 'default'}
                     className="min-h-10 w-full"
+                    disabled={coteInvalide}
                     onClick={() => changer(f.orientation, { vue: !f.vue })}
                   >
                     <Check className="size-4" />
@@ -152,7 +160,7 @@ export function SurPlace({
           )
         })}
       </ul>
-      <Button className="min-h-11 w-full" disabled={!corrections.length || envoi} onClick={confirmer}>
+      <Button className="min-h-11 w-full" disabled={!corrections.length || envoi || saisieInvalide} onClick={confirmer}>
         {envoi ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
         {corrections.length
           ? `Confirmer : ${formatM2(corrections.find((c) => c.cle === 'facade_nette')!.valeur)} nets`

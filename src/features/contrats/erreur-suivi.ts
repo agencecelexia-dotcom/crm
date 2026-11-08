@@ -10,7 +10,7 @@ const MESSAGES: Record<string, string> = {
   commission_encaissee: 'La commission est déjà réglée. Contactez Celexia pour corriger ce chantier.',
   affaire_signee: 'Ce chantier est signé. Contactez Celexia pour l’annuler.',
   motif_requis: 'Précisez la raison de la perte du chantier.',
-  motif_non_autorise: 'Choisissez un motif de perte côté client. Pour refuser ce chantier, utilisez « Me retirer de ce chantier ».',
+  motif_non_autorise: 'Choisissez un motif de perte côté client. Si vous ne pouvez pas prendre le chantier, choisissez cette situation dans le dialogue.',
   justification_requise: 'Précisez la situation en au moins 5 caractères.',
   cle_requise: 'Actualisez votre espace avant de réessayer cet enregistrement.',
   idempotence_conflit: 'Cette tentative correspond déjà à un autre enregistrement. Actualisez votre espace avant de réessayer.',

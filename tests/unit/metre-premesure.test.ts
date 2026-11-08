@@ -34,7 +34,7 @@ describe.each(jeux)('pré-mesure = écran : $nom', (j) => {
       expect(serveur.toit_surface).toBeUndefined()
       expect(serveur.toit_pente).toBeUndefined()
     } else {
-      const ecranToit = surfaceReelle(empriseAvecDebord(aire(j.contour), longueur(j.contour, true), 0.4), pente)
+      const ecranToit = surfaceReelle(empriseAvecDebord(aire(j.contour), longueur(j.contour, true), 0), pente)
       expect(serveur.toit_surface).toBeCloseTo(ecranToit, 1)
       expect(serveur.toit_pente).toBe(pente)
     }

@@ -25,7 +25,7 @@
 //   La recherche des photos de rue, gratuite, suit la pré-mesure.
 
 import { identifierMaison, maisonConfirmee, type Dossier } from '../_batiment.ts'
-import { mesurerToit, type MurMesure, type Pan, type ResultatToit } from '../_calcul-toit.ts'
+import { VERSION_TOITURE, mesurerToit, type MurMesure, type Pan, type ResultatToit } from '../_calcul-toit.ts'
 import { centre, type Point } from '../_geometrie.ts'
 import { quantitesDeLaMaisonReleve } from '../_dossier-serveur.ts'
 import { lireToit } from '../_materiaux-serveur.ts'
@@ -99,7 +99,7 @@ interface ProjetAMesurer {
 /** Le toit : le cache de l'outil d'abord, sinon une mesure — gardée pour la suite. */
 async function toitDe(cleabs: string, contour: Point[]): Promise<ResultatToit> {
   const res = await fetch(
-    `${URL_BASE()}/rest/v1/toiture_mesuree?cleabs=eq.${encodeURIComponent(cleabs)}&version=gte.3` +
+    `${URL_BASE()}/rest/v1/toiture_mesuree?cleabs=eq.${encodeURIComponent(cleabs)}&version=gte.${VERSION_TOITURE}` +
       '&select=couvert,motif,pente_pct,incertitude,pixels,versants,source,murs,hauteur_gouttiere,hauteur_faitage,facteur,part_plate,pans,mesure_le',
     { headers: entetes() },
   )
@@ -135,11 +135,11 @@ async function toitDe(cleabs: string, contour: Point[]): Promise<ResultatToit> {
           p_pente: r.pente, p_incertitude: r.incertitude,
           p_pixels: r.pixels, p_versants: r.versants, p_source: r.source,
           p_murs: r.murs, p_hauteur_gouttiere: r.hauteur_gouttiere,
-          p_hauteur_faitage: r.hauteur_faitage, p_version: 3,
+          p_hauteur_faitage: r.hauteur_faitage, p_version: VERSION_TOITURE,
           p_facteur: r.facteur, p_part_plate: r.part_plate, p_pans: r.pans,
         }
       : {
-          p_cleabs: cleabs, p_couvert: false, p_motif: r.motif,
+          p_cleabs: cleabs, p_couvert: false, p_motif: r.motif, p_version: VERSION_TOITURE,
           p_pente: null, p_incertitude: null, p_pixels: null, p_versants: [], p_source: null,
         },
   ).catch(() => undefined)

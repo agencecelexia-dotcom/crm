@@ -51,7 +51,7 @@ import {
  * 7 : la justesse des pans (`qualitePlans`) et leur origine (`pansDe`) : de quoi
  *     retenir les pans corrigés par l'IA seulement s'ils expliquent mieux le laser.
  */
-export const VERSION_RELEVE = 7
+export const VERSION_RELEVE = 8
 
 /**
  * Du dessus du toit au dessous de la couverture, au droit du mur : tuiles,
