@@ -37,7 +37,7 @@ La baseline existante passait **42 tests navigateur** et **558 tests unitaires**
 | Envoi | HTTP opaque et statut « envoyé » prématuré | Réservation, consommation unique avant Gmail, accusé explicite, état incertain sans renvoi automatique |
 | Entreprise | CGV remises à zéro sans demande, champs effacés conservés | Conservation/reset explicite des CGV, effacement effectif des champs facultatifs, caches actualisés |
 | Assurances | Pannes et formats mal expliqués ; historique devis inaccessible | Formats/taille contrôlés, erreur et réessai ; historique lisible même si la création est bloquée |
-| Dépôt PDF | Succès global malgré montant refusé | Fichier reçu et montant enregistré distingués, reprise possible |
+| Dépôt PDF | Succès global malgré montant refusé ; montant extrait parfois invisible | Fichier reçu et montant enregistré distingués, reprise possible ; montant TTC extrait conservé dans le champ numérique |
 | Commissions | Cellules textuelles pouvant devenir des formules | CSV neutralisé ; assiette, taux, justificatif et état de règlement conservés |
 | Métrés | Panne assimilée à absence, suppression refusée annoncée réussie | États réseau et refus métier distincts, reprise locale |
 | Mesure sur place | Plusieurs écritures pouvant réussir partiellement | Confirmation groupée transactionnelle avec contrôle d’accès |
@@ -60,8 +60,11 @@ Les outils métier sont regroupés autour d’un même chantier. Le devis peut �
 - n8n : copie du workflow avec Gmail remplacé par un simulateur, authentification testée, accusé réussi, prise refusée et PDF invalide. Les copies temporaires ont été supprimées ; aucun email n’a été envoyé.
 - TypeScript, ESLint, build et contrôle Deno des fonctions modifiées. CI enrichie avec les tests unitaires, SQL et parcours isolés.
 - Export GLB réellement téléchargé sur ordinateur et mobile : signature `glTF`, version et longueur du fichier vérifiées.
+- Lecture d’un vrai PDF natif par le worker PDF.js : bon TTC prérempli et sauvegardé ; document corrompu sans montant inventé.
 
-Validation technique finale : **178 scénarios navigateur réussis**, **629 tests unitaires réussis, 1 ignoré**, **188 migrations chargées et 6 suites SQL réussies**, **9 tests du relais Deno réussis**, **4 scénarios n8n simulés vérifiés**. La passe finale navigateur dure 2,3 minutes ; TypeScript, ESLint et build passent. Le build conserve un avertissement non bloquant sur la taille de certains chunks chargés séparément, notamment la 3D.
+Le contrôle des dépendances a révélé trois versions vulnérables : mises à jour ciblées vers PDF.js 6.2.108, Zod 4.6.7 et DOMPurify 3.4.17. L’audit des dépendances de production ne signale plus de vulnérabilité ; le seuil CI revient à `high`. Node minimal est aligné sur 22.13.0. Les runners CI utilisent explicitement Ubuntu 24.04, l’installation Chromium ayant échoué sur l’image 26.04 sélectionnée par `ubuntu-latest`.
+
+Validation technique finale : **180 scénarios navigateur réussis**, **629 tests unitaires réussis, 1 ignoré**, **188 migrations chargées et 6 suites SQL réussies**, **9 tests du relais Deno réussis**, **4 scénarios n8n simulés vérifiés**. La passe finale navigateur dure 2,4 minutes ; TypeScript, ESLint et build passent. Le build conserve un avertissement non bloquant sur la taille de certains chunks chargés séparément, notamment la 3D.
 
 Les captures sont conservées localement dans `test-results/artisan-review/` ; elles n’exposent que des données fictives et ne sont pas publiées dans Git.
 

@@ -37,7 +37,7 @@ pendant un appel.
 
 ## Prérequis
 
-- **Node.js 20+ LTS** et npm. *(Non installé sur la machine de dev initiale — à installer : https://nodejs.org)*
+- **Node.js 22.13+ ou 24 LTS** et npm 10+ (`.nvmrc` utilise Node 22).
 - Un projet **Supabase** (gratuit).
 
 ---

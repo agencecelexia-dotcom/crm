@@ -89,7 +89,7 @@ export function UploadDevis({
       let montantEnregistre = true
       if (montantDetecte != null && !montant.trim()) {
         // Montant lu automatiquement dans le PDF : pré-rempli et enregistré, comme une saisie manuelle.
-        setMontant(String(montantDetecte).replace('.', ','))
+        setMontant(String(montantDetecte))
         montantEnregistre = await enregistrerMontant(true, String(montantDetecte))
       } else if (montant.trim()) {
         // Enregistre aussi le montant saisi, le cas échéant (mécaniquement).

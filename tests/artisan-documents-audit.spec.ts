@@ -398,3 +398,48 @@ for (const [nom, status, reponse] of [
     await expect(panneau.getByRole('button', { name: 'Enregistrer', exact: true })).toBeEnabled()
   })
 }
+
+test('DOC-21 le worker PDF réel extrait le TTC d’un document natif et ignore un PDF corrompu', async ({ page }) => {
+  const backend = await installerBackendArtisan(page)
+  const montants: Record<string, unknown>[] = []
+  const workers: string[] = []
+  page.on('worker', (worker) => workers.push(worker.url()))
+  await page.route('https://crm-test.supabase.co/storage/v1/object/**', (route) => route.fulfill({ json: {} }))
+  await page.route(rpc('set_devis_by_token'), (route) => route.fulfill({ json: { ok: true } }))
+  await page.route(rpc('set_montant_by_token'), (route) => {
+    montants.push(route.request().postDataJSON())
+    return route.fulfill({ json: { ok: true } })
+  })
+
+  // Le fichier contient vraiment ces textes dans ses objets PDF : aucun mock
+  // du parseur, de getDocument ou du worker, y compris dans le navigateur.
+  const { jsPDF } = await import('jspdf')
+  const document = new jsPDF()
+  document.text('DEVIS FICTIF — TEST LOCAL UNIQUEMENT', 20, 20)
+  document.text('Client de demonstration sans donnees reelles', 20, 35)
+  document.text('TOTAL HT : 1 028,80 €', 20, 60)
+  document.text('TVA 20 % : 205,76 €', 20, 75)
+  document.text('TOTAL TTC : 1 234,56 €', 20, 90)
+  const pdf = Buffer.from(document.output('arraybuffer'))
+  expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')
+
+  const panneau = await ouvrirChantier(page)
+  const fichiers = panneau.locator('input[type=file][accept="application/pdf"]')
+  const champsMontant = panneau.getByRole('spinbutton', { name: /Montant TTC —/ })
+  await expect(champsMontant.first()).toHaveValue('')
+  await fichiers.first().setInputFiles({ name: 'devis-extraction-fictif.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect.poll(() => montants, { timeout: 15_000 }).toEqual([
+    { p_token: 'affectation-demo-1', p_slot: 'devis', p_montant: 1234.56 },
+  ])
+  await expect(champsMontant.first()).toHaveValue('1234.56')
+  expect(workers.some((url) => /pdf\.worker[^/]*\.mjs/.test(url)), 'Un vrai worker PDF.js a été démarré').toBe(true)
+
+  await expect(champsMontant.last()).toHaveValue('')
+  await fichiers.last().setInputFiles({ name: 'devis-signe-corrompu.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7 fichier volontairement corrompu, sans objets ni xref') })
+  await expect(page.getByText('Devis signé par le client reçu', { exact: true })).toBeVisible()
+  await expect(champsMontant.last()).toHaveValue('')
+  expect(montants).toHaveLength(1)
+  expect(backend.erreursPage).toEqual([])
+  expect(backend.sortiesBloquees).toEqual([])
+  expect(backend.requetesNonSimulees).toEqual([])
+})

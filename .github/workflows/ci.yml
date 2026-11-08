@@ -13,7 +13,7 @@ concurrency:
 jobs:
   verify:
     name: Type-check · Lint · Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +64,7 @@ jobs:
 
   securite:
     name: Vulnérabilités des dépendances
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,17 +73,14 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # Seuil « critical » et non « high » : react-router traîne un advisory
-      # RSC (GHSA-qwww-vcr4-c8h2) non atteignable ici — l'app est une SPA
-      # cliente, sans RSC ni SSR — dont le seul « correctif » proposé est un
-      # downgrade en 7.11.0 qui reperdrait 4 correctifs réels.
-      # À repasser à --audit-level=high dès que l'advisory est levé en amont.
       - name: npm audit (production)
-        run: npm audit --omit=dev --audit-level=critical
+        run: npm audit --omit=dev --audit-level=high
 
   e2e:
     name: Tests end-to-end
-    runs-on: ubuntu-latest
+    # Version explicite : Chromium Playwright ne prend pas encore en charge
+    # l'image Ubuntu 26.04 vers laquelle ubuntu-latest a basculé.
+    runs-on: ubuntu-24.04
     needs: verify
     steps:
       - uses: actions/checkout@v4
