@@ -1,13 +1,19 @@
 begin;
 do $audit$
 declare
-  f uuid := gen_random_uuid(); c uuid := gen_random_uuid(); p uuid; a uuid; af uuid;
+  f uuid := gen_random_uuid(); c uuid := gen_random_uuid(); p uuid; p2 uuid; a uuid; af uuid;
   ancien timestamptz := '2026-01-01'; r jsonb; avant jsonb;
 begin
   insert into auth.users(id) values(f),(c);
   insert into public.membres(user_id,role,nom) values(f,'fondateur','Fictif'),(c,'commercial','Fictif commercial');
   perform set_config('request.jwt.claim.sub',f::text,true);
   perform set_config('request.jwt.claim.role','authenticated',true);
+  insert into public.projets(client_nom,metier,created_by,updated_at)
+    values('Fictif horodatage','Couverture',f,ancien) returning id into p2;
+  perform public.masquer_projet(p2,false);
+  assert (select updated_at=ancien from public.projets where id=p2), 'réessai de visibilité a changé la date';
+  update public.projets set description=description where id=p2;
+  assert (select updated_at>ancien from public.projets where id=p2), 'horodatage des autres écritures altéré';
   insert into public.artisans(nom,contrat_externe) values('Fictif masquage',true) returning id into a;
   insert into public.projets(client_nom,client_telephone,metier,created_by,updated_at)
     values('Fictif masquage','0600000000','Couverture',f,ancien) returning id into p;
