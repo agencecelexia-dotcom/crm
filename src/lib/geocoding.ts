@@ -1,13 +1,11 @@
 // ------------------------------------------------------------
 //  Géocodage adresse → lat/lng via Nominatim (OpenStreetMap), gratuit, sans clé.
 //  Règles respectées : 1 requête/seconde max (file d'attente sérialisée),
-//  cache localStorage pour éviter les appels répétés, identification via param.
+//  cache localStorage pour éviter les appels répétés, identification par l'origine HTTP.
 // ------------------------------------------------------------
 
 const CACHE_KEY = 'celexia_geocache'
 const MIN_INTERVALLE_MS = 1100 // un peu plus d'1 s entre 2 requêtes (politesse Nominatim)
-// Contact identifiable (recommandé par la politique d'usage Nominatim).
-const CONTACT_EMAIL = 'agence.celexia@gmail.com'
 
 export interface Coordonnees {
   lat: number
@@ -78,10 +76,11 @@ export async function geocoder(adresse: string): Promise<Coordonnees | null> {
       url.searchParams.set('format', 'json')
       url.searchParams.set('limit', '1')
       url.searchParams.set('countrycodes', 'fr')
-      url.searchParams.set('email', CONTACT_EMAIL)
 
       const res = await fetch(url.toString(), {
         headers: { Accept: 'application/json' },
+        // Identifie le site, sans transmettre le chemin portant l'invitation ou le jeton artisan.
+        referrerPolicy: 'origin',
         signal: AbortSignal.timeout(8_000),
       })
       if (!res.ok) return null
