@@ -54,12 +54,7 @@ export interface Automatisation {
   description: string
   /** Ce qui la déclenche, pour situer le moment. */
   declencheur: string
-  /**
-   * Vrai quand l'interrupteur n'est pas encore câblé côté base. Affiché
-   * explicitement plutôt que masqué : mieux vaut savoir qu'une automatisation
-   * tourne sans pouvoir être coupée que de l'ignorer.
-   */
-  lectureSeule?: boolean
+
 }
 
 export const AUTOMATISATIONS: Automatisation[] = [
@@ -113,14 +108,14 @@ export const AUTOMATISATIONS: Automatisation[] = [
     famille: 'planifie',
     titre: 'Recontacts du jour',
     description: 'Sort les clients à rappeler dont la date de recontact est atteinte.',
-    declencheur: 'Chaque jour à 7 h',
+    declencheur: 'Chaque jour à 7 h UTC',
   },
   {
     cle: 'pont_crm_artisan',
     famille: 'planifie',
     titre: 'Pont vers le CRM des artisans',
     description:
-      'Pousse chaque attribution, retrait et message vers le CRM propre de l’artisan, et rapatrie ses mises à jour. Se règle artisan par artisan depuis sa fiche ; cet interrupteur coupe TOUS les ponts d’un coup.',
+      'Synchronise les attributions, retraits et messages avec les CRM externes des artisans.',
     declencheur: 'À chaque événement, livré dans la minute',
   },
   {
@@ -128,15 +123,15 @@ export const AUTOMATISATIONS: Automatisation[] = [
     famille: 'planifie',
     titre: 'Contrôle de cohérence',
     description:
-      'Vérifie chaque nuit que les montants, statuts et commissions concordent, et signale les écarts.',
-    declencheur: 'Chaque jour à 7 h',
+      'Vérifie chaque jour que les montants, statuts et commissions concordent, et signale les écarts.',
+    declencheur: 'Chaque jour à 7 h UTC',
   },
   {
     cle: 'auto_pre_metre',
     famille: 'planifie',
     titre: 'Pré-mesure des chantiers',
     description:
-      'Mesure à l’avance le toit, les façades et le terrain des chantiers attribués, et les confronte à ce qu’a dit le client : l’artisan trouve ses métrés prêts. Seules les maisons reliées à leur adresse sont mesurées.',
+      'Prépare les mesures du toit, des façades et du terrain des chantiers éligibles.',
     declencheur: 'Toutes les 10 minutes, six chantiers au plus',
   },
   {
@@ -144,7 +139,7 @@ export const AUTOMATISATIONS: Automatisation[] = [
     famille: 'planifie',
     titre: 'Matériau du toit',
     description:
-      'Pendant la pré-mesure, fait lire le matériau du toit (tuile, ardoise, zinc…) sur la photo aérienne de l’IGN. Une lecture par maison, quelques centimes chacune. Coupé, l’artisan peut toujours la lancer depuis sa fiche.',
+      'Identifie le matériau du toit sur la photo aérienne pendant la pré-mesure.',
     declencheur: 'Avec la pré-mesure, une fois par maison',
   },
 
@@ -180,10 +175,9 @@ export const AUTOMATISATIONS: Automatisation[] = [
   {
     cle: 'auto_notif_suivi',
     famille: 'notif_interne',
-    titre: 'Suivi ajouté par un artisan',
-    description: 'Prévient quand un artisan écrit un suivi depuis son espace.',
-    declencheur: 'Suivi enregistré via un lien artisan',
-    lectureSeule: true,
+    titre: 'Avancement signalé par un artisan',
+    description: 'Prévient l’agence lorsqu’un artisan change l’étape de son chantier.',
+    declencheur: 'Changement d’étape, hors pause et chantier perdu',
   },
   {
     cle: 'auto_notif_retrait',
@@ -191,15 +185,13 @@ export const AUTOMATISATIONS: Automatisation[] = [
     titre: 'Chantier rendu par un artisan',
     description: 'Prévient quand un artisan se retire d’un chantier, avec son motif.',
     declencheur: 'Retrait depuis l’espace artisan',
-    lectureSeule: true,
   },
   {
     cle: 'auto_notif_perdu',
     famille: 'notif_interne',
     titre: 'Chantier perdu',
-    description: 'Alerte pour reprise et réattribution rapide du chantier.',
+    description: 'Signale les chantiers perdus et ceux qui n’ont plus d’artisan.',
     declencheur: 'Chantier marqué perdu',
-    lectureSeule: true,
   },
 
   // ---- E-mails externes -----------------------------------------------
@@ -209,6 +201,5 @@ export const AUTOMATISATIONS: Automatisation[] = [
     titre: 'Invitation d’un commercial',
     description: 'Envoie le lien de création de mot de passe à un commercial invité.',
     declencheur: 'Invitation depuis la page Équipe',
-    lectureSeule: true,
   },
 ]

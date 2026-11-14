@@ -51,8 +51,10 @@ const DEFAUTS: Reglages = {
 export function useReglages() {
   return useQuery({
     queryKey: ['reglages'],
+    refetchInterval: 30_000,
     queryFn: async (): Promise<Reglages> => {
       const { data, error } = await supabase.from('app_settings').select('cle, valeur')
+        .in('cle', [...AUTOMATISATIONS.map((a) => a.cle), ...Object.keys(DEFAUTS).filter((k) => k !== 'bascules')])
       if (error) throw error
       const map = Object.fromEntries((data ?? []).map((r) => [r.cle, r.valeur]))
       return {
@@ -84,13 +86,16 @@ export function useReglages() {
 export function useSetReglage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ cle, valeur }: { cle: string; valeur: string }) => {
-      const { error } = await supabase
-        .from('app_settings')
-        .upsert({ cle, valeur, updated_at: new Date().toISOString() })
+    mutationFn: async ({ cle, valeur, attendue }: { cle: string; valeur: string; attendue: string }) => {
+      const { error } = await supabase.rpc('regler_automatisation', { p_cle: cle, p_valeur: valeur, p_attendue: attendue })
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['reglages'] }),
+    onSettled: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['reglages'] }),
+        qc.invalidateQueries({ queryKey: ['automatisations-journal'] }),
+      ])
+    },
   })
 }
 
