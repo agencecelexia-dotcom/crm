@@ -63,7 +63,7 @@ export async function rechercherEntreprises(
   url.searchParams.set('q', q)
   url.searchParams.set('per_page', '8')
 
-  const res = await fetch(url.toString())
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8_000) })
   if (!res.ok) throw new Error('Recherche entreprise indisponible')
   const data = (await res.json()) as { results?: ApiResult[] }
 

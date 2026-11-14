@@ -19,7 +19,7 @@ export function ContratFormate({
   const dateLabel = signedAt ? `Le ${formatDate(signedAt)}` : null
 
   return (
-    <div className="rounded-lg border border-border bg-white px-5 py-6 text-[13px] leading-relaxed text-foreground">
+    <div className="break-words rounded-lg border border-border bg-white px-5 py-6 text-[13px] leading-relaxed text-foreground">
       {blocs.map((b, i) => {
         switch (b.type) {
           case 'titre':
@@ -42,19 +42,19 @@ export function ContratFormate({
             )
           case 'definition':
             return (
-              <p key={i} className="mb-1.5 text-justify">
+              <p key={i} className="mb-1.5 text-left sm:text-justify">
                 <span className="font-semibold">{b.terme}</span> : {b.texte}
               </p>
             )
           case 'paragraphe':
             return (
-              <p key={i} className="mb-2 text-justify">
+              <p key={i} className="mb-2 text-left sm:text-justify">
                 {b.texte}
               </p>
             )
           case 'signature':
             return (
-              <div key={i} className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-4">
+              <div key={i} className="mt-6 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
                 <SignatureCol
                   lignes={b.gauche}
                   image={apporteurSignature}
@@ -86,7 +86,7 @@ function SignatureCol({
   placeholder?: string
 }) {
   return (
-    <div className="text-xs">
+    <div className="min-w-0 text-xs">
       {lignes.map((l, i) => (
         <p key={i} className={i === 0 ? 'font-semibold' : 'text-muted-foreground'}>
           {l}
