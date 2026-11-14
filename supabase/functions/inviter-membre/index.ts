@@ -113,10 +113,13 @@ Deno.serve(async (req) => {
     }
 
     // L'e-mail est tenté en plus, jamais à la place. Son échec n'empêche rien.
-    const { error: eMail } = await admin.auth.admin.inviteUserByEmail(mail, {
-      redirectTo: `${base}/bienvenue`,
-    })
-    mailEnvoye = !eMail
+    const { data: envoiActif, error: eReglage } = await admin.rpc('automatisation_active', { p_cle: 'auto_mail_invitation' })
+    if (!eReglage && envoiActif === true) {
+      const { error: eMail } = await admin.auth.admin.inviteUserByEmail(mail, {
+        redirectTo: `${base}/bienvenue`,
+      })
+      mailEnvoye = !eMail
+    }
 
     // 4. Enregistrer le membre et déclencher l'e-mail de bienvenue.
     // `p_invite_par` est indispensable : cet appel se fait en service_role, or

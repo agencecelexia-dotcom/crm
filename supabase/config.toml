@@ -56,3 +56,7 @@ verify_jwt = false
 
 [functions.document-signe]
 verify_jwt = false
+
+# Session ET rôle fondateur contrôlés dans la fonction ; clé n8n côté serveur.
+[functions.automatisations-n8n]
+verify_jwt = false
