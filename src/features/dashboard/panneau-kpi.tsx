@@ -1,3 +1,4 @@
+import { couleurStatut } from '@/lib/couleurs-statut'
 import { Link } from 'react-router-dom'
 
 import { Skeleton } from '@/components/ui/skeleton'
@@ -109,10 +110,11 @@ export function DetailsKpi({ debutPeriode }: PeriodeProps) {
 }
 
 function Chiffre({ label, valeur, detail, accent = false }: { label: string; valeur: string; detail: string; accent?: boolean }) {
+  const couleur = couleurStatut(accent ? 'en_attente' : 'devis_signe')
   return (
-    <div className="min-w-0 px-4 py-5 even:border-l even:border-border [&:nth-child(n+3)]:border-t [&:nth-child(n+3)]:border-border sm:px-6 lg:[&:nth-child(n+2)]:border-l lg:[&:nth-child(n+2)]:border-border lg:[&:nth-child(n+3)]:border-t-0">
+    <div style={{ backgroundColor: `${couleur.fond}80`, borderTop: `3px solid ${couleur.accent}` }} className="min-w-0 px-4 py-5 even:border-l even:border-border [&:nth-child(n+3)]:border-t [&:nth-child(n+3)]:border-border sm:px-6 lg:[&:nth-child(n+2)]:border-l lg:[&:nth-child(n+2)]:border-border lg:[&:nth-child(n+3)]:border-t-0">
       <dt className="text-xs text-muted-foreground sm:text-[13px]">{label}</dt>
-      <dd className={`montant mt-3 break-words text-2xl font-medium leading-none sm:text-[32px] xl:text-[36px] 2xl:text-[40px] ${accent ? 'text-primary' : 'text-foreground'}`}>{valeur}</dd>
+      <dd style={{ color: couleur.texte }} className={`montant mt-3 break-words text-2xl font-medium leading-none sm:text-[32px] xl:text-[36px] 2xl:text-[40px] ${accent ? 'text-primary' : 'text-foreground'}`}>{valeur}</dd>
       <dd className="mt-3 text-xs leading-relaxed text-muted-foreground">{detail}</dd>
     </div>
   )

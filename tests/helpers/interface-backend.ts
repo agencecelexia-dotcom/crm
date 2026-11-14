@@ -69,6 +69,7 @@ const rpc: Record<string, unknown> = {
 }
 
 export async function installerBackend(page: Page, options: { connecte?: boolean; role?: 'fondateur' | 'commercial'; projetsEnErreur?: boolean; projetsVides?: boolean; refuserCreation?: boolean } = {}) {
+  await page.routeWebSocket('ws://127.0.0.1:5180/**', (ws) => { ws.onMessage(() => undefined) })
   const requetesNonSimulees: string[] = []
   const erreursPage: string[] = []
   const appelsFonctions: string[] = []

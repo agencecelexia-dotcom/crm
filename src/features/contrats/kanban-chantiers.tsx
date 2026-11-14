@@ -1,3 +1,4 @@
+import { couleurStatut, styleStatut } from '@/lib/couleurs-statut'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatEuros } from '@/lib/format'
@@ -69,7 +70,7 @@ export function KanbanChantiers({
             aria-label={`${c.label} — ${c.items.length} chantier${c.items.length > 1 ? 's' : ''}`}
             className="w-[272px] shrink-0 rounded-[10px] border border-border bg-muted/30 p-3 sm:w-[288px]"
           >
-            <header className="mb-3 flex items-center gap-2">
+            <header style={{ ...styleStatut(c.cle), borderTop: `3px solid ${couleurStatut(c.cle).accent}`, borderRadius: 8, padding: 12 }} className="mb-3 flex items-center gap-2">
               <span aria-hidden className={cn('size-1.5 rounded-full opacity-70', c.accent)} />
               <h3 className="flex-1 text-sm font-semibold">{c.label}</h3>
               <span className="text-xs font-medium tabular-nums text-muted-foreground">

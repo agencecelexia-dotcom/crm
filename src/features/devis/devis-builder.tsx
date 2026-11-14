@@ -113,6 +113,7 @@ export function DevisBuilder({
   const setPdf = useSetDevisPdf(token)
   const envoyer = useEnvoyerDevis(token)
   const [busy, setBusy] = useState(false)
+  const generationIndisponible = busy || identiteQuery.isLoading || identiteQuery.isError || !identite
   const [apercuData, setApercuData] = useState<DevisData | null>(null)
   const boutonApercu = useRef<HTMLButtonElement>(null)
   // `busy` ne protège que l'affichage : entre deux appuis rapprochés, l'état
@@ -993,6 +994,7 @@ export function DevisBuilder({
         {/* Actions — précédées du total, qui reste ainsi sous les yeux quelle
             que soit la position dans un devis de quinze lignes. */}
         <div className="shrink-0 border-t border-border bg-card px-4 py-3 sm:px-6">
+          {identiteQuery.isLoading && <p role="status" className="mb-2 text-sm text-muted-foreground">Chargement de votre fiche entreprise…</p>}
           <div className="mb-2.5 flex items-baseline justify-between gap-2">
             <span className="text-sm text-muted-foreground">
               {lignesRemplies.length} ligne{lignesRemplies.length > 1 ? 's' : ''}
@@ -1004,15 +1006,15 @@ export function DevisBuilder({
               occupait exactement la place de « Reprendre ces lignes » dans
               l'entretien, et un second appui envoyait le devis par email. */}
           <div className="grid grid-cols-3 gap-2">
-          <Button ref={boutonApercu} variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={apercu} disabled={busy}>
+          <Button ref={boutonApercu} variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={apercu} disabled={generationIndisponible}>
             <Eye className="hidden size-4 sm:block" aria-hidden />
             Aperçu
           </Button>
-          <Button variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={() => enregistrer('garder')} disabled={busy} aria-busy={busy}>
+          <Button variant="outline" className="min-w-0 px-2 text-xs sm:text-sm" onClick={() => enregistrer('garder')} disabled={generationIndisponible} aria-busy={busy}>
             {busy ? <Loader2 className="hidden size-4 animate-spin sm:block" aria-hidden /> : <Save className="hidden size-4 sm:block" aria-hidden />}
             Enregistrer
           </Button>
-          <Button className="min-w-0 px-2 text-xs sm:text-sm" onClick={() => enregistrer('client')} disabled={busy} aria-busy={busy}>
+          <Button className="min-w-0 px-2 text-xs sm:text-sm" onClick={() => enregistrer('client')} disabled={generationIndisponible} aria-busy={busy}>
             {busy ? <Loader2 className="hidden size-4 animate-spin sm:block" aria-hidden /> : <Send className="hidden size-4 sm:block" aria-hidden />}
             Au client
           </Button>

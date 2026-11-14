@@ -27,6 +27,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { SignaturePad, type SignaturePadHandle } from '@/components/signature-pad'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
+import { LegendeStatuts } from '@/components/legende-statuts'
+import { styleStatut } from '@/lib/couleurs-statut'
 import { STATUTS_ORDRE, statutInfo } from '@/lib/constants'
 import { formatDate } from '@/lib/format'
 import { telechargerContratPdf } from './contrat-pdf'
@@ -46,6 +48,7 @@ import { useListeDevis, useReprendreDevis, type BrouillonDevis } from '@/feature
 import { CarteIdentite } from '@/features/devis/carte-identite'
 import { EcranMetres } from '@/features/metre/ecran-metres'
 import { FeuilleMetreDifferee } from '@/features/metre/feuille-metre-differee'
+import { FONCTIONNALITES_PAR_DEFAUT, useFonctionnalitesArtisan } from '@/features/parametres/fonctionnalites-artisan'
 import { CadreEspace } from './cadre-espace'
 import { ECRANS } from './ecrans-espace'
 import { PageHeader } from '@/components/page-header'
@@ -77,7 +80,10 @@ export function EspaceArtisanPage() {
   const [vuePerdus, setVuePerdus] = useState(false)
   // L'écran courant vit dans l'URL : le bouton retour du téléphone ramène au
   // précédent au lieu de quitter l'espace.
-  const [vue, allerA] = useVueEspace()
+  const [vueDemandee, allerA] = useVueEspace()
+  const fonctionnalitesQuery = useFonctionnalitesArtisan()
+  const fonctionnalites = fonctionnalitesQuery.data ?? FONCTIONNALITES_PAR_DEFAUT
+  const vue = fonctionnalites[vueDemandee] ? vueDemandee : 'chantiers'
   // Le chantier dont on prend les mesures, s'il y en a un.
   const [mesure, setMesure] = useState<ProjetEspace | null>(null)
   // Filtre demandé depuis le tableau de bord.
@@ -153,7 +159,7 @@ export function EspaceArtisanPage() {
   const projets = accesOuvert ? projetsRecus : projetsRecus.map((p) => ({ ...p, client_nom: null, client_telephone: null, client_email: null, client_adresse: null, client_code_postal: null, suivis: [] }))
   const projetsPerdus = data.projets_perdus ?? []
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
-  const peutChiffrer = accesOuvert && chiffrage?.peut_chiffrer === true
+  const peutChiffrer = fonctionnalites.devis && accesOuvert && chiffrage?.peut_chiffrer === true
 
   function ouvrirDevisProjet(p: ProjetEspace) {
     setDevisInitial({
@@ -177,7 +183,8 @@ export function EspaceArtisanPage() {
   }
 
   return (
-    <CadreEspace vue={vue} onAller={naviguer} nom={nomArtisan || 'Artisan'} societe={artisan.societe} signe={accesOuvert} nbChantiers={projets.length}>
+    <CadreEspace fonctionnalites={fonctionnalites} vue={vue} onAller={naviguer} nom={nomArtisan || 'Artisan'} societe={artisan.societe} signe={accesOuvert} nbChantiers={projets.length}>
+      {vue !== vueDemandee && <p role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">Cette rubrique est désactivée par Celexia. Retrouvez vos dossiers dans Mes chantiers.</p>}
       <PageHeader
         titre={vue === 'chantiers' && vuePerdus ? 'Chantiers perdus' : ecran.titre}
         sousTitre={`${artisan.societe || nomArtisan} · ${ecran.detail}`}
@@ -199,7 +206,7 @@ export function EspaceArtisanPage() {
             setFiltreDemande(f)
             document.getElementById('mes-chantiers')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
           }} />}
-          <ListeChantiers filtreDemande={filtreDemande} onFiltreApplique={() => setFiltreDemande(null)} projets={projets} signe={accesOuvert} onChange={() => void refetch()} onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined} onMesurer={accesOuvert ? setMesure : undefined} />
+          <ListeChantiers filtreDemande={filtreDemande} onFiltreApplique={() => setFiltreDemande(null)} projets={projets} signe={accesOuvert} onChange={() => void refetch()} onCreerDevis={peutChiffrer ? ouvrirDevisProjet : undefined} onMesurer={accesOuvert && fonctionnalites.metres ? setMesure : undefined} />
           {accesOuvert && <p className="text-xs leading-6 text-muted-foreground">Votre interlocuteur Celexia vous transmet ces chantiers. Contactez vos clients et renseignez l’avancement pour garder un suivi partagé avec l’agence.</p>}
         </div>
       ))}
@@ -229,7 +236,7 @@ export function EspaceArtisanPage() {
       )}
       {vue === 'aide' && <PiedDePageArtisan />}
 
-      {accesOuvert && mesure && token && <FeuilleMetreDifferee key={mesure.token} token={token} affectationToken={mesure.token} titre={mesure.client_nom} onClose={() => setMesure(null)} />}
+      {fonctionnalites.metres && accesOuvert && mesure && token && <FeuilleMetreDifferee key={mesure.token} token={token} affectationToken={mesure.token} titre={mesure.client_nom} onClose={() => setMesure(null)} />}
       {peutChiffrer && token && devisInitial && <DevisBuilder key={devisInitial.brouillon?.id ?? devisInitial.affectation_token ?? 'standalone'} token={token} vendeur={artisan} initial={devisInitial} onClose={() => setDevisInitial(null)} onDone={() => void refetch()} />}
     </CadreEspace>
   )
@@ -411,6 +418,7 @@ function ListeChantiers({
         />
       </div>
 
+      <LegendeStatuts />
       {/* Filtres par statut */}
       <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border pb-1">
         {filtres.map((f) => (
@@ -419,8 +427,9 @@ function ListeChantiers({
             type="button"
             onClick={() => setFiltre(f.cle)}
             aria-pressed={filtre === f.cle}
+            style={f.cle !== 'tous' && f.cle !== 'urgents' ? { ...styleStatut(f.cle), borderBottomWidth: filtre === f.cle ? 3 : 1 } : undefined}
             className={cn(
-              'flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-xs transition-colors',
+              'flex min-h-11 shrink-0 items-center gap-2 rounded-t-lg border-b-2 px-3 text-xs transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
               filtre === f.cle
                 ? 'border-primary font-medium text-foreground'

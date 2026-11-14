@@ -41,7 +41,7 @@ export function DashboardPage() {
     : format(periode === 'mois' ? startOfMonth(new Date()) : subDays(new Date(), 89), 'yyyy-MM-dd')
   const kpiArtisansQuery = useKpiParArtisan(debutPeriode)
   const caQuery = useCaParMois(6)
-  const projets = projetsQuery.data ?? []
+  const projets = (projetsQuery.data ?? []).filter((p) => !p.masque_agence_at)
 
   const topArtisans = useMemo(() => (kpiArtisansQuery.data ?? [])
     .filter((a) => a.ca_signe > 0)

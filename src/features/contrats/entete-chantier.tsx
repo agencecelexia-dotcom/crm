@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Lock, MapPin } from 'lucide-r
 import { cn } from '@/lib/utils'
 import { StatutArtisan } from './statut-artisan'
 import { formatEuros } from '@/lib/format'
-import { statutInfo } from '@/lib/constants'
+import { couleurStatut } from '@/lib/couleurs-statut'
 import { ancienneteLabel, COULEUR_URGENCE, estNouveau, urgenceChantier } from './urgence-chantier'
 import type { ProjetEspace } from '@/types/database'
 
@@ -57,6 +57,7 @@ export function EnteteChantier({
         compact ? 'p-4' : 'p-4 sm:px-5 xl:min-h-24',
         depliable && 'cursor-pointer transition-colors hover:bg-muted/40',
       )}
+      style={{ backgroundColor: `${couleurStatut(projet.statut).fond}80` }}
       onClick={depliable ? onToggle : undefined}
     >
       <div className={cn('min-w-0 flex-1', !compact && 'xl:grid xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)_minmax(0,1fr)] xl:items-center xl:gap-6')}>
@@ -159,8 +160,8 @@ export function LisereStatut({ statut }: { statut: string }) {
   return (
     <span
       aria-hidden
-      className="absolute inset-y-0 left-0 w-0.5 opacity-60"
-      style={{ background: statutInfo(statut).color }}
+      className="absolute inset-y-0 left-0 w-1"
+      style={{ background: couleurStatut(statut).accent }}
     />
   )
 }

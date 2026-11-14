@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2, AlertCircle, X, LockKeyhole, MoreHorizontal, List, Columns3, SlidersHorizontal } from 'lucide-react'
 
+import { LegendeStatuts } from '@/components/legende-statuts'
+import { couleurStatut } from '@/lib/couleurs-statut'
 import { PageHeader } from '@/components/page-header'
 import { Box, Mic, RotateCcw, UserCheck } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
@@ -27,6 +29,7 @@ import { useAffectationsCounts } from '../hooks/use-affectations'
 import { BadgePerduPar } from '../components/badge-perdu-par'
 import { useArtisansSignes } from '@/features/contrats/use-contrats'
 import { QuickProspectDialog } from '../components/quick-prospect-dialog'
+import { MasquerProjetButton } from '../components/masquer-projet-button'
 import { KanbanProjets } from '../components/kanban-projets'
 
 // Liste des projets : recherche + filtres statut / métier / ville.
@@ -44,6 +47,8 @@ export function ProjetsListPage() {
   // survivent au bouton « retour » du navigateur et sont partageables/favoris.
   const [params, setParams] = useSearchParams()
   const recherche = params.get('q') ?? ''
+  const visibilite = params.get('visibilite') === 'masques' ? 'masques' : params.get('visibilite') === 'tous' ? 'tous' : 'actifs'
+  const nbMasques = (projets ?? []).filter((p) => p.masque_agence_at).length
   const statut = params.get('statut') ?? 'tous'
   const metier = params.get('metier') ?? 'tous'
   const tri = params.get('tri') ?? 'recent'
@@ -52,8 +57,10 @@ export function ProjetsListPage() {
   // Met à jour un paramètre (valeur par défaut → on le retire pour garder l'URL propre).
   function setParam(cle: string, valeur: string, defaut: string) {
     setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
+      () => {
+        // La navigation peut être encore en transition React lorsqu’on tape.
+        // L’URL contient déjà le nouvel onglet ; ne pas réutiliser l’ancien rendu.
+        const next = new URLSearchParams(window.location.search)
         if (!valeur || valeur === defaut) next.delete(cle)
         else next.set(cle, valeur)
         return next
@@ -93,7 +100,11 @@ export function ProjetsListPage() {
     if (params.toString() === '') {
       try {
         const saved = sessionStorage.getItem(stockageFiltres)
-        if (saved) setParams(new URLSearchParams(saved), { replace: true })
+        if (saved) {
+          const filtres = new URLSearchParams(saved)
+          filtres.delete('visibilite')
+          setParams(filtres, { replace: true })
+        }
       } catch { /* Les filtres URL fonctionnent même si le stockage est bloqué. */ }
     }
   }, [params, setParams, stockageFiltres])
@@ -107,6 +118,7 @@ export function ProjetsListPage() {
     const q = recherche.trim().toLowerCase()
     const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
     return projets.filter((p) => {
+      const matchVisibilite = visibilite === 'tous' || (visibilite === 'masques' ? Boolean(p.masque_agence_at) : !p.masque_agence_at)
       const matchPipe = pipe === 'tous' || p.origine === pipe
       // Même périmètre que a_traiter(), migration 0173.
       const matchAttribution = !aAttribuer || (p.origine === 'neuf' && !['mort', 'devis_signe', 'termine', 'artisan_demarche', 'demarchage'].includes(p.statut))
@@ -119,9 +131,9 @@ export function ProjetsListPage() {
         [p.client_nom, p.client_ville, p.metiers.join(' '), p.artisan?.societe, p.artisan?.nom]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q))
-      return matchAttribution && matchPipe && matchMetier && matchTexte
+      return matchVisibilite && matchAttribution && matchPipe && matchMetier && matchTexte
     })
-  }, [projets, recherche, metier, pipe, aAttribuer])
+  }, [projets, recherche, metier, pipe, aAttribuer, visibilite])
 
   // Vue liste : on applique aussi le filtre statut, puis le tri choisi.
   const resultats = useMemo(() => {
@@ -191,13 +203,24 @@ export function ProjetsListPage() {
         }
       />
 
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <Tabs value={visibilite} onValueChange={(v) => setParam('visibilite', v, 'actifs')}>
+          <TabsList className="h-auto flex-wrap" aria-label="Visibilité des projets">
+            <TabsTrigger value="actifs">Pipeline · {(projets?.length ?? 0) - nbMasques}</TabsTrigger>
+            <TabsTrigger value="masques">Masqués · {nbMasques}</TabsTrigger>
+            <TabsTrigger value="tous">Tous les projets</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <p className="text-xs text-muted-foreground">Masquer conserve le dossier. Restaurer le remet dans le pipeline.</p>
+      </div>
+      <LegendeStatuts />
       <section className="overflow-hidden rounded-[10px] border border-border bg-card" aria-label="Liste et filtres des projets">
         <div className="space-y-3 border-b border-border p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex w-full min-w-0 items-center gap-2 xl:w-auto xl:flex-1">
               <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input className="h-10 bg-card pl-9" placeholder="Rechercher un client, une ville, un artisan…" aria-label="Rechercher un projet" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+                <Input className="h-10 bg-card pl-9" placeholder="Client, téléphone, ville ou artisan…" aria-label="Rechercher un projet" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
               </div>
               <Button variant="outline" size="sm" className="h-10 gap-2 bg-card px-3 xl:hidden" aria-expanded={filtresOuverts} aria-controls="filtres-projets" onClick={() => setFiltresOuverts((ouvert) => !ouvert)}>
                 <span className="relative"><SlidersHorizontal className="size-4" aria-hidden />{filtresActifs && <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-primary" aria-hidden />}</span>
@@ -270,7 +293,7 @@ export function ProjetsListPage() {
         ) : vue === 'pipeline' ? (
           <div className="p-4"><KanbanProjets projets={base} /></div>
         ) : resultats.length === 0 ? (
-          <div className="p-4"><EmptyState icon={FolderKanban} titre="Aucun projet" description="Crée un projet pendant l'appel pour démarrer le suivi." action={peutCreerLead ? <Button asChild><Link to="/projets/new"><Plus className="size-4" />Nouveau projet</Link></Button> : undefined} /></div>
+          <div className="p-4"><EmptyState icon={FolderKanban} titre={visibilite === 'masques' ? 'Aucun projet masqué' : 'Aucun projet dans le pipeline'} description="Les dossiers masqués restent accessibles dans l’onglet Masqués ou Tous les projets." action={peutCreerLead ? <Button asChild><Link to="/projets/new"><Plus className="size-4" />Nouveau projet</Link></Button> : undefined} /></div>
         ) : (
           <>
             <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1fr)_16px] gap-5 border-b border-border bg-muted/40 px-5 py-3 text-xs font-medium text-muted-foreground xl:grid" aria-hidden>
@@ -278,7 +301,7 @@ export function ProjetsListPage() {
             </div>
             <ul className="divide-y divide-border" aria-label="Projets">
               {resultats.map((p) => (
-                <li key={p.id}>
+                <li key={p.id} className="relative border-l-4" style={{ borderLeftColor: couleurStatut(p.masque_agence_at ? 'masque' : p.statut).accent }}>
                   <Link to={`/projets/${p.id}`} className="group grid grid-cols-2 items-start gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary sm:px-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1fr)_16px] xl:gap-5 xl:py-5">
                     <div className="col-span-2 min-w-0 xl:col-span-1">
                       <p className="break-words text-sm font-semibold leading-5">{p.client_nom}</p>
@@ -304,6 +327,10 @@ export function ProjetsListPage() {
                     </div>
                     <ChevronRight className="hidden size-4 self-center text-muted-foreground/60 xl:block" aria-hidden />
                   </Link>
+                  <div className="flex items-center justify-end gap-3 px-5 pb-3">
+                    {p.masque_agence_at && <span className="text-xs font-medium text-muted-foreground">Masqué</span>}
+                    <MasquerProjetButton projet={p} compact />
+                  </div>
                 </li>
               ))}
             </ul>

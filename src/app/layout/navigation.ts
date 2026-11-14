@@ -1,6 +1,6 @@
 import {
   Home, Map, FolderKanban, Users, StickyNote, PenTool, Zap,
-  BadgeEuro, ListChecks, Target, UserCog, RotateCcw, Briefcase,
+  BadgeEuro, Settings2, Target, UserCog, RotateCcw, Briefcase,
   Compass, Image, Box, Ruler, PhoneCall, type LucideIcon,
 } from 'lucide-react'
 
@@ -20,7 +20,6 @@ const GROUPES: { titre: string; items: NavigationItem[] }[] = [
     titre: 'Pilotage',
     items: [
       { to: '/', label: 'Tableau de bord', icon: Home },
-      { to: '/taches', label: 'À faire', icon: ListChecks, fondateurSeul: true },
       { to: '/commissions', label: 'Commissions', icon: BadgeEuro, fondateurSeul: true },
       { to: '/reprises', label: 'Suivi des reprises', icon: RotateCcw, fondateurSeul: true },
     ],
@@ -31,7 +30,7 @@ const GROUPES: { titre: string; items: NavigationItem[] }[] = [
       { to: '/projets', label: 'Projets', icon: FolderKanban, exclure: ['/projets/a-reattribuer'] },
       { to: '/projets/a-reattribuer', label: 'À réattribuer', icon: RotateCcw },
       { to: '/mon-pipe', label: 'Mes reprises', icon: Briefcase, commercialSeul: true },
-      { to: '/artisans', label: 'Artisans', icon: Users },
+      { to: '/artisans', label: 'Artisans / Partenaires', icon: Users },
       { to: '/appel', label: 'Prise d’appel', icon: PhoneCall, creationLeadRequise: true },
       { to: '/carte', label: 'Carte', icon: Map },
       { to: '/couverture', label: 'Prospection locale', icon: Target, fondateurSeul: true },
@@ -51,6 +50,7 @@ const GROUPES: { titre: string; items: NavigationItem[] }[] = [
     titre: 'Administration',
     items: [
       { to: '/equipe', label: 'Équipe', icon: UserCog, fondateurSeul: true },
+      { to: '/parametres/crm-artisan', label: 'CRM artisan', icon: Settings2, fondateurSeul: true },
       { to: '/parametres/automatisations', label: 'Automatisations', icon: Zap, fondateurSeul: true },
       { to: '/parametres/signature', label: 'Ma signature', icon: PenTool },
     ],
