@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { installerBackend, projets } from './helpers/interface-backend'
+import { installerBackend, projets, liensInscription } from './helpers/interface-backend'
 import { installerBackendArtisan, URL_ARTISAN_DEMO } from './helpers/espace-artisan-backend'
 
 test.beforeEach(({ page }, info) => {
@@ -56,7 +56,7 @@ test('invitation email sans nom : aperçu adapté et confirmation réelle requis
   await page.getByLabel(/Email destinataire/).fill('test@example.test')
   const apercu = page.frameLocator('iframe[title="Aperçu de l’invitation Celexia"]')
   await expect(apercu.getByText('Bonjour,', { exact: true })).toBeVisible()
-  await expect(apercu.getByRole('link', { name: /Compléter mon inscription/ })).toHaveAttribute('href', 'https://crm-ci7k.vercel.app/rejoindre/email?taux=10')
+  await expect(apercu.getByRole('link', { name: /Compléter mon inscription/ })).toHaveAttribute('href', `https://crm-ci7k.vercel.app/rejoindre/${liensInscription.find((l) => l.canal === 'email' && l.taux === 10)!.token}`)
   await page.getByRole('button', { name: 'Envoyer l’invitation à 10 % via Gmail', exact: true }).click()
   await expect(page.getByText(/Gmail a confirmé la prise en charge/)).toBeVisible()
   expect(envois).toHaveLength(1)

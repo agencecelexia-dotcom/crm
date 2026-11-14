@@ -20,7 +20,11 @@ Important : le Code parse le corps même reçu en `text/plain` (le front l'envoi
 Le formulaire agence appelle l’Edge Function `invitation-artisan` avec sa session.
 Elle vérifie le membre et son droit de création d’artisans, construit le HTML,
 et réserve un identifiant dans `invitations_artisans` (migration 0193).
-Le taux est toujours explicite dans `/rejoindre/email?taux=10|15|20`.
+Les liens sont désormais de la forme `/rejoindre/<jeton aléatoire>` (migration 0195).
+Le canal et le taux sont stockés côté serveur. La fonction d’inscription les relit
+depuis ce jeton et ignore tout taux ou source envoyé par le navigateur. La liste
+des liens est réservée aux membres autorisés à inviter. Les anciens liens portant
+`?taux=…` ne permettent plus de s’inscrire : les remplacer depuis le CRM.
 
 Pour importer le modèle, remplacer `__EDGE_URL__`, `__HEADER_CREDENTIAL_ID__`
 et les deux références Gmail par les credentials de l’instance. Le credential

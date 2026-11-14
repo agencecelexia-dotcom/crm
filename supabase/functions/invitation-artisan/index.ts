@@ -49,9 +49,12 @@ Deno.serve(async (req) => {
     const limite = await admin.from('invitations_artisans').select('id', { count: 'exact', head: true }).eq('created_by', membre.user_id).gte('created_at', new Date(Date.now() - 3600000).toISOString())
     if (limite.error) return json({ ok: false, error: 'journal_indisponible' }, 503)
     if ((limite.count ?? 0) >= 60) return json({ ok: false, error: 'limite_horaire' }, 429)
+    const { data: lien, error: erreurLien } = await admin.from('liens_inscription_artisan')
+      .select('token').eq('canal', 'email').eq('taux', invitation.taux).eq('actif', true).single()
+    if (erreurLien || !lien?.token) return json({ ok: false, error: 'liens_indisponibles' }, 503)
     const { error } = await admin.from('invitations_artisans').insert({ id: p.id, created_by: membre.user_id, ...invitation })
     if (error) return json({ ok: false, error: error.code === '23505' ? 'envoi_a_verifier' : 'reservation_impossible' }, 409)
-    const email = emailInvitation(invitation)
+    const email = emailInvitation(invitation, lien.token)
     try {
       const reponse = await fetch(webhook, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(45_000), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` }, body: JSON.stringify({ id: p.id, email: invitation.email, subject: email.subject, html: email.html }) })
       const accuse = await reponse.json().catch(() => null)
