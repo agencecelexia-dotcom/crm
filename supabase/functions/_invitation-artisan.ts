@@ -16,13 +16,14 @@ export function validerInvitation(input: unknown): InvitationArtisan {
 
 const h = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 
-/** Pas de donnée personnelle dans l'URL ; source et taux toujours explicites. */
-export function lienInscription(origin: string, canal: string, taux: number) {
-  return `${origin.replace(/\/$/, '')}/rejoindre${canal ? '/' + encodeURIComponent(canal) : ''}?taux=${taux}`
+/** Jeton opaque généré par le serveur : ni le canal ni le taux dans l'URL. */
+export function lienInscription(origin: string, token: string) {
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('Lien d’inscription invalide')
+  return `${origin.replace(/\/$/, '')}/rejoindre/${token}`
 }
 
-export function emailInvitation(p: InvitationArtisan, origin = 'https://crm-ci7k.vercel.app') {
-  const lien = lienInscription(origin, 'email', p.taux)
+export function emailInvitation(p: InvitationArtisan, token: string, origin = 'https://crm-ci7k.vercel.app') {
+  const lien = lienInscription(origin, token)
   const destinataire = [p.prenom, p.nom].filter(Boolean).join(' ')
   const bonjour = destinataire ? `Bonjour ${destinataire},` : p.societe ? `Bonjour à l’équipe ${p.societe},` : 'Bonjour,'
   const subject = 'Votre invitation à rejoindre Celexia'

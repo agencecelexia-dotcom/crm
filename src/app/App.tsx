@@ -113,7 +113,7 @@ export default function App() {
               element={<ErrorBoundary><InscriptionArtisanPage /></ErrorBoundary>}
             />
             <Route
-              path="/rejoindre/:canal"
+              path="/rejoindre/:invitationToken"
               element={<ErrorBoundary><InscriptionArtisanPage /></ErrorBoundary>}
             />
 

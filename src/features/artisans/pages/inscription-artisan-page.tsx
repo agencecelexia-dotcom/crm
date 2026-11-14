@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { CheckCircle2, Loader2, ArrowRight, ShieldCheck, Phone, LayoutDashboard } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
-import { N8N_WEBHOOK_URL, TAUX_COMMISSION_STANDARD, TEL_APPORTEUR } from '@/lib/constants'
+import { N8N_WEBHOOK_URL, TEL_APPORTEUR } from '@/lib/constants'
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -66,15 +67,23 @@ type Step = 'form' | 'explication' | 'contrat' | 'fini'
 // Lien PUBLIC d'auto-inscription artisan (WhatsApp/Facebook…), en 3 étapes :
 // 1) fiche complète → 2) explication du contrat → 3) signature → message final.
 export function InscriptionArtisanPage() {
-  const { canal } = useParams()
-  const [params] = useSearchParams()
-  // Taux de commission porté par le lien (?taux=20), borné 5–30.
-  // Sans paramètre : le taux standard. Le bornage est aussi appliqué côté
-  // serveur (trigger clamp_taux_inscription_publique, migration 0065).
-  const tauxPct = Math.min(
-    30,
-    Math.max(5, Number(params.get('taux')) || TAUX_COMMISSION_STANDARD * 100),
-  )
+  const { invitationToken } = useParams()
+  const formatValide = /^[a-f0-9]{64}$/.test(invitationToken ?? '')
+  const lien = useQuery({
+    queryKey: ['lien-inscription-public', invitationToken],
+    enabled: formatValide,
+    retry: false,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<{ taux: number } | null> => {
+      const { data, error } = await supabase.rpc('lien_inscription_artisan', { p_token: invitationToken })
+      if (error) throw error
+      if (data?.ok !== true) return null
+      if (![10, 15, 20].includes(data.taux)) throw new Error('Lien indisponible')
+      return { taux: data.taux }
+    },
+  })
+  const [tauxInscrit, setTauxInscrit] = useState<number | null>(null)
+  const tauxPct = tauxInscrit ?? lien.data?.taux
   const [step, setStep] = useState<Step>('form')
   const [submitting, setSubmitting] = useState(false)
   const [contratToken, setContratToken] = useState<string | null>(null)
@@ -85,22 +94,25 @@ export function InscriptionArtisanPage() {
   }
 
   async function onSubmit(input: ArtisanInput) {
+    if (!lien.data || !invitationToken) return
     setSubmitting(true)
     try {
       const coord = await geocodeArtisan(input)
+      const payload: Record<string, unknown> = {
+        ...input, latitude: coord?.lat ?? null, longitude: coord?.lon ?? null,
+        invitation_token: invitationToken,
+      }
+      // Seul le serveur fixe ces valeurs à partir du lien reçu.
+      delete payload.taux_commission
+      delete payload.source
       const { data, error } = await supabase.rpc('inscrire_artisan', {
-        p_payload: {
-          ...input,
-          latitude: coord?.lat ?? null,
-          longitude: coord?.lon ?? null,
-          source: `auto:${canal || 'lien'}`,
-          taux_commission: tauxPct / 100,
-        },
+        p_payload: payload,
       })
       const r = data as
-        | { ok?: boolean; error?: string; contrat_token?: string; espace_token?: string; email?: string | null }
+        | { ok?: boolean; error?: string; contrat_token?: string; espace_token?: string; email?: string | null; taux_commission?: number }
         | null
       if (error || !r?.ok) throw new Error(r?.error || error?.message || 'Inscription impossible')
+      if (typeof r.taux_commission === 'number') setTauxInscrit(Math.round(r.taux_commission * 100))
       setContratToken(r.contrat_token ?? null)
       if (r.espace_token) {
         setEspace({
@@ -120,6 +132,23 @@ export function InscriptionArtisanPage() {
       setSubmitting(false)
     }
   }
+
+  if (!lien.data) return (
+    <main className="flex min-h-dvh items-center justify-center bg-secondary p-6">
+      <div className="w-full max-w-md space-y-5 rounded-2xl border border-border bg-card p-7 text-center">
+        <BrandLogo className="mx-auto h-10" />
+        {formatValide && lien.isLoading ? <p role="status">Vérification de votre invitation…</p> : lien.isError ? <>
+          <h1 className="text-xl font-semibold">Invitation indisponible</h1>
+          <p role="alert" className="text-sm text-muted-foreground">Nous n’avons pas pu vérifier votre lien. Réessayez dans un instant.</p>
+          <Button onClick={() => void lien.refetch()}>Réessayer</Button>
+        </> : <>
+          <h1 className="text-xl font-semibold">Demandez un nouveau lien</h1>
+          <p className="text-sm text-muted-foreground">Ce lien d’inscription est incomplet ou n’est plus valide. Contactez Celexia pour recevoir votre invitation.</p>
+          <Button asChild><a href={`tel:${TEL_APPORTEUR}`}>Contacter Celexia</a></Button>
+        </>}
+      </div>
+    </main>
+  )
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-accent/60 via-secondary to-secondary">

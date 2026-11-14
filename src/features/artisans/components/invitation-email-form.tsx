@@ -7,14 +7,14 @@ import { supabase } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/format'
 import { emailInvitation, validerInvitation } from '../../../../supabase/functions/_invitation-artisan'
 
-export function InvitationEmailForm({ taux, onRetour }: { taux: 10 | 15 | 20; onRetour: () => void }) {
+export function InvitationEmailForm({ taux, token, onRetour }: { taux: 10 | 15 | 20; token: string; onRetour: () => void }) {
   const [champs, setChamps] = useState({ prenom: '', nom: '', societe: '', email: '' })
   const [envoi, setEnvoi] = useState(false)
   const [resultat, setResultat] = useState<'confirme' | 'incertain' | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [id] = useState(() => crypto.randomUUID())
   const qc = useQueryClient()
-  const apercu = emailInvitation({ ...champs, taux })
+  const apercu = emailInvitation({ ...champs, taux }, token)
   const historique = useQuery({
     queryKey: ['invitations-artisans'],
     refetchInterval: resultat === 'incertain' ? 5_000 : false,
@@ -49,6 +49,7 @@ export function InvitationEmailForm({ taux, onRetour }: { taux: 10 | 15 | 20; on
         limite_horaire: 'La limite de 60 invitations par heure est atteinte. Réessayez plus tard.',
         journal_indisponible: 'Le journal est indisponible. L’envoi n’a pas été lancé.',
         reservation_impossible: 'La demande n’a pas pu être enregistrée. L’envoi n’a pas été lancé.',
+        liens_indisponibles: 'Le lien d’inscription est indisponible. Aucune invitation n’a été envoyée. Réessayez plus tard.',
       }
       if (reponse?.error && refus[reponse.error]) {
         setErreur(refus[reponse.error])

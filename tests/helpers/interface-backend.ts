@@ -45,7 +45,12 @@ const kpi = {
   commission_acquise: 6840, commission_encaissee: 4000, commission_a_encaisser: 2840,
   taux_commission_moyen: 0.15, periode_debut: '2026-11-01', periode_fin: null,
 }
+export const liensInscription = ['lien', 'facebook', 'whatsapp', 'instagram', 'email'].flatMap((canal, i) =>
+  [10, 15, 20].map((taux, j) => ({ canal, taux, token: (i * 3 + j + 1).toString(16).repeat(64) })),
+)
+
 const rpc: Record<string, unknown> = {
+  liens_inscription_agence: liensInscription,
   kpi_agence: kpi,
   kpi_par_artisan: [
     { artisan_id: 'artisan-robert', artisan_nom: 'Robert Rénovation', leads_transmis: 2, rendus: 0, jamais_ouverts: 1, devis_envoyes: 1, signes: 1, perdus: 0, taux_conversion_global: 100, ca_signe: 28600, panier_moyen: 28600, delai_signature_j: 5 },
