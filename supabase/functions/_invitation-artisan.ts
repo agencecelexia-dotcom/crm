@@ -39,7 +39,7 @@ export function emailInvitation(p: InvitationArtisan, origin = 'https://crm-ci7k
 <p style="margin:0 0 16px;font-size:16px;line-height:1.65">${h(bonjour)}</p>
 <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#4b455b">Celexia vous invite à rejoindre son réseau d’entreprises du bâtiment. Présentez votre activité, vos métiers et votre zone d’intervention pour que nous puissions vous proposer des projets adaptés.</p>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px"><tr><td style="padding:20px">
-<p style="margin:0 0 6px;font-size:12px;font-weight:bold;color:#5b21b6">VOTRE TAUX DE COMMISSION</p>
+<p style="margin:0 0 6px;font-size:12px;font-weight:bold;color:#5b21b6">TAUX DE COMMISSION</p>
 <p style="margin:0;font-size:28px;font-weight:bold;color:#5b21b6">${p.taux} % <span style="font-size:14px;font-weight:normal">du montant TTC des devis signés</span></p>
 <p style="margin:10px 0 0;font-size:13px;line-height:1.6;color:#51416b">Ce taux est repris dans le contrat présenté lors de votre inscription. Prenez le temps de le consulter avant de signer.</p>
 </td></tr></table>
