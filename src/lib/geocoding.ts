@@ -62,14 +62,14 @@ export function composerAdresse(parts: {
 
 /**
  * Géocode une adresse texte. Renvoie null si introuvable ou adresse vide.
- * Résultat mis en cache (y compris les "non trouvés" pour ne pas réinterroger).
+ * Les résultats trouvés sont mis en cache ; un échec temporaire peut être réessayé.
  */
 export async function geocoder(adresse: string): Promise<Coordonnees | null> {
   const requete = adresse.trim().toLowerCase()
   if (!requete) return null
 
   const cache = lireCache()
-  if (requete in cache) return cache[requete]
+  if (cache[requete]) return cache[requete]
 
   return planifier(async () => {
     try {
@@ -82,6 +82,7 @@ export async function geocoder(adresse: string): Promise<Coordonnees | null> {
 
       const res = await fetch(url.toString(), {
         headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(8_000),
       })
       if (!res.ok) return null
 
@@ -89,6 +90,7 @@ export async function geocoder(adresse: string): Promise<Coordonnees | null> {
       const coord = data[0]
         ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
         : null
+      if (!coord || !Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) return null
 
       const maj = lireCache()
       maj[requete] = coord

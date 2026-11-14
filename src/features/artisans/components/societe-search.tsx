@@ -16,16 +16,18 @@ export function SocieteSearch({
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(false)
   const [resultats, setResultats] = useState<ResultatEntreprise[] | null>(null)
+  const [erreur, setErreur] = useState<string | null>(null)
 
   async function rechercher() {
-    if (q.trim().length < 3) return toast.error('Tape au moins 3 caractères')
+    if (loading) return
+    if (q.trim().length < 3) return setErreur('Saisissez au moins 3 caractères pour rechercher une entreprise.')
+    setErreur(null)
     setLoading(true)
     try {
       const r = await rechercherEntreprises(q)
       setResultats(r)
-      if (r.length === 0) toast.info('Aucune entreprise trouvée')
     } catch {
-      toast.error('Recherche indisponible')
+      setErreur('La recherche est indisponible. Vous pouvez réessayer ou remplir les champs ci-dessous.')
     } finally {
       setLoading(false)
     }
@@ -34,10 +36,11 @@ export function SocieteSearch({
   return (
     <div className="space-y-2 rounded-xl border border-border bg-secondary/40 p-3">
       <p className="text-sm font-medium">Rechercher l'entreprise (auto-remplissage)</p>
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Input
-          className="h-11 flex-1 min-w-0"
-          placeholder="Nom de société ou SIREN…"
+          className="h-12 min-w-0 sm:flex-1"
+          placeholder="Nom de société, SIREN ou SIRET…"
+          aria-label="Rechercher votre entreprise"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -47,11 +50,13 @@ export function SocieteSearch({
             }
           }}
         />
-        <Button type="button" onClick={rechercher} disabled={loading} className="h-11 shrink-0">
+        <Button type="button" onClick={rechercher} disabled={loading} className="h-12 shrink-0">
           {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
           Chercher
         </Button>
       </div>
+      {erreur && <p role="alert" className="text-sm text-destructive">{erreur}</p>}
+      {resultats?.length === 0 && <p role="status" className="text-sm text-muted-foreground">Aucune entreprise trouvée. Essayez son SIREN ou remplissez les champs ci-dessous.</p>}
 
       {resultats && resultats.length > 0 && (
         <ul className="space-y-1.5">
@@ -82,8 +87,7 @@ export function SocieteSearch({
         </ul>
       )}
       <p className="text-xs text-muted-foreground">
-        Source : annuaire des entreprises (gouv.fr). Choisis le bon établissement ;
-        les champs restent modifiables. Le capital n'est pas fourni (à saisir).
+        Sélectionnez votre entreprise dans les résultats. Vous pourrez vérifier et modifier les informations remplies. Source : annuaire des entreprises (gouv.fr).
       </p>
     </div>
   )
