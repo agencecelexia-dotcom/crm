@@ -3,6 +3,11 @@ import { installerBackend } from './helpers/interface-backend'
 import { AUTOMATISATIONS } from '../src/features/automatisations/catalogue'
 import type { AutomatisationN8n } from '../supabase/functions/_automatisations-n8n'
 
+test.beforeEach(({ page }, info) => {
+  test.skip(info.config.metadata.isolatedInterface !== true, 'Backend fictif obligatoire')
+  page.setDefaultTimeout(10_000)
+})
+
 async function installer(page: Page, options: { erreurN8n?: boolean; refusCommande?: boolean; erreurCrm?: boolean } = {}) {
   const audit = await installerBackend(page)
   const settings: Record<string, string> = { ...Object.fromEntries(AUTOMATISATIONS.map((a) => [a.cle, 'on'])), relances_pause: 'on' }
