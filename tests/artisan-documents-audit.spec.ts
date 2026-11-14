@@ -334,12 +334,12 @@ test('DOC-17 une identité indisponible bloque la génération et peut être rec
   await panneau.getByRole('textbox', { name: 'Désignation', exact: true }).fill('Prestation fictive')
   await panneau.getByRole('textbox', { name: 'Prix unitaire', exact: true }).fill('100')
   await expect(panneau.getByRole('button', { name: 'Réessayer la fiche entreprise' })).toBeVisible()
-  await panneau.getByRole('button', { name: 'Enregistrer', exact: true }).click()
-  await expect(page.getByText('Votre fiche entreprise doit être chargée avant de générer le devis', { exact: true })).toBeVisible()
+  await expect(panneau.getByRole('button', { name: 'Enregistrer', exact: true })).toBeDisabled()
   expect(backend.requetesNonSimulees).toEqual([])
   await page.unroute(rpc('identite_by_token'))
   await panneau.getByRole('button', { name: 'Réessayer la fiche entreprise' }).click()
   await expect(panneau.getByRole('button', { name: 'Réessayer la fiche entreprise' })).toHaveCount(0)
+  await expect(panneau.getByRole('button', { name: 'Enregistrer', exact: true })).toBeEnabled()
 })
 
 test('DOC-18 les PDF historiques restent consultables avec assurances bloquées et un envoi incertain ne se relance pas', async ({ page }) => {
@@ -356,6 +356,14 @@ test('DOC-18 les PDF historiques restent consultables avec assurances bloquées 
 test('DOC-19 un PDF refusé pour conflit de révision ne déclenche aucun envoi', async ({ page }) => {
   await installerBackendArtisan(page)
   await simulerSauvegarde(page)
+  // Une fiche lente ne doit pas rendre l'envoi cliquable prématurément :
+  // les mentions de l'entreprise et le régime de TVA restent à charger.
+  let chargerIdentite!: () => void
+  const identitePrete = new Promise<void>((resolve) => { chargerIdentite = resolve })
+  await page.route(rpc('identite_by_token'), async (route) => {
+    await identitePrete
+    await route.fallback()
+  })
   await page.route(rpc('set_devis_pdf_by_token'), (route) => {
     expect(route.request().postDataJSON().p_revision).toBe(1)
     return route.fulfill({ json: { ok: false, error: 'revision_conflit' } })
@@ -367,6 +375,11 @@ test('DOC-19 un PDF refusé pour conflit de révision ne déclenche aucun envoi'
   await panneau.getByRole('textbox', { name: 'Email', exact: true }).fill('fictif@example.test')
   await panneau.getByRole('textbox', { name: 'Désignation', exact: true }).fill('Prestation fictive')
   await panneau.getByRole('textbox', { name: 'Prix unitaire', exact: true }).fill('100')
+  await expect(panneau.getByRole('status')).toHaveText('Chargement de votre fiche entreprise…')
+  for (const name of ['Aperçu', 'Enregistrer', 'Au client']) {
+    await expect(panneau.getByRole('button', { name, exact: true })).toBeDisabled()
+  }
+  chargerIdentite()
   await panneau.getByRole('button', { name: 'Au client', exact: true }).click()
   await expect(page.getByText(/Ce brouillon a été modifié dans un autre onglet/)).toBeVisible()
   expect(envois).toBe(0)
