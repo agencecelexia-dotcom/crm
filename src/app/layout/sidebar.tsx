@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, LogOut, Search } from 'lucide-react'
+import { LogOut, Search } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { useAuth } from '@/lib/auth/use-auth'
 import { useDroits } from '@/lib/auth/use-droits'
 import { NavigationLinks } from './navigation-links'
 
-export function Sidebar() {
+export function Sidebar({ onRecherche }: { onRecherche: () => void }) {
   const { session, signOut, estFondateur } = useAuth()
   const { peutCreerLead } = useDroits()
   const email = session?.user.email ?? ''
@@ -18,11 +18,11 @@ export function Sidebar() {
         </Link>
         <p className="mt-2.5 text-xs text-[#a5a5af]">L’espace de votre agence</p>
       </div>
-      <Link to="/projets" className="mx-4 mb-6 flex min-h-9 items-center gap-2.5 rounded-lg border border-white/10 px-3 text-xs text-[#c5c5ce] transition-colors hover:border-white/20 hover:bg-white/5">
+      <button type="button" onClick={onRecherche} aria-label="Recherche globale" className="mx-4 mb-6 flex min-h-10 items-center gap-2.5 rounded-lg border border-white/10 px-3 text-xs text-[#c5c5ce] transition-colors hover:border-white/20 hover:bg-white/5">
         <Search className="size-4" strokeWidth={1.5} aria-hidden />
-        Rechercher un projet
-        <ArrowUpRight className="ml-auto size-3.5 text-[#8a8b96]" aria-hidden />
-      </Link>
+        Recherche globale
+        <kbd className="ml-auto rounded border border-white/15 px-1 text-[10px] text-[#a5a5af]" aria-hidden>⌘ K</kbd>
+      </button>
       <nav aria-label="Navigation principale" className="min-h-0 flex-1 overflow-y-auto px-3 pb-5">
         <NavigationLinks estFondateur={estFondateur} peutCreerLead={peutCreerLead} appearance="dark" />
       </nav>

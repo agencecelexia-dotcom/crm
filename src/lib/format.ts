@@ -16,9 +16,9 @@ export function formatEuros(montant: number | null | undefined): string {
 /** Formate un numéro de téléphone FR par paires : "0612345678" → "06 12 34 56 78". */
 export function formatTel(tel: string | null | undefined): string {
   if (!tel) return ''
-  const d = tel.replace(/\D/g, '')
+  const d = tel.replace(/\D/g, '').replace(/^0033(?=\d{9}$)/, '33')
   if (d.startsWith('33') && d.length === 11) {
-    return '+33 ' + d.slice(2).replace(/(\d{2})(?=\d)/g, '$1 ').trim()
+    return '+33 ' + d[2] + ' ' + d.slice(3).replace(/(\d{2})(?=\d)/g, '$1 ')
   }
   const groupe = d.replace(/(\d{2})(?=\d)/g, '$1 ').trim()
   return groupe || tel

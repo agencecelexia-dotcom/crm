@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, FolderKanban, ChevronRight, Phone, BadgeCheck, Clock, Trash2, AlertCircle, X, LockKeyhole, MoreHorizontal, List, Columns3, SlidersHorizontal } from 'lucide-react'
 
 import { LegendeStatuts } from '@/components/legende-statuts'
-import { couleurStatut } from '@/lib/couleurs-statut'
+import { couleurStatut, fondStatut } from '@/lib/couleurs-statut'
 import { PageHeader } from '@/components/page-header'
 import { Box, Mic, RotateCcw, UserCheck } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
@@ -220,7 +220,7 @@ export function ProjetsListPage() {
             <div className="flex w-full min-w-0 items-center gap-2 xl:w-auto xl:flex-1">
               <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input className="h-10 bg-card pl-9" placeholder="Client, téléphone, ville ou artisan…" aria-label="Rechercher un projet" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+                <Input className="h-10 bg-card pl-9" placeholder="Filtrer cette liste…" aria-label="Rechercher un projet" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
               </div>
               <Button variant="outline" size="sm" className="h-10 gap-2 bg-card px-3 xl:hidden" aria-expanded={filtresOuverts} aria-controls="filtres-projets" onClick={() => setFiltresOuverts((ouvert) => !ouvert)}>
                 <span className="relative"><SlidersHorizontal className="size-4" aria-hidden />{filtresActifs && <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-primary" aria-hidden />}</span>
@@ -301,7 +301,7 @@ export function ProjetsListPage() {
             </div>
             <ul className="divide-y divide-border" aria-label="Projets">
               {resultats.map((p) => (
-                <li key={p.id} className="relative border-l-4" style={{ borderLeftColor: couleurStatut(p.masque_agence_at ? 'masque' : p.statut).accent }}>
+                <li key={p.id} className="relative border-l-4" style={{ borderLeftColor: couleurStatut(p.statut).accent, backgroundColor: fondStatut(p.statut) }}>
                   <Link to={`/projets/${p.id}`} className="group grid grid-cols-2 items-start gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/35 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary sm:px-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1fr)_16px] xl:gap-5 xl:py-5">
                     <div className="col-span-2 min-w-0 xl:col-span-1">
                       <p className="break-words text-sm font-semibold leading-5">{p.client_nom}</p>
