@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { ChevronRight, LogOut, PenTool } from 'lucide-react'
+import { ChevronRight, LogOut, PenTool, Search } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,7 +11,7 @@ import { useDroits } from '@/lib/auth/use-droits'
 import { NotificationsBell } from '@/features/automatisations/notifications-bell'
 import { navigationActive, navigationPourRole } from './navigation'
 
-export function Header() {
+export function Header({ onRecherche }: { onRecherche: () => void }) {
   const { session, signOut, estFondateur } = useAuth()
   const { peutCreerLead } = useDroits()
   const { pathname } = useLocation()
@@ -32,6 +32,7 @@ export function Header() {
           {sousPage ? <><Link to={page.to} className="text-muted-foreground hover:text-foreground">{page.label}</Link><ChevronRight className="size-3 text-muted-foreground/60" aria-hidden /><span className="font-medium">{pathname.endsWith('/new') ? 'Création' : pathname.endsWith('/edit') ? 'Modification' : 'Détail'}</span></> : <span className="font-medium text-foreground">{page?.label ?? 'Dossier'}</span>}
         </nav>
         <div className="flex shrink-0 items-center gap-3">
+          <Button variant="ghost" size="icon" aria-label="Recherche globale" onClick={onRecherche} className="size-10 md:hidden"><Search className="size-5" aria-hidden /></Button>
           <span className="hidden text-xs text-muted-foreground lg:block">{estFondateur ? 'Vue agence' : 'Espace commercial'}</span>
           <NotificationsBell />
           <span aria-hidden className="h-5 w-px bg-border" />

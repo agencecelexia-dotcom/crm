@@ -98,7 +98,7 @@ export function ReleveCommissions({ token }: { token: string }) {
         </div>
         {data.lignes.length === 0 ? <p className="border-t border-border px-5 py-10 text-sm text-muted-foreground sm:px-6">Aucun chantier signé à afficher dans le relevé</p> : (
           <>
-            <div className="hidden overflow-x-auto md:block" tabIndex={0} role="region" aria-label="Relevé de commissions, tableau défilant">
+            <div className="relative hidden overflow-x-auto xl:block" tabIndex={0} role="region" aria-label="Relevé de commissions, tableau défilant">
               <table className="w-full min-w-[720px] text-[13px]">
                 <caption className="sr-only">Commissions par chantier : assiette, taux, montant et état du règlement</caption>
                 <thead><tr className="border-y border-border bg-muted/40 text-left text-xs text-muted-foreground"><th scope="col" className="px-6 py-3 font-normal">Client</th><th scope="col" className="px-3 py-3 font-normal">Signature</th><th scope="col" className="px-3 py-3 text-right font-normal">Montant signé</th><th scope="col" className="px-3 py-3 text-right font-normal">Taux</th><th scope="col" className="px-3 py-3 text-right font-normal">Commission</th><th scope="col" className="px-3 py-3 font-normal">Règlement</th><th scope="col" className="px-4 py-3 font-normal"><span className="sr-only">Justificatif</span></th></tr></thead>
@@ -115,7 +115,7 @@ export function ReleveCommissions({ token }: { token: string }) {
                 ))}</tbody>
               </table>
             </div>
-            <ul className="divide-y divide-border border-t border-border md:hidden">{data.lignes.map((l) => (
+            <ul className="divide-y divide-border border-t border-border xl:hidden">{data.lignes.map((l) => (
               <li key={l.projet_id} className="space-y-3 px-5 py-4">
                 <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-sm font-medium">{l.client ?? 'Client'}</p><p className="mt-1 text-xs text-muted-foreground">{[l.ville, l.metier].filter(Boolean).join(' · ')}{l.date_signature && ` · signé le ${formatDate(l.date_signature)}`}</p></div><span className="shrink-0 text-xs text-muted-foreground">{l.reglee ? 'Réglée' : 'À régler'}</span></div>
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[13px] tabular-nums">{formatEuros(l.assiette)} <span className="text-muted-foreground">× {formatTaux(l.taux)} = </span><span className="font-medium">{formatEuros(l.commission)}</span></p>{l.devis_url && <a href={l.devis_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1.5 text-xs text-primary"><Eye className="size-3.5" aria-hidden />Justificatif</a>}</div>

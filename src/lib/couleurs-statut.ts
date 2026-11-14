@@ -28,3 +28,8 @@ export function styleStatut(statut: string | null | undefined) {
   const c = couleurStatut(statut)
   return { backgroundColor: c.fond, color: c.texte, borderColor: c.bordure }
 }
+
+/** Voile léger pour les grandes surfaces, avec la même famille que les badges. */
+export function fondStatut(statut: string | null | undefined) {
+  return `color-mix(in srgb, ${couleurStatut(statut).fond} 48%, white)`
+}

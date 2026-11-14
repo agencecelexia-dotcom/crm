@@ -1,7 +1,7 @@
 import { useState, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { BadgeCheck, Clock } from 'lucide-react'
-import { couleurStatut, styleStatut } from '@/lib/couleurs-statut'
+import { couleurStatut, fondStatut, styleStatut } from '@/lib/couleurs-statut'
 import { MasquerProjetButton } from './masquer-projet-button'
 import { cn } from '@/lib/utils'
 import { dansLePipeline, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
@@ -67,6 +67,7 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
               {items.map((p) => (
                 <div
                   key={p.id}
+                  style={{ backgroundColor: fondStatut(p.statut), borderColor: couleurStatut(p.statut).bordure }}
                   draggable
                   onDragStart={(e) => e.dataTransfer.setData('text/plain', p.id)}
                   className="cursor-grab rounded-xl border border-border/70 bg-card p-2.5 shadow-soft transition-shadow hover:shadow-card active:cursor-grabbing"
