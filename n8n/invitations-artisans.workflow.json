@@ -1,0 +1,229 @@
+{
+  "name": "Celexia — invitations inscription via Gmail",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Recevoir l’invitation",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "celexia-inscription-email",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__HEADER_CREDENTIAL_ID__",
+          "name": "Celexia invitations — webhook privé"
+        }
+      },
+      "webhookId": "2baa1c13-7cee-459c-a67d-6ac434e3a6fb"
+    },
+    {
+      "id": "2",
+      "name": "Valider l’invitation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body;\nif (!b || !/^[0-9a-f-]{36}$/i.test(b.id) || typeof b.email !== 'string' || !/^[^\\s<>@]+@[^\\s<>@]+\\.[^\\s<>@]+$/.test(b.email) || typeof b.subject !== 'string' || /[\\r\\n]/.test(b.subject) || typeof b.html !== 'string' || b.html.length > 50000) throw new Error('Invitation invalide');\nreturn [{ json: { id: b.id, email: b.email, subject: b.subject, html: b.html } }];"
+      }
+    },
+    {
+      "id": "3",
+      "name": "Réserver l’envoi unique",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "__EDGE_URL__",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'prendre', id: $json.id } }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__HEADER_CREDENTIAL_ID__",
+          "name": "Celexia invitations — webhook privé"
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Vérifier la réservation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "jsCode": "if ($input.first().json.ok !== true) throw new Error('Envoi déjà pris en charge ou refusé');\nreturn [{ json: $('Valider l’invitation').first().json }];"
+      }
+    },
+    {
+      "id": "5",
+      "name": "Envoyer via Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "__GMAIL_CREDENTIAL_ID__",
+          "name": "__GMAIL_CREDENTIAL_NAME__"
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "Journaliser la confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "__EDGE_URL__",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'confirmer', id: $('Valider l’invitation').first().json.id, message_id: $json.id } }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__HEADER_CREDENTIAL_ID__",
+          "name": "Celexia invitations — webhook privé"
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Répondre au CRM",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1440,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: $json.ok === true, id: $json.id } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recevoir l’invitation": {
+      "main": [
+        [
+          {
+            "node": "Valider l’invitation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valider l’invitation": {
+      "main": [
+        [
+          {
+            "node": "Réserver l’envoi unique",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Réserver l’envoi unique": {
+      "main": [
+        [
+          {
+            "node": "Vérifier la réservation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier la réservation": {
+      "main": [
+        [
+          {
+            "node": "Envoyer via Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer via Gmail": {
+      "main": [
+        [
+          {
+            "node": "Journaliser la confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Journaliser la confirmation": {
+      "main": [
+        [
+          {
+            "node": "Répondre au CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": false
+  }
+}

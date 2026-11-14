@@ -55,10 +55,10 @@ export function TableauDeBordArtisan({ stats, projets, onFiltrer }: {
   return (
     <section aria-label="Synthèse de votre activité" className="mb-6 space-y-3">
       <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-card lg:grid-cols-4">
-        <StatTile grouped icon={Euro} label="CA signé" valeur={formatEuros(stats.ca_signe)} sousLabel={`${stats.gagnes} chantier${stats.gagnes > 1 ? 's' : ''} gagné${stats.gagnes > 1 ? 's' : ''}`} />
-        <StatTile grouped icon={Hourglass} label="Devis en cours" valeur={formatEuros(stats.pipe_en_cours)} sousLabel="Devis chiffrés, non tranchés" />
-        <StatTile grouped icon={Wallet} label="Commission à régler" valeur={formatEuros(stats.commission_due)} sousLabel={`${formatEuros(stats.commission_reglee)} déjà réglés`} tone="brand" />
-        <StatTile grouped icon={Hourglass} label="Avant signature" valeur={String(stats.en_cours)} sousLabel={`Sur ${stats.leads_recus} chantiers reçus`} />
+        <StatTile grouped icon={Euro} tone="success" label="CA signé" valeur={formatEuros(stats.ca_signe)} sousLabel={`${stats.gagnes} chantier${stats.gagnes > 1 ? 's' : ''} gagné${stats.gagnes > 1 ? 's' : ''}`} />
+        <StatTile grouped icon={Hourglass} tone="warning" label="Devis en cours" valeur={formatEuros(stats.pipe_en_cours)} sousLabel="Devis chiffrés, non tranchés" />
+        <StatTile grouped icon={Wallet} label="Commission à régler" valeur={formatEuros(stats.commission_due)} sousLabel={`${formatEuros(stats.commission_reglee)} déjà réglés`} tone="warning" />
+        <StatTile grouped icon={Hourglass} tone="info" label="Avant signature" valeur={String(stats.en_cours)} sousLabel={`Sur ${stats.leads_recus} chantiers reçus`} />
       </div>
 
       {urgences > 0 && (

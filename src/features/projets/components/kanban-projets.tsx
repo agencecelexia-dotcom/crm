@@ -1,6 +1,8 @@
 import { useState, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { BadgeCheck, Clock } from 'lucide-react'
+import { couleurStatut, styleStatut } from '@/lib/couleurs-statut'
+import { MasquerProjetButton } from './masquer-projet-button'
 import { cn } from '@/lib/utils'
 import { dansLePipeline, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { usePatchProjet } from '../hooks/use-projets'
@@ -39,6 +41,7 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
         return (
           <div
             key={s}
+            style={{ borderTop: `4px solid ${couleurStatut(s).accent}` }}
             onDragOver={(e) => {
               e.preventDefault()
               setOver(s)
@@ -50,9 +53,9 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
               over === s ? 'border-dashed border-primary bg-primary/5' : 'border-border/70',
             )}
           >
-            <div className="mb-2 flex items-center justify-between px-1">
+            <div className="mb-2 flex items-center justify-between rounded-lg px-2 py-3" style={styleStatut(s)}>
               <span className="flex items-center gap-2 text-sm font-medium">
-                <span className="size-2.5 rounded-full" style={{ background: STATUTS[s].color }} />
+                <span className="size-2.5 rounded-full" style={{ background: couleurStatut(s).accent }} />
                 {STATUTS[s].label}
               </span>
               <span className="rounded-full bg-white/60 px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
@@ -91,6 +94,7 @@ export function KanbanProjets({ projets }: { projets: ProjetAvecArtisan[] }) {
                       </p>
                     )}
                   </Link>
+                  <div className="mt-2 border-t border-border pt-1"><MasquerProjetButton projet={p} compact /></div>
                 </div>
               ))}
               {items.length === 0 && (

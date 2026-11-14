@@ -24,6 +24,7 @@ import {
 import { formatEuros } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase/client'
+import { couleurStatut, styleStatut } from '@/lib/couleurs-statut'
 import { SUIVI_STATUTS } from '@/lib/constants'
 import { FilDiscussion } from './fil-discussion'
 import { messageErreurSuivi } from './erreur-suivi'
@@ -315,6 +316,7 @@ export function SuiviArtisan({
                   type="button"
                   disabled={envoi}
                   aria-current={active ? 'step' : undefined}
+                  style={active ? styleStatut(cle) : undefined}
                   onClick={() => {
                     if (estRdv) {
                       if (!rdvMode) {
@@ -337,6 +339,7 @@ export function SuiviArtisan({
                       'flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-medium',
                       active ? 'bg-primary text-primary-foreground' : done ? 'bg-secondary text-foreground' : 'border border-border text-muted-foreground',
                     )}
+                    style={active || done ? { backgroundColor: couleurStatut(cle).fond, color: couleurStatut(cle).texte, border: `1px solid ${couleurStatut(cle).bordure}` } : undefined}
                   >
                     {done ? <Check className="size-4" /> : idx + 1}
                   </span>

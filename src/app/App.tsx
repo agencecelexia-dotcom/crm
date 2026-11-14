@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { AppProviders } from './providers'
 import { AppLayout } from './layout/app-layout'
@@ -37,7 +37,6 @@ const Maison3DPage = lazy(() =>
   import('@/features/metre/maison-3d-page').then((m) => ({ default: m.Maison3DPage })),
 )
 const CommissionsPage = lazy(() => import('@/features/commissions/commissions-page').then((m) => ({ default: m.CommissionsPage })))
-const TachesPage = lazy(() => import('@/features/taches/taches-page').then((m) => ({ default: m.TachesPage })))
 const CouverturePage = lazy(() => import('@/features/couverture/couverture-page').then((m) => ({ default: m.CouverturePage })))
 const NotesPage = lazy(() => import('@/features/notes/notes-page').then((m) => ({ default: m.NotesPage })))
 const AppelPage = lazy(() => import('@/features/appel/appel-page').then((m) => ({ default: m.AppelPage })))
@@ -55,6 +54,7 @@ const ArtisanNewPage = lazy(() => import('@/features/artisans/pages/artisan-new-
 const ArtisanDetailPage = lazy(() => import('@/features/artisans/pages/artisan-detail-page').then((m) => ({ default: m.ArtisanDetailPage })))
 const ArtisanEditPage = lazy(() => import('@/features/artisans/pages/artisan-edit-page').then((m) => ({ default: m.ArtisanEditPage })))
 const ParametresSignaturePage = lazy(() => import('@/features/parametres/signature-page').then((m) => ({ default: m.ParametresSignaturePage })))
+const CrmArtisanPage = lazy(() => import('@/features/parametres/crm-artisan-page').then((m) => ({ default: m.CrmArtisanPage })))
 const AutomatisationsPage = lazy(() => import('@/features/automatisations/automatisations-page').then((m) => ({ default: m.AutomatisationsPage })))
 
 /**
@@ -123,7 +123,7 @@ export default function App() {
                 {/* L'accueil dépend du rôle : le fondateur pilote l'agence,
                     le commercial travaille ses leads. */}
                 <Route path="/" element={<AccueilSelonRole />} />
-                <Route path="/taches" element={<TachesPage />} />
+                <Route path="/taches" element={<Navigate to="/projets" replace />} />
                 <Route path="/carte" element={<CartePage />} />
                 {/* L'outil mesure, l'agence tranche : les écarts entre ce que
                     dit le client et ce que mesure l'outil. */}
@@ -160,6 +160,7 @@ export default function App() {
                   <Route path="/commissions" element={<CommissionsPage />} />
                   <Route path="/notes" element={<NotesPage />} />
                   <Route path="/couverture" element={<CouverturePage />} />
+                  <Route path="/parametres/crm-artisan" element={<CrmArtisanPage />} />
                   <Route path="/parametres/automatisations" element={<AutomatisationsPage />} />
                   <Route path="/equipe" element={<EquipePage />} />
                   {/* L'espace d'un commercial, en lecture seule. */}

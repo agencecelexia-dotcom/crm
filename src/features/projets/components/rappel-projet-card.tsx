@@ -76,7 +76,7 @@ export function RappelProjetCard({ projetId }: { projetId: string }) {
           Programmer le rappel
         </Button>
         <p className="text-[11px] text-muted-foreground">
-          Tu recevras un email à l'heure dite, et la tâche t'attendra dans « À faire ».
+          Tu recevras un email à l’heure prévue. Le rappel reste visible sur cette fiche.
         </p>
       </CardContent>
     </Card>

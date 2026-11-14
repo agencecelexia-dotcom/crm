@@ -1,9 +1,9 @@
 import { lazy, Suspense, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, Pencil, Trash2, Phone, Mail, MapPin, Map, UserCheck } from 'lucide-react'
+import { AlertCircle, Pencil, Phone, Mail, MapPin, Map, UserCheck } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth/use-auth'
@@ -23,20 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import { MasquerProjetButton } from '../components/masquer-projet-button'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatTel } from '@/lib/format'
-import { useProjet, usePatchProjet, useDeleteProjet, useRepreneurs } from '../hooks/use-projets'
+import { useProjet, usePatchProjet, useRepreneurs } from '../hooks/use-projets'
 import { AffectationsCard } from '../components/affectations-card'
 import { MontantsCard } from '../components/montants-card'
 import { CarteMetresProjet } from '@/features/metre/carte-metres-projet'
@@ -60,7 +50,6 @@ import { invaliderDonneesProjets } from '../lib/invalidation'
 // Fiche projet : infos, statut, assignation, montants/commission, documents.
 export function ProjetDetailPage() {
   const { id } = useParams()
-  const navigate = useNavigate()
   const { data: projet, isLoading, isError, refetch } = useProjet(id)
   const { data: repreneurs } = useRepreneurs()
   const { estFondateur, session } = useAuth()
@@ -84,7 +73,6 @@ export function ProjetDetailPage() {
       }),
   })
   const patch = usePatchProjet()
-  const remove = useDeleteProjet()
   const { data: affectationsCounts } = useAffectationsCounts()
   const [statutEnAttente, setStatutEnAttente] = useState<StatutProjet | null>(null)
 
@@ -165,6 +153,11 @@ export function ProjetDetailPage() {
           </Button>
         }
       />
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3">
+        <p className="text-sm">{projet.masque_agence_at ? 'Projet masqué · coordonnées et historique conservés.' : 'Ce projet est visible dans le pipeline.'}</p>
+        <MasquerProjetButton projet={projet} />
+      </div>
 
       {/* Qui a repris ce chantier. Affiché tout en haut : c'est l'information
           qui évite qu'un deuxième commercial rappelle le même client. */}
@@ -398,43 +391,6 @@ export function ProjetDetailPage() {
         }}
       />
 
-      {/* Suppression */}
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="ghost" className="w-full text-destructive">
-            <Trash2 className="size-4" />
-            Supprimer ce projet
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer le projet ?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Cette action est irréversible.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() =>
-                remove.mutate(projet.id, {
-                  onSuccess: () => {
-                    toast.success('Projet supprimé')
-                    navigate('/projets', { replace: true })
-                  },
-                  onError: (err) =>
-                    toast.error('Suppression impossible', {
-                      description: err instanceof Error ? err.message : undefined,
-                    }),
-                })
-              }
-            >
-              Supprimer
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

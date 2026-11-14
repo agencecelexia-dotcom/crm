@@ -80,12 +80,12 @@ export function ArtisansListPage() {
       return next
     }, { replace: true })
   }
-  const vue: Vue = params.get('vue') === 'partenaires' ? 'partenaires' : 'artisans'
+  const vue: Vue = params.get('vue') === 'artisans' ? 'artisans' : 'partenaires'
   function setVue(v: string) {
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (v === 'partenaires') next.set('vue', v)
+        if (v === 'artisans') next.set('vue', v)
         else next.delete('vue')
         return next
       },
@@ -168,7 +168,7 @@ export function ArtisansListPage() {
   return (
     <div>
       <PageHeader
-        titre="Artisans"
+        titre={vue === 'partenaires' ? 'Partenaires' : 'Artisans'}
         sousTitre="L’annuaire de l’agence : contacts, spécialités et collaboration"
         action={
           <div className="flex items-center gap-2">
@@ -203,8 +203,8 @@ export function ArtisansListPage() {
             </div>
             <Tabs value={vue} onValueChange={setVue}>
               <TabsList className="h-10 border border-border bg-muted/50" aria-label="Population des artisans">
-                <TabsTrigger value="artisans" className="px-2 text-xs sm:px-3 sm:text-sm">Artisans{!isLoading && !isError && <span className="ml-1 text-xs tabular-nums text-muted-foreground">{classiques.length}</span>}</TabsTrigger>
                 <TabsTrigger value="partenaires" className="gap-1.5 px-2 text-xs sm:gap-2 sm:px-3 sm:text-sm"><Star className="size-3.5" aria-hidden />Partenaires{!isLoading && !isError && <span className="text-xs tabular-nums text-muted-foreground">{partenaires.length}</span>}</TabsTrigger>
+                <TabsTrigger value="artisans" className="px-2 text-xs sm:px-3 sm:text-sm">Artisans{!isLoading && !isError && <span className="ml-1 text-xs tabular-nums text-muted-foreground">{classiques.length}</span>}</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>

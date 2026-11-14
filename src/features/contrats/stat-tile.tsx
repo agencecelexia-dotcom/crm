@@ -1,8 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 
+import { PALETTE_STATUTS } from '@/lib/couleurs-statut'
 import { cn } from '@/lib/utils'
 
-type Tone = 'default' | 'success' | 'warning' | 'danger' | 'brand'
+type Tone = 'default' | 'success' | 'warning' | 'danger' | 'brand' | 'info'
 
 /** Une valeur, son périmètre et son libellé ; le contenu porte la hiérarchie. */
 export function StatTile({
@@ -19,15 +20,16 @@ export function StatTile({
   tone?: Tone
   grouped?: boolean
 }) {
+  const couleur = tone === 'success' ? PALETTE_STATUTS.vert : tone === 'warning' ? PALETTE_STATUTS.ambre : tone === 'danger' ? PALETTE_STATUTS.rouge : tone === 'info' ? PALETTE_STATUTS.bleu : tone === 'brand' ? PALETTE_STATUTS.violet : null
   return (
-    <div className={cn(
+    <div style={couleur ? { backgroundColor: `${couleur.fond}80`, borderTop: `3px solid ${couleur.accent}` } : undefined} className={cn(
       'min-w-0 bg-card px-4 py-5 sm:px-5',
       grouped
         ? 'even:border-l even:border-border [&:nth-child(n+3)]:border-t [&:nth-child(n+3)]:border-border lg:[&:nth-child(n+2)]:border-l lg:[&:nth-child(n+2)]:border-border lg:[&:nth-child(n+3)]:border-t-0'
         : 'rounded-xl border border-border',
     )}>
       <p className="text-xs text-muted-foreground sm:text-[13px]">{label}</p>
-      <p className={cn('montant mt-3 break-words text-2xl font-medium leading-none sm:text-[32px]', tone === 'brand' && 'text-primary', tone === 'danger' && 'text-destructive')}>{valeur}</p>
+      <p style={couleur ? { color: couleur.texte } : undefined} className={cn('montant mt-3 break-words text-2xl font-medium leading-none sm:text-[32px]', tone === 'brand' && 'text-primary', tone === 'danger' && 'text-destructive')}>{valeur}</p>
       {sousLabel && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{sousLabel}</p>}
     </div>
   )

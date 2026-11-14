@@ -90,6 +90,7 @@ const prixDemo: PrixArtisan[] = [{ id: 'prix-demo-tuiles', designation: 'Dépose
 const modelesDemo: ModeleDevis[] = [{ id: 'modele-demo-toiture', nom: 'Réfection de couverture', metier: 'Couverture', nb_lignes: 1, source: 'perso', lignes: [{ designation: 'Dépose et remplacement des tuiles', unite: 'm²', quantite: 110, prix_unitaire: 85, cout_unitaire: 48, tva_taux: 10 }] }]
 
 interface OptionsBackendArtisan {
+  fonctionnalites?: Partial<Record<'devis' | 'metres' | 'commissions' | 'entreprise' | 'aide', boolean>>
   signe?: boolean
   lienInvalide?: boolean
   espaceEnErreur?: boolean
@@ -150,6 +151,7 @@ export async function installerBackendArtisan(page: Page, options: OptionsBacken
     appels.push({ nom, payload })
     const chantier = espace.projets.find((p) => p.token === payload.p_token)
     switch (nom) {
+      case 'fonctionnalites_espace_artisan': return json({ chantiers: true, devis: true, metres: true, commissions: true, entreprise: true, aide: true, ...etat.fonctionnalites })
       case 'get_espace_artisan':
         if (etat.espaceEnErreur) return indisponible()
         return json(etat.lienInvalide ? null : espace)

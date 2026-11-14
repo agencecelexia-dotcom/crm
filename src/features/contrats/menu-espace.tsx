@@ -3,9 +3,11 @@ import { ChevronRight, Menu } from 'lucide-react'
 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+import type { FonctionnalitesArtisan } from '@/features/parametres/fonctionnalites-artisan'
 import { ECRANS, type VueEspace } from './ecrans-espace'
 
-export function MenuEspace({ vue, onAller, compteurs }: {
+export function MenuEspace({ vue, onAller, compteurs, fonctionnalites }: {
+  fonctionnalites: FonctionnalitesArtisan
   vue: VueEspace
   onAller: (v: VueEspace) => void
   compteurs?: Partial<Record<VueEspace, number>>
@@ -19,7 +21,7 @@ export function MenuEspace({ vue, onAller, compteurs }: {
         <SheetContent side="right" className="flex w-[min(360px,calc(100%-1rem))] flex-col gap-0">
           <SheetHeader className="border-b border-border px-6 py-6"><SheetTitle>Votre espace artisan</SheetTitle><SheetDescription>Chantiers, documents et relation avec l’agence</SheetDescription></SheetHeader>
           <nav aria-label="Toutes les rubriques artisan" className="min-h-0 flex-1 overflow-y-auto p-3">
-            {ECRANS.map(({ cle, titre, detail, Icone }) => <button key={cle} type="button" aria-current={cle === vue ? 'page' : undefined} onClick={() => { onAller(cle); setOuvert(false) }} className={cn('my-1 flex min-h-16 w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors', cle === vue ? 'bg-muted text-foreground' : 'hover:bg-muted/60')}>
+            {ECRANS.filter((e) => fonctionnalites[e.cle]).map(({ cle, titre, detail, Icone }) => <button key={cle} type="button" aria-current={cle === vue ? 'page' : undefined} onClick={() => { onAller(cle); setOuvert(false) }} className={cn('my-1 flex min-h-16 w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors', cle === vue ? 'bg-muted text-foreground' : 'hover:bg-muted/60')}>
               <Icone className={cn('size-4 shrink-0', cle === vue ? 'text-primary' : 'text-muted-foreground')} strokeWidth={1.5} aria-hidden />
               <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{titre}{compteurs?.[cle] != null && <span className="ml-2 text-xs font-normal tabular-nums text-muted-foreground">{compteurs[cle]}</span>}</span><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{detail}</span></span>
               <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />

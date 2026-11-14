@@ -229,6 +229,8 @@ export interface CouvertureZone {
 export type OrigineChantier = 'neuf' | 'chez_artisan' | 'reprise'
 
 export interface Projet {
+  /** Masquage agence réversible, indépendant du statut et des commissions. */
+  masque_agence_at?: string | null
   id: string
   // Client
   client_nom: string
@@ -298,6 +300,7 @@ export type ProjetInput = Omit<
   | 'token'
   | 'perdu_at'
   | 'deleted_at'
+  | 'masque_agence_at'
   | 'created_by'
   | 'created_at'
   | 'updated_at'
