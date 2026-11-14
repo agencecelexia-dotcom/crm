@@ -23,6 +23,7 @@ test('le lien copié ne révèle ni canal ni taux', async ({ page, context }) =>
 
 test('un taux ajouté à l’URL ne remplace pas celui du lien au contrat', async ({ page }) => {
   const backend = await installerBackend(page, { connecte: false })
+  await page.route('https://nominatim.openstreetmap.org/search?*', (r) => r.fulfill({ json: [{ lat: '45.76', lon: '4.84' }] }))
   await page.route('**/rest/v1/rpc/lien_inscription_artisan', async (r) => {
     expect(r.request().postDataJSON()).toEqual({ p_token: lien.token })
     await r.fulfill({ json: { ok: true, taux: 20, canal: 'email' } })
@@ -49,6 +50,7 @@ test('un taux ajouté à l’URL ne remplace pas celui du lien au contrat', asyn
   await expect(page.getByText(/fixe notre commission de 20 %/)).toBeVisible()
   expect(inscriptions).toHaveLength(1)
   expect(inscriptions[0].invitation_token).toBe(lien.token)
+  expect(inscriptions[0]).toMatchObject({ latitude: 45.76, longitude: 4.84 })
   expect(inscriptions[0]).not.toHaveProperty('taux_commission')
   expect(inscriptions[0]).not.toHaveProperty('source')
   expect(backend.requetesNonSimulees).toEqual([])
