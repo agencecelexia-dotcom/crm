@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { MasquerProjetButton } from '../components/masquer-projet-button'
+import { SupprimerProjetButton } from '../components/supprimer-projet-button'
 import { STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatTel } from '@/lib/format'
 import { useProjet, usePatchProjet, useRepreneurs } from '../hooks/use-projets'
@@ -156,7 +157,10 @@ export function ProjetDetailPage() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3">
         <p className="text-sm">{projet.masque_agence_at ? 'Projet masqué · coordonnées et historique conservés.' : 'Ce projet est visible dans le pipeline.'}</p>
-        <MasquerProjetButton projet={projet} />
+        <div className="flex flex-wrap gap-2">
+          <MasquerProjetButton projet={projet} />
+          <SupprimerProjetButton projet={projet} />
+        </div>
       </div>
 
       {/* Qui a repris ce chantier. Affiché tout en haut : c'est l'information
