@@ -35,6 +35,13 @@ export type StatutProjet =
    * uniquement à ne pas rappeler ce numéro et à le reconnaître s'il insiste.
    */
   | 'demarchage'
+  /**
+   * « Lead de 💩 » : faux lead (aucun projet réel, mauvais numéro, plaisantin).
+   *
+   * Pas un lead perdu (« mort ») : il n'en a jamais été un. Hors pipeline et
+   * hors statistiques comme « demarchage », et caché par défaut des listes.
+   */
+  | 'lead_pourri'
 
 /** Une zone d'intervention = une ville (géocodée) + un rayon (km). */
 export interface ZoneCouverte {

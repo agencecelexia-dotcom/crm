@@ -22,13 +22,14 @@ import type { Projet, ProjetInput } from '@/types/database'
 
 // Formulaire d'appel rapide : champs courts, saisissables pendant l'appel.
 const schema = z.object({
-  client_nom: z.string().min(1, 'Nom du client requis'),
+  // Rien d'obligatoire : on note ce qu'on a pendant l'appel, on complète après.
+  client_nom: z.string().optional(),
   client_telephone: z.string().optional(),
   client_email: z.string().email('Email invalide').or(z.literal('')).optional(),
   client_adresse: z.string().optional(),
   client_code_postal: z.string().optional(),
   client_ville: z.string().optional(),
-  metiers: z.array(z.string()).min(1, 'Choisis au moins un type de projet'),
+  metiers: z.array(z.string()),
   description: z.string().optional(),
   budget_estime: z.string().optional(), // parsé en nombre au submit
 })
@@ -83,14 +84,15 @@ export function ProjetForm({
     const clean = (v?: string) => (v && v.trim() ? v.trim() : null)
     const budget = parseFloat((values.budget_estime ?? '').replace(',', '.'))
     onSubmit({
-      client_nom: values.client_nom.trim(),
+      // client_nom est NOT NULL en base : sans nom, on affiche le numéro.
+      client_nom: clean(values.client_nom) ?? clean(values.client_telephone) ?? 'Sans nom',
       client_telephone: clean(values.client_telephone),
       client_email: clean(values.client_email),
       client_adresse: clean(values.client_adresse),
       client_code_postal: clean(values.client_code_postal),
       client_ville: clean(values.client_ville),
       metiers: values.metiers,
-      metier: values.metiers[0], // 1er métier (colonne NOT NULL, compat)
+      metier: values.metiers[0] ?? '', // 1er métier (colonne NOT NULL, compat)
       sous_metier: null,
       description: clean(values.description),
       budget_estime: Number.isFinite(budget) && budget > 0 ? budget : null,
@@ -118,7 +120,7 @@ export function ProjetForm({
           name="client_nom"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nom du client *</FormLabel>
+              <FormLabel>Nom du client</FormLabel>
               <FormControl>
                 <Input className="h-11" placeholder="Mme Martin" {...field} />
               </FormControl>
@@ -161,7 +163,7 @@ export function ProjetForm({
           name="metiers"
           render={() => (
             <FormItem>
-              <FormLabel>Type(s) de projet *</FormLabel>
+              <FormLabel>Type(s) de projet</FormLabel>
               <div className="flex flex-wrap gap-2">
                 {METIERS.map((m) => {
                   const actif = metiersSeles.includes(m)

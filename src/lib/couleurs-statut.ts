@@ -19,7 +19,7 @@ const FAMILLE: Record<string, keyof typeof PALETTE_STATUTS> = {
   a_rappeler: 'orange', en_attente: 'ambre', rdv_pris: 'violet',
   devis_envoye: 'ambre', devis_signe: 'vert', termine: 'sarcelle',
   perdu: 'rouge', a_reattribuer: 'rose', mort: 'gris',
-  artisan_demarche: 'sarcelle', demarchage: 'gris', masque: 'gris',
+  artisan_demarche: 'sarcelle', demarchage: 'gris', lead_pourri: 'ambre', masque: 'gris',
 }
 export function couleurStatut(statut: string | null | undefined) {
   return PALETTE_STATUTS[FAMILLE[statut ?? ''] ?? 'gris']

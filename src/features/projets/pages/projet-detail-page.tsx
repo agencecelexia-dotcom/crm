@@ -222,8 +222,16 @@ export function ProjetDetailPage() {
           {projet.statut === 'demarchage' && (
             <p className="rounded-xl border border-[#78716C]/25 bg-[#78716C]/5 p-2.5 text-xs text-[#57534E]">
               Sollicitation commerciale, pas un client : agence web, assurance, énergie…
-              La fiche est hors pipeline et ne remontera dans aucune liste de prospects.
+              La fiche est hors pipeline et cachée de la liste des projets (onglet « Masqués »).
               Elle sert à reconnaître ce numéro s'il rappelle.
+            </p>
+          )}
+
+          {projet.statut === 'lead_pourri' && (
+            <p className="rounded-xl border border-[#92400E]/25 bg-[#92400E]/5 p-2.5 text-xs text-[#92400E]">
+              Faux lead, pas de projet réel : la fiche est hors pipeline, hors statistiques
+              et cachée de la liste des projets (onglet « Masqués »). Elle sert à reconnaître
+              ce numéro s'il rappelle.
             </p>
           )}
 

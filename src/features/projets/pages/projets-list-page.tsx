@@ -22,7 +22,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAuth } from '@/lib/auth/use-auth'
 import { useDroits } from '@/lib/auth/use-droits'
-import { METIERS, relegueEnBas, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
+import { METIERS, relegueEnBas, statutCache, STATUTS, STATUTS_ORDRE } from '@/lib/constants'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
 import { useProjets, useRepreneurs } from '../hooks/use-projets'
 import { useAffectationsCounts } from '../hooks/use-affectations'
@@ -33,6 +33,13 @@ import { MasquerProjetButton } from '../components/masquer-projet-button'
 import { KanbanProjets } from '../components/kanban-projets'
 
 // Liste des projets : recherche + filtres statut / métier / ville.
+// Démarchage et « Lead de 💩 » sont cachés comme un dossier masqué : ils ne
+// servent qu'à reconnaître un numéro, pas à travailler. Un filtre explicite sur
+// leur statut les fait réapparaître — c'est alors précisément ce qu'on cherche.
+function estCache(p: { masque_agence_at?: string | null; statut: string }, filtreStatut: string) {
+  return Boolean(p.masque_agence_at) || (statutCache(p.statut) && filtreStatut !== p.statut)
+}
+
 export function ProjetsListPage() {
   const { data: projets, isLoading, isError, refetch } = useProjets()
   const [filtresOuverts, setFiltresOuverts] = useState(false)
@@ -48,8 +55,8 @@ export function ProjetsListPage() {
   const [params, setParams] = useSearchParams()
   const recherche = params.get('q') ?? ''
   const visibilite = params.get('visibilite') === 'masques' ? 'masques' : params.get('visibilite') === 'tous' ? 'tous' : 'actifs'
-  const nbMasques = (projets ?? []).filter((p) => p.masque_agence_at).length
   const statut = params.get('statut') ?? 'tous'
+  const nbMasques = (projets ?? []).filter((p) => estCache(p, statut)).length
   const metier = params.get('metier') ?? 'tous'
   const tri = params.get('tri') ?? 'recent'
   const vue = params.get('vue') === 'pipeline' ? 'pipeline' : 'liste'
@@ -118,10 +125,10 @@ export function ProjetsListPage() {
     const q = recherche.trim().toLowerCase()
     const qDigits = q.replace(/\D/g, '') // pour la recherche par numéro
     return projets.filter((p) => {
-      const matchVisibilite = visibilite === 'tous' || (visibilite === 'masques' ? Boolean(p.masque_agence_at) : !p.masque_agence_at)
+      const matchVisibilite = visibilite === 'tous' || (visibilite === 'masques' ? estCache(p, statut) : !estCache(p, statut))
       const matchPipe = pipe === 'tous' || p.origine === pipe
       // Même périmètre que a_traiter(), migration 0173.
-      const matchAttribution = !aAttribuer || (p.origine === 'neuf' && !['mort', 'devis_signe', 'termine', 'artisan_demarche', 'demarchage'].includes(p.statut))
+      const matchAttribution = !aAttribuer || (p.origine === 'neuf' && !['mort', 'devis_signe', 'termine', 'artisan_demarche', 'demarchage', 'lead_pourri'].includes(p.statut))
       const matchMetier = metier === 'tous' || p.metiers.includes(metier)
       const telDigits = (p.client_telephone ?? '').replace(/\D/g, '')
       const matchTel = qDigits.length >= 2 && telDigits.includes(qDigits)
@@ -133,7 +140,7 @@ export function ProjetsListPage() {
           .some((v) => v!.toLowerCase().includes(q))
       return matchVisibilite && matchAttribution && matchPipe && matchMetier && matchTexte
     })
-  }, [projets, recherche, metier, pipe, aAttribuer, visibilite])
+  }, [projets, recherche, metier, pipe, aAttribuer, visibilite, statut])
 
   // Vue liste : on applique aussi le filtre statut, puis le tri choisi.
   const resultats = useMemo(() => {
