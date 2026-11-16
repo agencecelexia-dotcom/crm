@@ -28,7 +28,8 @@ import { useCreateProjet } from '../hooks/use-projets'
 import type { ProjetInput, StatutProjet } from '@/types/database'
 
 // Ajout ultra-rapide d'un prospect : on a souvent juste un numéro de téléphone
-// (appel manqué, SMS sans réponse). Téléphone requis, le reste optionnel.
+// (appel manqué, SMS sans réponse). Rien n'est obligatoire : un démarcheur ou un
+// faux lead se note parfois sans même un numéro.
 export function QuickProspectDialog() {
   const navigate = useNavigate()
   const create = useCreateProjet()
@@ -45,10 +46,11 @@ export function QuickProspectDialog() {
 
   function creer() {
     if (create.isPending) return
-    if (!tel.trim()) return toast.error('Le numéro de téléphone est requis')
     const input: ProjetInput = {
-      client_nom: nom.trim() || tel.trim(), // sans nom, on affiche le numéro
-      client_telephone: tel.trim(),
+      // Sans nom, on affiche le numéro ; sans rien, un libellé neutre
+      // (client_nom est NOT NULL en base).
+      client_nom: nom.trim() || tel.trim() || 'Sans nom',
+      client_telephone: tel.trim() || null,
       client_email: null,
       client_adresse: null,
       client_code_postal: null,
@@ -97,20 +99,19 @@ export function QuickProspectDialog() {
         <DialogHeader>
           <DialogTitle>Nouveau projet</DialogTitle>
           <DialogDescription>
-            Un numéro de téléphone suffit pour démarrer (appel manqué, SMS…). Tu compléteras
-            le reste (métier, adresse, artisan…) plus tard depuis la fiche.
+            Rien n'est obligatoire : note ce que tu as (appel manqué, SMS…) et complète le
+            reste (métier, adresse, artisan…) plus tard depuis la fiche.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={(event) => { event.preventDefault(); creer() }} className="min-w-0 space-y-4">
         <div className="space-y-3 py-1">
           <div className="space-y-1.5">
-            <Label htmlFor="qp-tel">Téléphone *</Label>
+            <Label htmlFor="qp-tel">Téléphone (optionnel)</Label>
             <Input
               id="qp-tel"
               type="tel"
               autoComplete="tel"
-              required
               className="h-11"
               placeholder="06 12 34 56 78"
               value={tel}
@@ -136,15 +137,12 @@ export function QuickProspectDialog() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="a_rappeler">{STATUTS.a_rappeler.label}</SelectItem>
-                <SelectItem value="en_attente">{STATUTS.en_attente.label}</SelectItem>
                 <SelectItem value="nouveau">{STATUTS.nouveau.label}</SelectItem>
-                {/* Pas un prospect : un artisan qui propose ses services. Sans
-                    cette option, la fiche repart dans le pipeline et se fait
-                    rappeler comme un lead. */}
-                <SelectItem value="artisan_demarche">
-                  {STATUTS.artisan_demarche.label}
-                </SelectItem>
+                {/* Pas des prospects : ces fiches sortent du pipeline et des
+                    statistiques, et sont cachées de la liste (onglet Masqués).
+                    Elles servent seulement à reconnaître le numéro. */}
                 <SelectItem value="demarchage">{STATUTS.demarchage.label}</SelectItem>
+                <SelectItem value="lead_pourri">{STATUTS.lead_pourri.label}</SelectItem>
               </SelectContent>
             </Select>
           </div>

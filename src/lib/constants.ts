@@ -183,6 +183,9 @@ export const STATUTS: Record<
   // Distinct d'« artisan démarché », qui reste un fournisseur potentiel — un
   // vendeur de sites web n'a aucune valeur future pour le pipe.
   demarchage: { label: 'Démarchage', color: '#78716C', textOnColor: '#FFFFFF' },
+  // Faux lead : pas de projet réel. Hors pipeline et hors stats, comme le
+  // démarchage, pour ne pas fausser le taux de conversion.
+  lead_pourri: { label: 'Lead de 💩', color: '#92400E', textOnColor: '#FFFFFF' },
 }
 
 /**
@@ -240,6 +243,7 @@ export const STATUTS_ORDRE: StatutProjet[] = [
   'mort',
   'artisan_demarche',
   'demarchage',
+  'lead_pourri',
 ]
 
 /**
@@ -257,7 +261,19 @@ export const STATUTS_PERTE: StatutProjet[] = ['perdu', 'mort']
  * de conversion ; l'exclure du pipeline évite de rappeler comme prospect
  * quelqu'un qui cherchait du travail.
  */
-export const STATUTS_HORS_PIPELINE: StatutProjet[] = ['artisan_demarche', 'demarchage']
+export const STATUTS_HORS_PIPELINE: StatutProjet[] = ['artisan_demarche', 'demarchage', 'lead_pourri']
+
+/**
+ * Statuts cachés par défaut de la liste des projets, comme un dossier masqué :
+ * ils ne servent qu'à reconnaître un numéro s'il rappelle. Visibles dans les
+ * onglets « Masqués » et « Tous », ou en filtrant explicitement dessus.
+ */
+export const STATUTS_CACHES: StatutProjet[] = ['demarchage', 'lead_pourri']
+
+/** Vrai si la fiche est cachée par défaut côté agence. */
+export function statutCache(statut: string | null | undefined): boolean {
+  return STATUTS_CACHES.includes(statut as StatutProjet)
+}
 
 /** Un projet compte-t-il dans le pipeline commercial ? */
 export function dansLePipeline(statut: string | null | undefined): boolean {
@@ -276,6 +292,7 @@ export const STATUTS_EN_BAS: StatutProjet[] = [
   'mort',
   'artisan_demarche',
   'demarchage',
+  'lead_pourri',
 ]
 
 /** Vrai si le dossier doit être relégué en fin de liste. */
