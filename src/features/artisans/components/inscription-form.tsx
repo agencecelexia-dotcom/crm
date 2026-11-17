@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { DEPARTEMENTS, DEPARTEMENT_NOM, METIERS, SOUS_METIERS } from '@/lib/constants'
 import { geocoder } from '@/lib/geocoding'
 import { cn } from '@/lib/utils'
+import { normaliserSiteWeb } from '@/lib/site-web'
 import type { ArtisanInput, ZoneCouverte } from '@/types/database'
 import { SocieteSearch } from './societe-search'
 import { metiersInscription, preparerInscription, schemaBrouillonInscription, validerInscription, type DonneesInscription, type ErreursInscription } from '../inscription-modele'
@@ -139,6 +140,12 @@ export function InscriptionForm({ invitationToken, taux, onSubmit, submitting, e
         {champ('siren', 'SIREN ou SIRET *', { inputMode: 'numeric', maxLength: 20, aide: '9 chiffres pour un SIREN, 14 pour un SIRET. Si vous indiquez un SIRET, ses 9 premiers chiffres serviront de SIREN au contrat.' })}
         {champ('adresse', 'Adresse de l’entreprise *', { autoComplete: 'street-address', placeholder: '12 rue des Lilas' })}
         <div className="grid gap-5 sm:grid-cols-[140px_1fr]">{champ('code_postal', 'Code postal *', { autoComplete: 'postal-code', inputMode: 'numeric', maxLength: 5 })}{champ('ville', 'Ville *', { autoComplete: 'address-level2' })}</div>
+        <fieldset id="inscription-a_site_web" tabIndex={-1} className="space-y-3 outline-none" aria-describedby={erreurs.a_site_web ? 'a_site_web-erreur' : undefined}>
+          <legend className="mb-3 text-sm font-semibold">Votre entreprise a-t-elle un site web ? *</legend>
+          <div className="grid grid-cols-2 gap-2">{(['oui', 'non'] as const).map((v) => <button type="button" key={v} aria-pressed={d.a_site_web === v} onClick={() => changer('a_site_web', v)} className={cn(CHOIX, 'text-center', d.a_site_web === v ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border hover:bg-muted')}>{d.a_site_web === v && <Check className="mr-1.5 inline size-3.5" aria-hidden />}{v === 'oui' ? 'Oui' : 'Non'}</button>)}</div>
+          {erreurs.a_site_web && <p id="a_site_web-erreur" className="text-sm text-destructive">{erreurs.a_site_web}</p>}
+          {d.a_site_web === 'oui' && champ('site_web', 'Adresse de votre site web *', { inputMode: 'url', autoComplete: 'url', autoCapitalize: 'none', spellCheck: false, placeholder: 'www.votre-entreprise.fr' })}
+        </fieldset>
         <details className="rounded-xl border border-border p-4">
           <summary className="cursor-pointer text-sm font-medium">Informations complémentaires pour le contrat</summary>
           <div className="mt-5 space-y-5"><p className="text-xs leading-relaxed text-muted-foreground">Complétez les informations qui s’appliquent à votre entreprise. Elles restent modifiables avant la création du contrat.</p>
@@ -187,7 +194,7 @@ export function InscriptionForm({ invitationToken, taux, onSubmit, submitting, e
       </>}
       {etape === 3 && <>
         <Resume titre="Vos coordonnées" modifier={() => aller(0)}><p className="font-medium text-foreground">{[d.prenom, d.nom].filter(Boolean).join(' ')}</p><p>{d.telephone}</p><p className="break-all">{d.email}</p></Resume>
-        <Resume titre="Votre entreprise" modifier={() => aller(1)}><p className="font-medium text-foreground">{d.societe}</p><p>SIREN : {d.siren.replace(/\s/g, '').slice(0, 9)}</p><p>{d.adresse}<br />{d.code_postal} {d.ville}</p>{d.forme_juridique && <p>{d.forme_juridique}{d.capital_social && ` · Capital : ${d.capital_social} €`}</p>}{d.ville_immatriculation && <p>Immatriculation : {d.ville_immatriculation}</p>}<p>Représentant : {d.representant || [d.prenom, d.nom].filter(Boolean).join(' ')}{d.qualite_representant && ` · ${d.qualite_representant}`}</p></Resume>
+        <Resume titre="Votre entreprise" modifier={() => aller(1)}><p className="font-medium text-foreground">{d.societe}</p><p>SIREN : {d.siren.replace(/\s/g, '').slice(0, 9)}</p><p>{d.adresse}<br />{d.code_postal} {d.ville}</p>{d.forme_juridique && <p>{d.forme_juridique}{d.capital_social && ` · Capital : ${d.capital_social} €`}</p>}{d.ville_immatriculation && <p>Immatriculation : {d.ville_immatriculation}</p>}<p>Représentant : {d.representant || [d.prenom, d.nom].filter(Boolean).join(' ')}{d.qualite_representant && ` · ${d.qualite_representant}`}</p><p className="break-all">Site web : {d.a_site_web === 'oui' ? normaliserSiteWeb(d.site_web) : 'aucun'}</p></Resume>
         <Resume titre="Votre activité et votre secteur" modifier={() => aller(2)}><p className="font-medium text-foreground">{metiers.join(', ')}</p>{!!d.sous_metiers.length && <p>{d.sous_metiers.filter((s) => metiers.some((m) => SOUS_METIERS[m]?.includes(s))).join(', ')}</p>}{d.mode === 'rayon' ? d.zones.map((z, i) => <p key={i}>{z.ville} ({z.cp}) et les environs à {z.rayon} km</p>) : <p>{d.departements.map((c) => `${c} — ${DEPARTEMENT_NOM(c)}`).join(', ')}</p>}{d.nb_salaries && <p>{d.nb_salaries} salarié(s)</p>}{d.annees_experience && <p>{d.annees_experience} année(s) d’expérience</p>}{d.assurance_rc_pro && <p>RC professionnelle : {d.assurance_rc_pro === 'oui' ? 'oui' : 'non'}</p>}{d.assurance_decennale && <p>Décennale : {d.assurance_decennale === 'oui' ? 'oui' : 'non'}</p>}{d.specificites && <p>{d.specificites}</p>}</Resume>
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-wide text-primary">Taux de commission</p><p className="mt-2 text-lg font-semibold">{taux} % du montant TTC des devis signés</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Ce taux est repris dans le contrat présenté à l’étape suivante. Prenez le temps de le lire avant de signer.</p></div>
       </>}

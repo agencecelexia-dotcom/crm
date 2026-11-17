@@ -9,6 +9,7 @@ import {
   Trash2,
   Phone,
   Mail,
+  Globe,
   MapPin,
   TrendingUp,
   ShieldOff,
@@ -36,6 +37,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { formatEuros, formatDate, formatTel } from '@/lib/format'
+import { libelleSiteWeb } from '@/lib/site-web'
 import {
   useArtisan,
   useDefinirPartenaire,
@@ -162,6 +164,17 @@ export function ArtisanDetailPage() {
             >
               <Mail className="size-4 text-muted-foreground" />
               {artisan.email}
+            </a>
+          )}
+          {artisan.site_web && (
+            <a
+              href={artisan.site_web}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 break-all text-primary underline-offset-2 hover:underline"
+            >
+              <Globe className="size-4 shrink-0 text-muted-foreground" />
+              {libelleSiteWeb(artisan.site_web)}
             </a>
           )}
           {(artisan.adresse || artisan.ville) && (
