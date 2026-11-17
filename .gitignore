@@ -55,3 +55,6 @@ supabase/.temp/
 
 # Captures d’écran déposées à la racine pendant le travail
 *.png
+
+# Réglages Claude Code personnels
+.claude/settings.local.json

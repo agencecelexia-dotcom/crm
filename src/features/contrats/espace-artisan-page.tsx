@@ -156,8 +156,11 @@ export function EspaceArtisanPage() {
 
   const { artisan, engagement, signe, contrat_externe, projets: projetsRecus } = data
   const accesOuvert = signe || contrat_externe
-  const projets = accesOuvert ? projetsRecus : projetsRecus.map((p) => ({ ...p, client_nom: null, client_telephone: null, client_email: null, client_adresse: null, client_code_postal: null, suivis: [] }))
-  const projetsPerdus = data.projets_perdus ?? []
+  // Avant signature : aucun chantier, même si une ancienne base en renvoyait
+  // encore. Seul leur nombre est affiché, pour inviter à signer.
+  const projets = accesOuvert ? projetsRecus : []
+  const projetsPerdus = accesOuvert ? data.projets_perdus ?? [] : []
+  const nbEnAttente = accesOuvert ? 0 : data.nb_chantiers_en_attente ?? projetsRecus.length
   const nomArtisan = [artisan.prenom, artisan.nom].filter(Boolean).join(' ') || artisan.societe
   const peutChiffrer = fonctionnalites.devis && accesOuvert && chiffrage?.peut_chiffrer === true
 
@@ -183,7 +186,7 @@ export function EspaceArtisanPage() {
   }
 
   return (
-    <CadreEspace fonctionnalites={fonctionnalites} vue={vue} onAller={naviguer} nom={nomArtisan || 'Artisan'} societe={artisan.societe} signe={accesOuvert} nbChantiers={projets.length}>
+    <CadreEspace fonctionnalites={fonctionnalites} vue={vue} onAller={naviguer} nom={nomArtisan || 'Artisan'} societe={artisan.societe} signe={accesOuvert} nbChantiers={accesOuvert ? projets.length : nbEnAttente}>
       {vue !== vueDemandee && <p role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">Cette rubrique est désactivée par Celexia. Retrouvez vos dossiers dans Mes chantiers.</p>}
       <PageHeader
         titre={vue === 'chantiers' && vuePerdus ? 'Chantiers perdus' : ecran.titre}
@@ -196,9 +199,15 @@ export function EspaceArtisanPage() {
 
       {isError && <div role="status" className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><WifiOff className="size-4 shrink-0" aria-hidden /><span className="min-w-0 flex-1">Connexion perdue : les informations affichées peuvent dater.</span><Button size="sm" variant="outline" onClick={() => void refetch()}>Réessayer</Button></div>}
 
+      {!accesOuvert && nbEnAttente > 0 && (
+        <p role="status" className="mb-4 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <Lock className="size-4 shrink-0 text-primary" aria-hidden />
+          <span><b>{nbEnAttente} chantier{nbEnAttente > 1 ? 's' : ''} vous attend{nbEnAttente > 1 ? 'ent' : ''}.</b> Signez votre contrat ci-dessous pour y accéder.</span>
+        </p>
+      )}
       {!accesOuvert && <SignatureContrat engagement={engagement} onSigne={() => void refetch()} />}
 
-      {vue === 'chantiers' && (vuePerdus ? (
+      {vue === 'chantiers' && accesOuvert && (vuePerdus ? (
         <ChantiersPerdus projets={projetsPerdus} signe={accesOuvert} onRetour={() => setVuePerdus(false)} onChange={() => void refetch()} />
       ) : (
         <div className="space-y-6">

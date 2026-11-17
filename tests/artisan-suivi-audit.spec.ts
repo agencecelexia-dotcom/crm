@@ -285,17 +285,15 @@ test('retrait : motif et raison requis, refus financier lisible et dialogue cons
   verifierIsolation(backend)
 })
 
-test('contrat non signé : aucun suivi, appel ou montant accessible dans la fiche', async ({ page }) => {
+test('contrat non signé : aucun chantier ne peut être ouvert', async ({ page }) => {
   const backend = await installerBackendArtisan(page, { signe: false })
   const projet = unChantier(backend)
   await page.goto(URL_ARTISAN_DEMO)
-  await page.getByRole('button', { name: 'Ouvrir le chantier', exact: true }).click()
-  const panneau = page.getByRole('dialog', { name: 'Client confidentiel', exact: true })
-  await expect(panneau.getByRole('group', { name: 'Avancement du chantier' })).toHaveCount(0)
-  await expect(panneau.getByRole('link', { name: /Appeler/ })).toHaveCount(0)
-  await expect(panneau.getByRole('textbox', { name: 'Note de suivi' })).toHaveCount(0)
-  await expect(panneau).not.toContainText(projet.client_nom!)
-  await expect(panneau.getByRole('link', { name: 'Signer le contrat', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Votre contrat d’engagement', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ouvrir le chantier', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('group', { name: 'Avancement du chantier' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Appeler/ })).toHaveCount(0)
+  await expect(page.locator('main')).not.toContainText(projet.client_nom!)
   verifierIsolation(backend)
 })
 
@@ -303,9 +301,10 @@ test('SUIVI-07 — les archives ne révèlent pas les échanges client avant sig
   const backend = await installerBackendArtisan(page, { signe: false })
   perdu(backend, { suivis: [{ auteur: 'agence', type: 'note', statut: null, message: 'Confidentiel audit : appeler Sophie au 0600000100', created_at: DATE }] })
   await page.goto(URL_ARTISAN_DEMO)
-  await page.getByRole('button', { name: /^Perdus/ }).click()
-  await page.getByRole('button', { name: 'Client confidentiel', exact: true }).click()
-  await expect(page.getByRole('dialog')).not.toContainText('Confidentiel audit')
+  // Avant signature, les archives ne sont même plus proposées (0200).
+  await expect(page.getByRole('button', { name: /^Perdus/ })).toHaveCount(0)
+  await expect(page.locator('body')).not.toContainText('Confidentiel audit')
+  verifierIsolation(backend)
 })
 
 test('SUIVI-08 — filtre Devis signé puis Par étape conserve les résultats sélectionnés', async ({ page }) => {
