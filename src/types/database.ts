@@ -520,6 +520,9 @@ export interface EspaceArtisan {
   }
   signe: boolean
   contrat_externe: boolean
+  /** Avant signature, la base ne renvoie AUCUN chantier, seulement leur
+   *  nombre (migration 0200). 0 une fois le contrat signé. */
+  nb_chantiers_en_attente?: number
   /** Chantiers sortis du pipe : retirés par l'artisan, masqués par l'agence,
    *  ou perdus depuis plus de 15 jours. Migration 0070. */
   projets_perdus?: ProjetPerdu[]
