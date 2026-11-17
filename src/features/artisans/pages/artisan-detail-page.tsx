@@ -46,6 +46,7 @@ import {
 import { ScoringArtisanCard } from '../components/scoring-artisan-card'
 import { useProjetsByArtisan } from '@/features/projets/hooks/use-projets'
 import { ContratCard } from '@/features/contrats/contrat-card'
+import { RenvoyerLienButton } from '../components/renvoyer-lien-button'
 import { useAuth } from '@/lib/auth/use-auth'
 import { PontCrmCard } from '../components/pont-crm-card'
 import { AssurancesArtisanCard } from '@/features/assurances/assurances-artisan-card'
@@ -116,6 +117,13 @@ export function ArtisanDetailPage() {
                 : `Source : ${artisan.source}`}
             </Badge>
           )}
+        </div>
+      )}
+
+      {/* Lien perdu : un clic renvoie à l'artisan l'accès à son espace. */}
+      {estFondateur && (
+        <div className="mb-4 flex justify-center">
+          <RenvoyerLienButton artisan={artisan} jeton={jeton} />
         </div>
       )}
 

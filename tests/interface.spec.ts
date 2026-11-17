@@ -106,7 +106,7 @@ test('la modale reste utilisable à petite hauteur et Entrée soumet une seule r
   await page.goto('/projets')
   await page.getByRole('button', { name: 'Nouveau projet', exact: true }).click()
   const modale = page.getByRole('dialog', { name: 'Nouveau projet', exact: true })
-  const telephone = modale.getByRole('textbox', { name: 'Téléphone *', exact: true })
+  const telephone = modale.getByRole('textbox', { name: 'Téléphone (optionnel)', exact: true })
   const ajouter = modale.getByRole('button', { name: 'Ajouter', exact: true })
   await expect(telephone).toBeFocused()
   await telephone.fill('0600000099')
