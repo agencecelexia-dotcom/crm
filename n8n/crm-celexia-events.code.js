@@ -285,6 +285,19 @@ if (d.event === 'envoyer_lien_mission') {
     <p style="margin:0 0 4px;color:#374151;font-size:15px;line-height:1.5;">Pour l'instant il n'y a pas encore de chantier. Dès que nous vous en attribuons un, <b>il apparaîtra directement ici</b> — nous vous appellerons pour vous prévenir.</p>
     ${btn(esc(d.lien), 'Accéder à mon espace →')}
     <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Pensez à enregistrer notre numéro : <b>Antoine apporteur d'affaires</b>.</p>`);
+} else if (d.event === 'renvoyer_lien_espace') {
+  // ➜ l'ARTISAN qui a perdu son lien : déclenché à la main depuis sa fiche.
+  to = d.email; if (!to || !d.lien) return [];
+  subject = '🔗 Votre lien d\'accès à votre espace Celexia';
+  html = frame(`
+    <h1 style="margin:0 0 10px;font-size:20px;color:#111827;">${salutG(d)},</h1>
+    <p style="margin:0 0 8px;color:#374151;font-size:15px;line-height:1.5;">Voici le lien de votre <b>espace partenaire Celexia</b>. Vous y retrouvez tous vos chantiers, votre contrat et vos devis.</p>
+    ${btn(esc(d.lien), 'Accéder à mon espace →')}
+    <p style="margin:0 0 8px;color:#374151;font-size:14px;line-height:1.5;">💡 Pour ne plus le perdre, ajoutez-le à vos favoris ou à l'écran d'accueil de votre téléphone.</p>
+    <p style="margin:0 0 8px;color:#6b7280;font-size:13px;">Ce lien est personnel : il ouvre votre espace sans mot de passe, ne le transférez pas.</p>
+    <p style="margin:0;color:#6b7280;font-size:13px;">Si le bouton ne fonctionne pas, copiez ce lien :<br>
+      <a href="${esc(d.lien)}" style="color:#7C3AED;word-break:break-all;">${esc(d.lien)}</a>
+    </p>`);
 } else if (d.event === 'nouvel_artisan_inscrit') {
   // ➜ interne (boîte agence par défaut)
   const canal = capG(d.canal || 'le lien');
