@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { normaliserSiteWeb } from '../../src/lib/site-web'
 import { metiersInscription, preparerInscription, schemaBrouillonInscription, validerInscription } from '../../src/features/artisans/inscription-modele'
 
-const complet = () => schemaBrouillonInscription.parse({ nom: ' Durand ', telephone: '+33 6 12 34 56 78', email: 'sam@example.test', societe: 'Atelier', siren: '123 456 789 00012', adresse: '1 rue fictive', ville: 'Lyon', code_postal: '69001', metiers: ['Peinture'], zones: [{ ville: 'Lyon', cp: '69001', rayon: 30 }] })
+const complet = () => schemaBrouillonInscription.parse({ nom: ' Durand ', telephone: '+33 6 12 34 56 78', email: 'sam@example.test', societe: 'Atelier', siren: '123 456 789 00012', adresse: '1 rue fictive', ville: 'Lyon', code_postal: '69001', a_site_web: 'non', metiers: ['Peinture'], zones: [{ ville: 'Lyon', cp: '69001', rayon: 30 }] })
 describe('inscription publique : validation et conservation des secteurs', () => {
   it('autorise le prénom et les informations complémentaires absents', () => {
     for (const etape of [0, 1, 2]) expect(validerInscription(complet(), etape)).toEqual({})
@@ -32,5 +33,27 @@ describe('inscription publique : validation et conservation des secteurs', () =>
   it('refuse un département inventé et les effectifs négatifs', () => {
     const erreurs = validerInscription({ ...complet(), mode: 'departements', departements: ['XYZ'], nb_salaries: '-1' }, 2)
     expect(Object.keys(erreurs)).toEqual(['nb_salaries', 'departements'])
+  })
+  it('demande si l’entreprise a un site web, et son adresse quand c’est oui', () => {
+    expect(validerInscription({ ...complet(), a_site_web: '' }, 1)).toEqual({ a_site_web: 'Indiquez si votre entreprise a un site web.' })
+    expect(Object.keys(validerInscription({ ...complet(), a_site_web: 'oui' }, 1))).toEqual(['site_web'])
+    expect(Object.keys(validerInscription({ ...complet(), a_site_web: 'oui', site_web: 'mon site' }, 1))).toEqual(['site_web'])
+    const d = { ...complet(), a_site_web: 'oui' as const, site_web: ' www.atelier.fr ' }
+    expect(validerInscription(d, 1)).toEqual({})
+    expect(preparerInscription(d, []).site_web).toBe('https://www.atelier.fr')
+    expect(preparerInscription({ ...d, a_site_web: 'non' }, []).site_web).toBeNull()
+  })
+  it('un brouillon enregistré avant la question reste lisible', () => {
+    expect(schemaBrouillonInscription.parse({ nom: 'Durand' })).toMatchObject({ a_site_web: '', site_web: '' })
+  })
+})
+
+describe('site web : seul un lien http(s) est accepté', () => {
+  it('complète www et garde une adresse complète', () => {
+    expect(normaliserSiteWeb('www.atelier.fr')).toBe('https://www.atelier.fr')
+    expect(normaliserSiteWeb('http://atelier.fr/accueil')).toBe('http://atelier.fr/accueil')
+  })
+  it('refuse javascript:, les identifiants et le texte libre', () => {
+    for (const v of ['javascript:alert(1)', 'https://user:mdp@atelier.fr', 'non', 'mon site.fr', 'atelier', '', null]) expect(normaliserSiteWeb(v)).toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ArtisanInput, ZoneCouverte } from '@/types/database'
 import { DEPARTEMENTS, SOUS_METIERS } from '@/lib/constants'
+import { normaliserSiteWeb } from '@/lib/site-web'
 
 const texte = z.string().default('')
 export const schemaBrouillonInscription = z.object({
@@ -10,6 +11,7 @@ export const schemaBrouillonInscription = z.object({
   representant: texte, qualite_representant: texte,
   nb_salaries: texte, annees_experience: texte, assurance_rc_pro: texte, assurance_decennale: texte,
   specificites: texte, autre_metier: texte,
+  a_site_web: z.enum(['', 'oui', 'non']).catch(''), site_web: texte,
   metiers: z.array(z.string()).default([]), sous_metiers: z.array(z.string()).default([]),
   mode: z.enum(['rayon', 'departements']).default('rayon'),
   departements: z.array(z.string()).default([]),
@@ -37,6 +39,11 @@ export function validerInscription(d: DonneesInscription, etape: number): Erreur
   ]
   const resultat = schemas[etape]?.safeParse(d)
   if (resultat && !resultat.success) for (const erreur of resultat.error.issues) erreurs[String(erreur.path[0])] ??= erreur.message
+  if (etape === 1) {
+    if (!d.a_site_web) erreurs.a_site_web = 'Indiquez si votre entreprise a un site web.'
+    else if (d.a_site_web === 'oui' && !d.site_web.trim()) erreurs.site_web = 'Indiquez l’adresse de votre site web.'
+    else if (d.a_site_web === 'oui' && !normaliserSiteWeb(d.site_web)) erreurs.site_web = 'Adresse non reconnue. Exemple : www.votre-entreprise.fr'
+  }
   if (etape === 2) {
     if (!metiersInscription(d).length) erreurs.metiers = 'Sélectionnez au moins un métier, ou indiquez le vôtre.'
     if (d.mode === 'departements') {
@@ -64,6 +71,7 @@ export function preparerInscription(d: DonneesInscription, zones: ZoneCouverte[]
     nb_salaries: d.nb_salaries ? Number(d.nb_salaries) : null, annees_experience: d.annees_experience ? Number(d.annees_experience) : null,
     assurance_rc_pro: d.assurance_rc_pro ? d.assurance_rc_pro === 'oui' : null, assurance_decennale: d.assurance_decennale ? d.assurance_decennale === 'oui' : null,
     specificites: clean(d.specificites), metiers,
+    site_web: d.a_site_web === 'oui' ? normaliserSiteWeb(d.site_web) : null,
     sous_metiers: d.sous_metiers.filter((s) => metiers.some((m) => SOUS_METIERS[m]?.includes(s))),
     departements_couverts: d.mode === 'departements' ? d.departements : [], zones_couvertes: d.mode === 'rayon' ? zones : [],
     zone_intervention: null, rayon_km: null, latitude: null, longitude: null,

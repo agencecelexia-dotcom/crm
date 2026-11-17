@@ -19,8 +19,10 @@ async function coordonnees(page: Page) {
   for (const [name, value] of [['Nom *', 'Durand'], ['Prénom (facultatif)', 'Sam'], ['Téléphone *', '0600000000'], ['Email *', 'fictif@example.test']]) await page.getByRole('textbox', { name, exact: true }).fill(value)
   await page.getByRole('button', { name: 'Continuer', exact: true }).click()
 }
-async function entreprise(page: Page) {
+async function entreprise(page: Page, siteWeb: string | null = null) {
   for (const [name, value] of [['Nom de l’entreprise *', 'Atelier fictif'], ['Adresse de l’entreprise *', '1 rue fictive'], ['Code postal *', '69001'], ['Ville *', 'Lyon'], ['SIREN ou SIRET *', '12345678900012']]) await page.getByRole('textbox', { name, exact: true }).fill(value)
+  await page.getByRole('button', { name: siteWeb ? 'Oui' : 'Non', exact: true }).click()
+  if (siteWeb) await page.getByRole('textbox', { name: 'Adresse de votre site web *', exact: true }).fill(siteWeb)
   await page.getByRole('button', { name: 'Continuer', exact: true }).click()
 }
 async function secteur(page: Page) {
@@ -125,6 +127,28 @@ test('les champs manquants sont signalés, et les retours ou actualisations cons
   await page.getByRole('button', { name: 'Retour', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Email *', exact: true })).toHaveValue('fictif@example.test')
   expect(backend.payloads).toHaveLength(0)
+})
+
+test('le site web est demandé, exigé quand la réponse est oui, et transmis', async ({ page }) => {
+  const backend = await inscription(page)
+  await page.goto(url)
+  await coordonnees(page)
+  for (const [name, value] of [['Nom de l’entreprise *', 'Atelier fictif'], ['Adresse de l’entreprise *', '1 rue fictive'], ['Code postal *', '69001'], ['Ville *', 'Lyon'], ['SIREN ou SIRET *', '12345678900012']]) await page.getByRole('textbox', { name, exact: true }).fill(value)
+  await page.getByRole('button', { name: 'Continuer', exact: true }).click()
+  await expect(page.getByText('Indiquez si votre entreprise a un site web.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Oui', exact: true }).click()
+  await page.getByRole('button', { name: 'Continuer', exact: true }).click()
+  await expect(page.getByText('Indiquez l’adresse de votre site web.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Adresse de votre site web *', exact: true })).toBeFocused()
+  await page.getByRole('textbox', { name: 'Adresse de votre site web *', exact: true }).fill('www.atelier-fictif.fr')
+  await page.getByRole('button', { name: 'Continuer', exact: true }).click()
+  await page.getByRole('button', { name: 'Peinture', exact: true }).click()
+  await departement(page)
+  await page.getByRole('button', { name: 'Continuer', exact: true }).click()
+  await expect(page.getByText('Site web : https://www.atelier-fictif.fr', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Lire mon contrat', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Votre contrat d’engagement' })).toBeVisible()
+  expect(backend.payloads[0]).toMatchObject({ site_web: 'https://www.atelier-fictif.fr' })
 })
 
 test('la ville proposée et son rayon sont enregistrés sans bouton Ajouter', async ({ page }) => {

@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { normaliserSiteWeb } from '@/lib/site-web'
 import {
   METIERS,
   SOUS_METIERS,
@@ -45,6 +46,7 @@ const schema = z.object({
   societe: z.string().optional(),
   telephone: z.string().optional(),
   email: z.string().email('Email invalide').or(z.literal('')).optional(),
+  site_web: z.string().refine((v) => !v.trim() || normaliserSiteWeb(v) !== null, 'Adresse non reconnue (ex. www.entreprise.fr)').optional(),
   metiers: z.array(z.string()),
   sous_metiers: z.array(z.string()),
   rayon_km: z.string().optional(), // parsé en nombre au submit
@@ -89,6 +91,7 @@ function valeursParDefaut(artisan?: Artisan): FormValues {
     societe: artisan?.societe ?? '',
     telephone: artisan?.telephone ?? '',
     email: artisan?.email ?? '',
+    site_web: artisan?.site_web ?? '',
     metiers: artisan?.metiers ?? [],
     sous_metiers: artisan?.sous_metiers ?? [],
     rayon_km: artisan?.rayon_km != null ? String(artisan.rayon_km) : '',
@@ -201,6 +204,7 @@ export function ArtisanForm({
       societe: clean(values.societe),
       telephone: clean(values.telephone),
       email: clean(values.email),
+      site_web: normaliserSiteWeb(values.site_web),
       metiers: values.metiers ?? [],
       sous_metiers: values.sous_metiers ?? [],
       zone_intervention: null, // champ retiré (zones/départements suffisent)
@@ -360,6 +364,20 @@ export function ArtisanForm({
             )}
           />
         </div>
+
+        <FormField
+          control={form.control}
+          name="site_web"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Site web</FormLabel>
+              <FormControl>
+                <Input inputMode="url" autoCapitalize="none" spellCheck={false} placeholder="www.entreprise.fr" className="h-11" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         {/* Sélection des métiers (chips multi-sélection) */}
         <FormItem>

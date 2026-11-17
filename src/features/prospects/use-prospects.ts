@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
 import type { Prospect, StatutProspect } from '@/types/database'
+import { normaliserSiteWeb } from '@/lib/site-web'
 
 /** Sociétés à démarcher autour d'un point (RPC : triées par distance). */
 export function useProspectsAutour(
@@ -95,6 +96,7 @@ export function useConvertirEnArtisan() {
           societe: p.company_name,
           telephone: p.tel,
           email: p.email,
+          site_web: normaliserSiteWeb(p.website),
           metiers: metiers ?? p.metiers ?? [],
           sous_metiers: sousMetiers,
           rayon_km: rayonKm,

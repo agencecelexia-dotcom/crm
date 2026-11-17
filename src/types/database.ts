@@ -59,6 +59,7 @@ export interface Artisan {
   societe: string | null
   telephone: string | null
   email: string | null
+  site_web: string | null // https://… (0201) ; null = pas de site ou non renseigné
   metiers: string[]
   sous_metiers: string[]
   zone_intervention: string | null
