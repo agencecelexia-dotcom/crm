@@ -1,0 +1,6 @@
+node_modules/
+out/
+# Générés par les scripts (npm run capturer / voix-provisoire / caler-voix)
+public/captures/*.png
+public/voix/
+public/antoine.mp4

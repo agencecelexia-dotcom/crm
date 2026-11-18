@@ -1,0 +1,90 @@
+{
+  "source": "provisoire",
+  "duree": 207.677,
+  "parties": [
+    {
+      "id": "bienvenue",
+      "debut": 0.5,
+      "fin": 16.101,
+      "audio": "voix/bienvenue.wav"
+    },
+    {
+      "id": "pourquoi",
+      "debut": 16.801,
+      "fin": 38.742,
+      "audio": "voix/pourquoi.wav"
+    },
+    {
+      "id": "lien",
+      "debut": 39.442,
+      "fin": 51.363,
+      "audio": "voix/lien.wav"
+    },
+    {
+      "id": "menu",
+      "debut": 52.063,
+      "fin": 64.82,
+      "audio": "voix/menu.wav"
+    },
+    {
+      "id": "tableau",
+      "debut": 65.52,
+      "fin": 77.847,
+      "audio": "voix/tableau.wav"
+    },
+    {
+      "id": "liste",
+      "debut": 78.547,
+      "fin": 90.513,
+      "audio": "voix/liste.wav"
+    },
+    {
+      "id": "fiche",
+      "debut": 91.213,
+      "fin": 100.01,
+      "audio": "voix/fiche.wav"
+    },
+    {
+      "id": "avancement",
+      "debut": 100.71,
+      "fin": 117.705,
+      "audio": "voix/avancement.wav"
+    },
+    {
+      "id": "appels",
+      "debut": 118.405,
+      "fin": 133.39,
+      "audio": "voix/appels.wav"
+    },
+    {
+      "id": "notes",
+      "debut": 134.09,
+      "fin": 146.304,
+      "audio": "voix/notes.wav"
+    },
+    {
+      "id": "devis",
+      "debut": 147.004,
+      "fin": 164.964,
+      "audio": "voix/devis.wav"
+    },
+    {
+      "id": "retrait",
+      "debut": 165.664,
+      "fin": 177.95,
+      "audio": "voix/retrait.wav"
+    },
+    {
+      "id": "commissions",
+      "debut": 178.65,
+      "fin": 186.925,
+      "audio": "voix/commissions.wav"
+    },
+    {
+      "id": "reflexes",
+      "debut": 187.625,
+      "fin": 204.677,
+      "audio": "voix/reflexes.wav"
+    }
+  ]
+}

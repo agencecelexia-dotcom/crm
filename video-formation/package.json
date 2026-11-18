@@ -1,0 +1,25 @@
+{
+  "name": "celexia-video-formation",
+  "private": true,
+  "type": "module",
+  "description": "Vidéo de prise en main de l'espace artisan (Remotion). Hors application : n'est ni bâtie ni déployée avec le CRM.",
+  "scripts": {
+    "capturer": "npx playwright test --config capture/capture.config.ts",
+    "voix-provisoire": "node scripts/voix-provisoire.mjs",
+    "caler-voix": "node scripts/caler-voix.mjs",
+    "script-antoine": "node scripts/script-antoine.mjs",
+    "apercu": "remotion studio src/index.ts",
+    "rendu": "remotion render src/index.ts Formation out/formation-espace-artisan.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.540",
+    "@remotion/media-utils": "4.0.540",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.540"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.7",
+    "typescript": "5.9.3"
+  }
+}
